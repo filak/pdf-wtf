@@ -2,4 +2,4 @@
 
 PDF - what the file ...
 
-PDF parsing and data extraction
+PDF files parsing and data extraction
