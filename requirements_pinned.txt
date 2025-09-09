@@ -8,4 +8,6 @@ ocrmypdf==15.4.0      # MPL-2.0 License (Mozilla Public License 2.0)
 click==8.1.7          # BSD-3-Clause License
 # --- External non-Python dependencies (not installed via pip) ---
 # Tesseract OCR (Apache License 2.0)
+# https://github.com/UB-Mannheim/tesseract
 # Ghostscript (AGPL-3.0, or commercial license from Artifex)
+# https://www.ghostscript.com/releases/gsdnld.html
