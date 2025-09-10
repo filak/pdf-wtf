@@ -9,26 +9,26 @@ PDF files parsing and data extraction
 1. Create virtualenv &amp; activate it:
 
     ```
-    $ py -m venv venv
-    $ venv\Scripts\activate
+    py -m venv venv
+    venv\Scripts\activate
     ```
     
 2. Upgrade the environment - run:
 
     ```
-    $ py -m venv --upgrade venv
-    $ python -m pip install --upgrade pip
-    $ pip install setuptools wheel --upgrade
+    py -m venv --upgrade venv
+    python -m pip install --upgrade pip
+    pip install setuptools wheel --upgrade
     ```
     
 3. Install - run:
     
     ```
-    $ pip install -e .[dev]
+    pip install -e .[dev]
     ```
 
 4. Test - run:
 
     ```
-    $ pytest
+    pytest
     ```
