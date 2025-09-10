@@ -4,6 +4,8 @@ PDF - what the file format ...
 
 PDF files parsing and data extraction
 
+> Work in progress ...
+
 ## Local dev installation
 
 1. Create virtualenv &amp; activate it:
