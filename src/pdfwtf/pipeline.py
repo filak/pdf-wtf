@@ -7,6 +7,7 @@ import ocrmypdf
 from ocrmypdf.api import configure_logging, Verbosity
 from typing import List
 from .utils import get_output_dir_final, get_temp_dir, parse_page_ranges
+from .imaging import process_img_folder
 
 configure_logging(verbosity=Verbosity.quiet, progress_bar_friendly=False)
 
@@ -176,6 +177,7 @@ def process_pdf(
     input_pikepdf.close()
 
     # Step 2: Extract images
+    images_dir = None
     if tmp_pdf.exists():
         images_dir = output_dir / f"{img_dir}_{input_pdf.stem}"
         images_dir.mkdir(parents=True, exist_ok=True)
@@ -183,8 +185,15 @@ def process_pdf(
 
     # Step 3: OCR if scanned
     if is_scanned_pdf(tmp_pdf):
+
         # Try to use https://pymupdf.readthedocs.io/en/latest/recipes-ocr.html
-        # instead of ocrmypdf for better performance:
+        # instead of ocrmypdf for better performance
+
+        if images_dir:
+            proc_images_dir = output_dir / f"{img_dir}_proc_{input_pdf.stem}"
+            proc_images_dir.mkdir(parents=True, exist_ok=True)
+            process_img_folder(images_dir, proc_images_dir)
+
         run_ocr(
             tmp_pdf, output_pdf, lang=languages, clean_scanned_flag=clean_scanned_flag
         )
