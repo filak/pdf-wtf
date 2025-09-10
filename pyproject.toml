@@ -26,5 +26,7 @@ where = ["src"]
 
 [project.optional-dependencies]
 dev = [
+    "flake8",
+    "black",
     "pytest"
 ]
