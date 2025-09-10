@@ -47,9 +47,13 @@ def extract_pages(
         raise RuntimeError(f"Failed to extract pages: {e}")
 
 
-def run_ocr(input_pdf, output_pdf, lang="eng", clean_scanned_flag=False, backend="ocrmypdf"):
+def run_ocr(
+    input_pdf, output_pdf, lang="eng", clean_scanned_flag=False, backend="ocrmypdf"
+):
     if backend == "ocrmypdf":
-        run_ocrmypdf(input_pdf, output_pdf, lang=lang, clean_scanned_flag=clean_scanned_flag)
+        run_ocrmypdf(
+            input_pdf, output_pdf, lang=lang, clean_scanned_flag=clean_scanned_flag
+        )
 
 
 def run_ocrmypdf(input_pdf, output_pdf, lang="eng", clean_scanned_flag=False):

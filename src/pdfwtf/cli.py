@@ -22,7 +22,7 @@ from .utils import get_output_dir
     "--relative",
     "input_path_prefix",
     type=click.Path(file_okay=False),
-    help="Input dir path prefix to create relative output subdirs",
+    help="Part of the input path separating the output subdirs path (e.g. '_data/in')",
 )
 @click.option(
     "--extract",
