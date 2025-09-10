@@ -47,7 +47,12 @@ def extract_pages(
         raise RuntimeError(f"Failed to extract pages: {e}")
 
 
-def run_ocr(input_pdf, output_pdf, lang="eng", clean_scanned_flag=False):
+def run_ocr(input_pdf, output_pdf, lang="eng", clean_scanned_flag=False, backend="ocrmypdf"):
+    if backend == "ocrmypdf":
+        run_ocrmypdf(input_pdf, output_pdf, lang=lang, clean_scanned_flag=clean_scanned_flag)
+
+
+def run_ocrmypdf(input_pdf, output_pdf, lang="eng", clean_scanned_flag=False):
     """Run OCR with Tesseract via OCRmyPDF."""
     if clean_scanned_flag:
         ocrmypdf.ocr(
@@ -139,7 +144,6 @@ def process_pdf(
     clear_temp_flag=False,
     export_texts_flag=False,
     txt_dir="_txt",
-    export_images_flag=False,
     dpi=300,
     img_dir="_img",
 ):
@@ -167,8 +171,16 @@ def process_pdf(
 
     input_pikepdf.close()
 
-    # Step 2: OCR if scanned
+    # Step 2: Extract images
+    if tmp_pdf.exists():
+        images_dir = output_dir / f"{img_dir}_{input_pdf.stem}"
+        images_dir.mkdir(parents=True, exist_ok=True)
+        export_images(tmp_pdf, images_dir, dpi=dpi)
+
+    # Step 3: OCR if scanned
     if is_scanned_pdf(tmp_pdf):
+        # Try to use https://pymupdf.readthedocs.io/en/latest/recipes-ocr.html
+        # instead of ocrmypdf for better performance:
         run_ocr(
             tmp_pdf, output_pdf, lang=languages, clean_scanned_flag=clean_scanned_flag
         )
@@ -184,11 +196,7 @@ def process_pdf(
         total_pages_out = len(output_pikepdf.pages)
         output_pikepdf.close()
 
-    if export_images_flag and total_pages_out > 0:
-        images_dir = output_dir / f"{img_dir}_{input_pdf.stem}"
-        images_dir.mkdir(parents=True, exist_ok=True)
-        export_images(tmp_pdf, images_dir, dpi=dpi)
-
+    # Step 4: Extract texts
     if export_texts_flag and total_pages_out > 0:
         texts_dir = output_dir / f"{txt_dir}_{input_pdf.stem}"
         texts_dir.mkdir(parents=True, exist_ok=True)

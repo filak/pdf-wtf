@@ -39,15 +39,9 @@ from .utils import get_output_dir
     is_flag=True,
     help="Clean scanned PDF files - uses unpaper !",
 )
-@click.option(
-    "--images",
-    "export_images_flag",
-    is_flag=True,
-    help="Export pages as images - PNG files",
-)
 @click.option("--dpi", default=300, help="DPI for image export")
 @click.option(
-    "--texts", "export_texts_flag", is_flag=True, help="Export pages as text files"
+    "--get-text", "export_texts_flag", is_flag=True, help="Export pages as text files"
 )
 @click.option(
     "--clear-temp", "clear_temp_flag", is_flag=True, help="Clear temporary files"
@@ -60,7 +54,6 @@ def main(
     languages,
     clean_scanned_flag,
     clear_temp_flag,
-    export_images_flag,
     dpi,
     export_texts_flag,
 ):
@@ -78,7 +71,6 @@ def main(
         languages=languages,
         clean_scanned_flag=clean_scanned_flag,
         clear_temp_flag=clear_temp_flag,
-        export_images_flag=export_images_flag,
         dpi=dpi,
         export_texts_flag=export_texts_flag,
     )
