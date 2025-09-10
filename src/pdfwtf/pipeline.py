@@ -1,11 +1,12 @@
 import hashlib
+import os
 import shutil
 from pathlib import Path
 import fitz  # PyMuPDF
 import pikepdf
 import ocrmypdf
 from typing import List
-from .utils import parse_page_ranges
+from .utils import find_project_root, get_temp_dir, compute_relative_output, parse_page_ranges
 
 
 def is_scanned_pdf(filepath):
@@ -66,27 +67,44 @@ def export_images(input_pdf, out_dir, dpi=200):
 
 def process_pdf(
     input_pdf,
-    output_pdf,
+    output_dir=None,
+    relative_marker=None,
     extract_pages_str=None,
     languages="eng",
     export_images_flag=False,
-    image_dir="images",
     dpi=200,
+    rotate_images_flag=False,
+    clear_temp_flag=False,
+    images_dir="_images",
 ):
     """Full PDF pipeline: remove pages, OCR if needed, export images."""
-
-    # Convert to Path objects
     input_pdf = Path(input_pdf).resolve()
-    output_pdf = Path(output_pdf).resolve()
 
-    # Ensure temp dir exists relative to this script/module
-    base_dir = Path(__file__).resolve().parent
-    temp_dir = base_dir / "instance" / "temp"
-    temp_dir.mkdir(parents=True, exist_ok=True)
+    # Determine output directory: argument > env var > default
+    if output_dir is not None:
+        output_dir = Path(output_dir).expanduser().resolve()
+    else:
+        base_dir = find_project_root()
+        output_dir = base_dir / "instance" / "_data" / "out-pdf"
 
-    # Create tmp filename with hash prefix
-    base_hash = hashlib.md5(f"{input_pdf}{output_pdf}".encode("utf-8")).hexdigest()[:8]
-    tmp_pdf = temp_dir / f"{base_hash}_{output_pdf.name}.tmp.pdf"
+    if relative_marker:
+        marker_path = Path(relative_marker).resolve()
+        final_output_dir = compute_relative_output(input_pdf, marker_path, output_dir)
+    else:
+        final_output_dir = output_dir
+
+    final_output_dir.mkdir(parents=True, exist_ok=True)
+    output_pdf = final_output_dir / input_pdf.name
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Final output filename = same as input, inside final_output_dir
+    output_pdf = final_output_dir / input_pdf.name
+
+    temp_dir = get_temp_dir(clean=clear_temp_flag)
+
+    base_hash = hashlib.md5(str(input_pdf).encode("utf-8")).hexdigest()[:8]
+    tmp_pdf = temp_dir / f"{base_hash}_{input_pdf.stem}.tmp.pdf"
 
     try:
         input_pikepdf = pikepdf.open(input_pdf)
@@ -99,7 +117,7 @@ def process_pdf(
             )
             extract_pages(input_pikepdf, str(tmp_pdf), pages_to_keep)
         else:
-            shutil.copy2(input_pdf, tmp_pdf)  # safe copy to tmp
+            shutil.copy2(input_pdf, tmp_pdf)
 
         input_pikepdf.close()
 
@@ -109,16 +127,16 @@ def process_pdf(
         else:
             if tmp_pdf.resolve() != output_pdf:
                 shutil.move(tmp_pdf, output_pdf)
-            # else already correct location
+
+        # Step 3: Export images if requested
+        if export_images_flag:
+            images_dir = final_output_dir / f"{input_pdf.stem}_{images_dir}"
+            images_dir.mkdir(parents=True, exist_ok=True)
+            export_images(output_pdf, images_dir, dpi=dpi)
 
     finally:
-        # Cleanup tmp file if it still exists
         if tmp_pdf.exists():
             try:
                 tmp_pdf.unlink()
             except Exception:
                 pass
-
-    # Step 3: Export images
-    if export_images_flag:
-        export_images(output_pdf, image_dir, dpi=dpi)

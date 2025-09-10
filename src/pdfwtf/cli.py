@@ -1,5 +1,6 @@
+import os
 import click
-from .pipeline import process_pdf
+from .pipeline import find_project_root, process_pdf
 
 
 @click.command()
@@ -7,11 +8,21 @@ from .pipeline import process_pdf
     "--infile",
     "input_pdf",
     required=True,
-    type=click.Path(exists=True),
+    type=click.Path(exists=True, dir_okay=False),
     help="Input PDF file",
 )
 @click.option(
-    "--outfile", "output_pdf", required=True, type=click.Path(), help="Output PDF file"
+    "--outdir",
+    "output_dir",
+    required=False,
+    type=click.Path(file_okay=False),
+    help="Output directory",
+)
+@click.option(
+    "--relative",
+    "relative_marker",
+    type=click.Path(file_okay=False),
+    help="Part of input file path to compute relative output subfolders",
 )
 @click.option(
     "--extract",
@@ -26,34 +37,43 @@ from .pipeline import process_pdf
     "--images", "export_images_flag", is_flag=True, help="Export pages as images"
 )
 @click.option(
-    "--imgdir",
-    "image_dir",
-    default="images",
-    type=click.Path(),
-    help="Directory for image export",
+    "--rotate",
+    "rotate_images_flag",
+    is_flag=True,
+    help="TBD: Autorotate images in scanned PDFs",
 )
+@click.option("--clear", "clear_temp_flag", is_flag=True, help="Clear temporary files")
 @click.option("--dpi", default=200, help="DPI for image export")
 def main(
     input_pdf,
-    output_pdf,
+    output_dir,
+    relative_marker,
     extract_pages_str,
     languages,
     export_images_flag,
-    image_dir,
     dpi,
+    rotate_images_flag,
+    clear_temp_flag,
 ):
+    if not output_dir:
+        env_outdir = os.environ.get("PDFWTF_OUTPUT_DIR")
+        if env_outdir:
+            output_dir = env_outdir
+
     """PDF processing pipeline with page removal, OCR, and image export."""
     click.echo(f"Input: {input_pdf}")
-    click.echo(f"Output: {output_pdf}")
+    click.echo(f"Output: {output_dir}")
 
     process_pdf(
         input_pdf,
-        output_pdf,
+        output_dir=output_dir,
+        relative_marker=relative_marker,
         extract_pages_str=extract_pages_str,
         languages=languages,
         export_images_flag=export_images_flag,
-        image_dir=image_dir,
         dpi=dpi,
+        rotate_images_flag=rotate_images_flag,
+        clear_temp_flag=clear_temp_flag,
     )
 
     click.echo("Done!")
