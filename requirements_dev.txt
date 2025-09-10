@@ -1,0 +1,4 @@
+-r requirements.txt   # include all runtime dependencies
+pytest                # MIT License (testing framework)
+flake8
+black

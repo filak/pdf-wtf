@@ -1,0 +1,15 @@
+LICENSE
+README.md
+pyproject.toml
+src/pdfwtf/__init__.py
+src/pdfwtf/cli.py
+src/pdfwtf/pipeline.py
+src/pdfwtf/utils.py
+src/pdfwtf.egg-info/PKG-INFO
+src/pdfwtf.egg-info/SOURCES.txt
+src/pdfwtf.egg-info/dependency_links.txt
+src/pdfwtf.egg-info/entry_points.txt
+src/pdfwtf.egg-info/requires.txt
+src/pdfwtf.egg-info/top_level.txt
+tests/test_pipeline.py
+tests/test_utils.py

@@ -1,0 +1,6 @@
+PyMuPDF==1.26.4
+ocrmypdf==16.10.4
+click
+
+[dev]
+pytest

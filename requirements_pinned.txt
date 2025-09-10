@@ -1,11 +1,11 @@
 ## PDF manipulation and content editing
-pikepdf==9.4.2        # MPL-2.0 License (Mozilla Public License 2.0)
+# pikepdf        # Installed via ocrmypdf  # MPL-2.0 License (Mozilla Public License 2.0)
 # https://pikepdf.readthedocs.io/en/latest/installation.html
 ## PDF processing, text/image extraction, rendering
-PyMuPDF==1.24.11      # AGPL-3.0 License (GNU Affero General Public License v3.0)
+PyMuPDF==1.26.4      # AGPL-3.0 License (GNU Affero General Public License v3.0)
 # https://pymupdf.readthedocs.io/en/latest/installation.html
 ## OCR wrapper (uses Tesseract + Ghostscript)
-ocrmypdf==15.4.0      # MPL-2.0 License (Mozilla Public License 2.0)
+ocrmypdf==16.10.4      # MPL-2.0 License (Mozilla Public License 2.0)
 # https://ocrmypdf.readthedocs.io/en/latest/installation.html
 ## CLI helper
 click==8.1.7          # BSD-3-Clause License

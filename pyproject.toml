@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pdfwtf"
+version = "0.1.0"
+description = "Smart PDF parsing pipeline: remove pages, OCR scanned PDFs, export images"
+authors = [
+    { name = "Fila Kriz", email = "your_email@example.com" }
+]
+readme = "README.md"
+license = { text = "Mixed: MPL-2.0, AGPL-3.0, BSD-3-Clause" }
+requires-python = ">=3.9"
+dependencies = [
+    "PyMuPDF==1.26.4",
+    "ocrmypdf==16.10.4",
+    "click"
+]
+
+[project.scripts]
+pdfwtf = "pdfwtf.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[project.optional-dependencies]
+dev = [
+    "pytest"
+]
