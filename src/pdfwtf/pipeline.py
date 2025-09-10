@@ -63,6 +63,7 @@ def run_ocr(input_pdf, output_pdf, lang="eng", clean_scanned_flag=False):
             clean=True,
             clean_final=True,
             continue_on_soft_render_error=True,
+            output_type="pdf",
         )
     else:
         ocrmypdf.ocr(
@@ -76,27 +77,36 @@ def run_ocr(input_pdf, output_pdf, lang="eng", clean_scanned_flag=False):
             optimize=0,
             progress_bar=False,
             continue_on_soft_render_error=True,
+            output_type="pdf",
         )
 
 
-def export_images(pdf_path, out_dir, dpi=200):
+def export_images(pdf_path, out_dir, dpi=300):
 
     out_dir = Path(out_dir)
+
+    if out_dir.exists():
+        shutil.rmtree(out_dir)
+
     out_dir.mkdir(parents=True, exist_ok=True)
 
     doc = fitz.open(pdf_path)
     try:
         for i, page in enumerate(doc, start=1):
             pix = page.get_pixmap(dpi=dpi)
-            out_path = out_dir / f"page_{i}.png"
+            out_path = out_dir / f"page_{str(i).zfill(3)}.png"
             pix.save(str(out_path))  # PyMuPDF expects a str path
     finally:
         doc.close()
 
 
-def export_text(pdf_path, out_dir):
-    pdf_path = Path(pdf_path)
+def export_text(pdf_path, out_dir, level="text") -> dict:
+
     out_dir = Path(out_dir)
+
+    if out_dir.exists():
+        shutil.rmtree(out_dir)
+
     out_dir.mkdir(parents=True, exist_ok=True)  # ensure output dir exists
 
     doc = fitz.open(pdf_path)
@@ -105,10 +115,12 @@ def export_text(pdf_path, out_dir):
     try:
         for page_num in range(len(doc)):
             page = doc[page_num]
-            text = page.get_text("text")
+            text = page.get_text(level)
             text_pages[page_num + 1] = text
 
-            out_path = out_dir / f"page_{page_num + 1}.txt"
+            cnt = page_num + 1
+
+            out_path = out_dir / f"page_{str(cnt).zfill(3)}.txt"
             out_path.write_text(text, encoding="utf-8")
 
     finally:
@@ -128,7 +140,7 @@ def process_pdf(
     export_texts_flag=False,
     txt_dir="_txt",
     export_images_flag=False,
-    dpi=200,
+    dpi=300,
     img_dir="_img",
 ):
     """Full PDF pipeline: remove pages, OCR if needed, export images."""
@@ -175,7 +187,7 @@ def process_pdf(
     if export_images_flag and total_pages_out > 0:
         images_dir = output_dir / f"{img_dir}_{input_pdf.stem}"
         images_dir.mkdir(parents=True, exist_ok=True)
-        export_images(output_pdf, images_dir, dpi=dpi)
+        export_images(tmp_pdf, images_dir, dpi=dpi)
 
     if export_texts_flag and total_pages_out > 0:
         texts_dir = output_dir / f"{txt_dir}_{input_pdf.stem}"

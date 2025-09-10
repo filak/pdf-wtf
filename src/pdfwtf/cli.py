@@ -45,7 +45,7 @@ from .utils import get_output_dir
     is_flag=True,
     help="Export pages as images - PNG files",
 )
-@click.option("--dpi", default=200, help="DPI for image export")
+@click.option("--dpi", default=300, help="DPI for image export")
 @click.option(
     "--texts", "export_texts_flag", is_flag=True, help="Export pages as text files"
 )
