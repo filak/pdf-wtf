@@ -11,9 +11,9 @@ def test_open_range():
     assert parse_page_ranges("3-", 6) == [3, 4, 5, 6]
 
 def test_multiple_ranges():
-    assert parse_page_ranges("1-2,5", 10) == [1, 2, 5]
+    assert parse_page_ranges("1-2,5,7-", 8) == [1, 2, 5, 7, 8]
 
 def test_invalid_page():
     with pytest.raises(ValueError):
-        parse_page_ranges("20", 10)
+        parse_page_ranges("11", 10)
 

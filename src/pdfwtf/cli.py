@@ -14,7 +14,10 @@ from .pipeline import process_pdf
     "--outfile", "output_pdf", required=True, type=click.Path(), help="Output PDF file"
 )
 @click.option(
-    "--remove", "remove_pages_str", default=None, help="Pages to remove, e.g. '1-3,5'"
+    "--extract",
+    "extract_pages_str",
+    default=None,
+    help="Pages to extract, e.g. '1-3,5,8-'",
 )
 @click.option(
     "--lang", "languages", default="eng", help="OCR language(s), e.g. 'eng+ces'"
@@ -33,27 +36,28 @@ from .pipeline import process_pdf
 def main(
     input_pdf,
     output_pdf,
-    remove_pages_str,
+    extract_pages_str,
     languages,
     export_images_flag,
     image_dir,
     dpi,
 ):
     """PDF processing pipeline with page removal, OCR, and image export."""
-    click.echo(f"📂 Input: {input_pdf}")
-    click.echo(f"📄 Output: {output_pdf}")
+    click.echo(f"Input: {input_pdf}")
+    click.echo(f"Output: {output_pdf}")
 
     process_pdf(
         input_pdf,
         output_pdf,
-        remove_pages_str=remove_pages_str,
+        extract_pages_str=extract_pages_str,
         languages=languages,
         export_images_flag=export_images_flag,
         image_dir=image_dir,
         dpi=dpi,
     )
 
-    click.echo("🎉 Done!")
+    click.echo("Done!")
+
 
 if __name__ == "__main__":
     main(standalone_mode=False)

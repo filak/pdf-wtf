@@ -15,32 +15,31 @@ def is_scanned_pdf(filepath):
     return True
 
 
-def remove_pages(
-    input_pdf: str,
+def extract_pages(
+    input_pikepdf: str,
     output_pdf: str,
-    pages_to_remove: List[int],
+    pages_to_keep: List[int],
     zero_based: bool = False,
 ):
     """
-    Create a new PDF with specified pages removed.
+    Create a new PDF with specified pages.
     """
     # Convert to 0-based if needed
     if not zero_based:
-        pages_to_remove = [p - 1 for p in pages_to_remove]
+        pages_to_keep = [p - 1 for p in pages_to_keep]
 
-    pdf = pikepdf.open(input_pdf)
     try:
         new_pdf = pikepdf.Pdf.new()
-        total_pages = len(pdf.pages)
 
         # Add only pages not in pages_to_remove
-        for i, page in enumerate(pdf.pages):
-            if i not in pages_to_remove:
+        for i, page in enumerate(input_pikepdf.pages):
+            if i in pages_to_keep:
                 new_pdf.pages.append(page)
 
         new_pdf.save(output_pdf)
-    finally:
-        pdf.close()  # explicitly close the original PDF
+        new_pdf.close()
+    except Exception as e:
+        raise RuntimeError(f"Failed to extract pages: {e}")
 
 
 def run_ocr(input_pdf, output_pdf, lang="eng"):
@@ -62,7 +61,7 @@ def export_images(input_pdf, out_dir, dpi=200):
 def process_pdf(
     input_pdf,
     output_pdf,
-    remove_pages_str=None,
+    extract_pages_str=None,
     languages="eng",
     export_images_flag=False,
     image_dir="images",
@@ -70,13 +69,17 @@ def process_pdf(
 ):
     """Full PDF pipeline: remove pages, OCR if needed, export images."""
     tmp_pdf = output_pdf + ".tmp.pdf"
+    input_pikepdf = pikepdf.open(input_pdf)
+    total_pages = len(input_pikepdf.pages)
 
-    # Step 1: Remove pages
-    if remove_pages_str:
-        pages_to_remove = parse_page_ranges(remove_pages_str)
-        remove_pages(input_pdf, tmp_pdf, pages_to_remove)
+    # Step 1: Extract pages
+    if extract_pages_str:
+        pages_to_keep = parse_page_ranges(extract_pages_str, total_pages=total_pages)
+        extract_pages(input_pikepdf, tmp_pdf, pages_to_keep)
     else:
         tmp_pdf = input_pdf
+
+    input_pikepdf.close()
 
     # Step 2: OCR if scanned
     if is_scanned_pdf(tmp_pdf):
