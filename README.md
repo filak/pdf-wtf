@@ -1,4 +1,4 @@
-# pdf-wtff
+# pdf-wtf
 
 PDF - what the file format ...
 
