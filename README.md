@@ -10,13 +10,13 @@ PDF files parsing and data extraction
 
     ```
     py -m venv venv
-    venv\Scripts\activate
+    py -m venv --upgrade venv
     ```
     
 2. Upgrade the environment - run:
 
     ```
-    py -m venv --upgrade venv
+    venv\Scripts\activate
     python -m pip install --upgrade pip
     pip install setuptools wheel --upgrade
     ```
