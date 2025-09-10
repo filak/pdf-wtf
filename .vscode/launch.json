@@ -1,0 +1,17 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: pdfwtf.cli",
+            "type": "debugpy",
+            "module": "pdfwtf.cli",
+            "cwd": "${workspaceFolder}/src",
+            "request": "launch",
+            "console": "internalConsole",
+            "justMyCode": true,
+            "args": [
+                "--help"
+            ]
+        }
+    ]
+}
