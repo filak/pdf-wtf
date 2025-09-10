@@ -1,5 +1,8 @@
+import os
 import shutil
 from pathlib import Path
+
+RELATIVE_OUTPUT_DIR = "_data/out-pdf"
 
 
 def find_project_root(marker="instance") -> Path:
@@ -17,7 +20,7 @@ def find_project_root(marker="instance") -> Path:
 
 
 def get_temp_dir(clean: bool = False) -> Path:
-    """Get or create a temporary directory inside the project instance/temp."""
+
     base_dir = find_project_root()
     temp_dir = base_dir / "instance" / "temp"
     temp_dir.mkdir(parents=True, exist_ok=True)
@@ -33,6 +36,51 @@ def get_temp_dir(clean: bool = False) -> Path:
                 pass
 
     return temp_dir
+
+
+def get_output_dir(output_dir=None) -> Path:
+
+    if output_dir:
+        output_dir = Path(output_dir).resolve()
+    else:
+        env_outdir = os.environ.get("PDFWTF_OUTPUT_DIR")
+        if env_outdir:
+            output_dir = env_outdir
+        else:
+            base_dir = find_project_root()
+            output_dir = base_dir / "instance" / RELATIVE_OUTPUT_DIR
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    return output_dir
+
+
+def get_output_dir_final(
+    output_dir: Path, input_pdf: Path, input_path_prefix: str = None
+) -> Path:
+
+    if not input_path_prefix:
+        return output_dir
+
+    input_str = str(input_pdf)
+    prefix_str = str(Path(input_path_prefix))
+
+    if prefix_str not in input_str:
+        raise ValueError(
+            f"Input path prefix '{prefix_str}' not found in input file path '{input_str}'"
+        )
+
+    # Everything after the first occurrence of marker
+    relative_subpath = Path(
+        input_str.split(prefix_str, 1)[1].strip("/").strip("\\")
+    ).parent
+
+    # Compute final output directory
+    output_dir = output_dir / relative_subpath
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    return output_dir
 
 
 def parse_page_ranges(pages_str, total_pages=None):
@@ -56,24 +104,3 @@ def parse_page_ranges(pages_str, total_pages=None):
                 raise ValueError(f"Page {page} is out of range (1-{total_pages})")
             pages.add(page)
     return sorted(pages)
-
-
-def compute_relative_output(input_pdf: Path, marker: Path, base_output_dir: Path) -> Path:
-    """
-    Compute the output directory based on the relative path from marker.
-    """
-    input_str = str(input_pdf)       # convert Path to string
-    marker_str = str(marker)         # convert Path to string
-
-    # Normalize separators (cross-platform)
-    input_str_norm = input_str.replace("\\", "/")
-    marker_norm = marker_str.replace("\\", "/")
-
-    if marker_norm not in input_str_norm:
-        raise ValueError(f"Marker '{marker}' not found in input file path '{input_str}'")
-
-    # Everything after the first occurrence of marker
-    relative_subpath = input_str_norm.split(marker_norm, 1)[1].lstrip("/")
-
-    # Compute final output directory
-    return base_output_dir / Path(relative_subpath).parent

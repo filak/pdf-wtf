@@ -1,12 +1,14 @@
 import hashlib
-import os
 import shutil
 from pathlib import Path
 import fitz  # PyMuPDF
 import pikepdf
 import ocrmypdf
+from ocrmypdf.api import configure_logging, Verbosity
 from typing import List
-from .utils import find_project_root, get_temp_dir, compute_relative_output, parse_page_ranges
+from .utils import get_output_dir_final, get_temp_dir, parse_page_ranges
+
+configure_logging(verbosity=Verbosity.quiet, progress_bar_friendly=False)
 
 
 def is_scanned_pdf(filepath):
@@ -45,17 +47,44 @@ def extract_pages(
         raise RuntimeError(f"Failed to extract pages: {e}")
 
 
-def run_ocr(input_pdf, output_pdf, lang="eng"):
+def run_ocr(input_pdf, output_pdf, lang="eng", clean_scanned_flag=False):
     """Run OCR with Tesseract via OCRmyPDF."""
-    ocrmypdf.ocr(input_pdf, output_pdf, language=lang, force_ocr=True)
+    if clean_scanned_flag:
+        ocrmypdf.ocr(
+            input_pdf,
+            output_pdf,
+            language=lang,
+            force_ocr=True,
+            rotate_pages=True,
+            optimize=0,
+            progress_bar=False,
+            deskew=True,
+            fast_web_view=False,
+            clean=True,
+            clean_final=True,
+            continue_on_soft_render_error=True,
+        )
+    else:
+        ocrmypdf.ocr(
+            input_pdf,
+            output_pdf,
+            language=lang,
+            force_ocr=True,
+            deskew=True,
+            fast_web_view=False,
+            rotate_pages=True,
+            optimize=0,
+            progress_bar=False,
+            continue_on_soft_render_error=True,
+        )
 
 
-def export_images(input_pdf, out_dir, dpi=200):
-    """Export PDF pages as PNG images."""
+def export_images(pdf_path, out_dir, dpi=200):
+
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    doc = fitz.open(input_pdf)
+    doc = fitz.open(pdf_path)
     try:
         for i, page in enumerate(doc, start=1):
             pix = page.get_pixmap(dpi=dpi)
@@ -65,78 +94,98 @@ def export_images(input_pdf, out_dir, dpi=200):
         doc.close()
 
 
+def export_text(pdf_path, out_dir):
+    pdf_path = Path(pdf_path)
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)  # ensure output dir exists
+
+    doc = fitz.open(pdf_path)
+    text_pages = {}
+
+    try:
+        for page_num in range(len(doc)):
+            page = doc[page_num]
+            text = page.get_text("text")
+            text_pages[page_num + 1] = text
+
+            out_path = out_dir / f"page_{page_num + 1}.txt"
+            out_path.write_text(text, encoding="utf-8")
+
+    finally:
+        doc.close()
+
+    return text_pages
+
+
 def process_pdf(
     input_pdf,
-    output_dir=None,
-    relative_marker=None,
+    output_dir,
+    input_path_prefix=None,
     extract_pages_str=None,
     languages="eng",
+    clean_scanned_flag=False,
+    clear_temp_flag=False,
+    export_texts_flag=False,
+    txt_dir="_txt",
     export_images_flag=False,
     dpi=200,
-    rotate_images_flag=False,
-    clear_temp_flag=False,
-    images_dir="_images",
+    img_dir="_img",
 ):
     """Full PDF pipeline: remove pages, OCR if needed, export images."""
     input_pdf = Path(input_pdf).resolve()
 
-    # Determine output directory: argument > env var > default
-    if output_dir is not None:
-        output_dir = Path(output_dir).expanduser().resolve()
-    else:
-        base_dir = find_project_root()
-        output_dir = base_dir / "instance" / "_data" / "out-pdf"
-
-    if relative_marker:
-        marker_path = Path(relative_marker).resolve()
-        final_output_dir = compute_relative_output(input_pdf, marker_path, output_dir)
-    else:
-        final_output_dir = output_dir
-
-    final_output_dir.mkdir(parents=True, exist_ok=True)
-    output_pdf = final_output_dir / input_pdf.name
-
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    # Final output filename = same as input, inside final_output_dir
-    output_pdf = final_output_dir / input_pdf.name
+    output_dir = get_output_dir_final(output_dir, input_pdf, input_path_prefix)
+    output_pdf = output_dir / input_pdf.name
 
     temp_dir = get_temp_dir(clean=clear_temp_flag)
 
     base_hash = hashlib.md5(str(input_pdf).encode("utf-8")).hexdigest()[:8]
     tmp_pdf = temp_dir / f"{base_hash}_{input_pdf.stem}.tmp.pdf"
 
-    try:
-        input_pikepdf = pikepdf.open(input_pdf)
-        total_pages = len(input_pikepdf.pages)
+    # try:
+    input_pikepdf = pikepdf.open(input_pdf)
+    total_pages_in = len(input_pikepdf.pages)
 
-        # Step 1: Extract pages
-        if extract_pages_str:
-            pages_to_keep = parse_page_ranges(
-                extract_pages_str, total_pages=total_pages
-            )
-            extract_pages(input_pikepdf, str(tmp_pdf), pages_to_keep)
-        else:
-            shutil.copy2(input_pdf, tmp_pdf)
+    # Step 1: Extract pages
+    if extract_pages_str:
+        pages_to_keep = parse_page_ranges(extract_pages_str, total_pages=total_pages_in)
+        extract_pages(input_pikepdf, str(tmp_pdf), pages_to_keep)
+    else:
+        shutil.copy2(input_pdf, tmp_pdf)
 
-        input_pikepdf.close()
+    input_pikepdf.close()
 
-        # Step 2: OCR if scanned
-        if is_scanned_pdf(tmp_pdf):
-            run_ocr(tmp_pdf, output_pdf, lang=languages)
-        else:
-            if tmp_pdf.resolve() != output_pdf:
-                shutil.move(tmp_pdf, output_pdf)
+    # Step 2: OCR if scanned
+    if is_scanned_pdf(tmp_pdf):
+        run_ocr(
+            tmp_pdf, output_pdf, lang=languages, clean_scanned_flag=clean_scanned_flag
+        )
+    else:
+        if tmp_pdf.resolve() != output_pdf:
+            shutil.copy2(tmp_pdf, output_pdf)
 
-        # Step 3: Export images if requested
-        if export_images_flag:
-            images_dir = final_output_dir / f"{input_pdf.stem}_{images_dir}"
-            images_dir.mkdir(parents=True, exist_ok=True)
-            export_images(output_pdf, images_dir, dpi=dpi)
+    total_pages_out = 0
 
-    finally:
-        if tmp_pdf.exists():
-            try:
-                tmp_pdf.unlink()
-            except Exception:
-                pass
+    if output_pdf.exists():
+        print(f"Output PDF :  {str(output_pdf)}")
+        output_pikepdf = pikepdf.open(output_pdf)
+        total_pages_out = len(output_pikepdf.pages)
+        output_pikepdf.close()
+
+    if export_images_flag and total_pages_out > 0:
+        images_dir = output_dir / f"{img_dir}_{input_pdf.stem}"
+        images_dir.mkdir(parents=True, exist_ok=True)
+        export_images(output_pdf, images_dir, dpi=dpi)
+
+    if export_texts_flag and total_pages_out > 0:
+        texts_dir = output_dir / f"{txt_dir}_{input_pdf.stem}"
+        texts_dir.mkdir(parents=True, exist_ok=True)
+        text_pages = export_text(output_pdf, texts_dir)
+
+        if text_pages:
+            summary_txt = output_dir / f"{input_pdf.stem}.txt"
+            with summary_txt.open("w", encoding="utf-8") as f:
+                for page_num, text in text_pages.items():
+                    f.write(f"--- Page {page_num} of {total_pages_out} ---\n")
+                    f.write(text)
+                    f.write("\n\n")
