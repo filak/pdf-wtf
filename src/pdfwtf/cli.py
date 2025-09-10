@@ -54,3 +54,6 @@ def main(
     )
 
     click.echo("🎉 Done!")
+
+if __name__ == "__main__":
+    main(standalone_mode=False)

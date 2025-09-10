@@ -2,13 +2,25 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Python: pdfwtf.cli",
+            "name": "Debug cli.py",
             "type": "debugpy",
-            "module": "pdfwtf.cli",
-            "cwd": "${workspaceFolder}/src",
             "request": "launch",
-            "console": "internalConsole",
-            "justMyCode": true,
+            "module": "pdfwtf.cli",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/src"
+            },
+            "console": "integratedTerminal",
+            "args": [
+                "--help"
+            ]
+        },
+        {
+            "name": "Debug installed CLI",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "pdfwtf.cli",
+            "console": "integratedTerminal",
             "args": [
                 "--help"
             ]
