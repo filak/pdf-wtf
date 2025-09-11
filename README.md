@@ -49,4 +49,15 @@ Test run:
 
      docker run --rm unpaper-alpine --version
 
+Create ENV vars:
+
+     setx PDFWTF_HOME_DIR d:\Decko\pdf-wtf\
+     setx PDFWTF_TEMP_DIR %PDFWTF_HOME_DIR%instance\temp\
+
+     echo  %PDFWTF_HOME_DIR%  %PDFWTF_TEMP_DIR%
+
+
+
+
+
 
