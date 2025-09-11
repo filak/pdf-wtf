@@ -6,19 +6,10 @@ import pikepdf
 import ocrmypdf
 from ocrmypdf.api import configure_logging, Verbosity
 from typing import List
-from .utils import get_output_dir_final, get_temp_dir, parse_page_ranges
+from .utils import get_output_dir_final, get_temp_dir, is_scanned_pdf, parse_page_ranges
 from .imaging import process_img_folder
 
 configure_logging(verbosity=Verbosity.quiet, progress_bar_friendly=False)
-
-
-def is_scanned_pdf(filepath):
-    """Check if a PDF is likely scanned (no embedded text)."""
-    with fitz.open(filepath) as doc:
-        for page in doc:
-            if page.get_text().strip():
-                return False
-    return True
 
 
 def extract_pages(
@@ -176,6 +167,8 @@ def process_pdf(
 
     input_pikepdf.close()
 
+    is_scan = is_scanned_pdf(tmp_pdf)
+
     # Step 2: Extract images
     images_dir = None
     if tmp_pdf.exists():
@@ -184,8 +177,9 @@ def process_pdf(
         export_images(tmp_pdf, images_dir, dpi=dpi)
 
     # Step 3: OCR if scanned
-    if is_scanned_pdf(tmp_pdf):
+    if is_scan:
 
+        # Use unpaper via Docker to enhance the images before OCR
         # Try to use https://pymupdf.readthedocs.io/en/latest/recipes-ocr.html
         # instead of ocrmypdf for better performance
 
