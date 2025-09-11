@@ -34,3 +34,19 @@ PDF files parsing and data extraction
     ```
     pytest
     ```
+
+## Using unpaper on Windows
+
+> OCRmyPDF requires unpaper installed to be abel to use --clean and --clean_final params
+
+Install and start Docker Desktop
+
+Build the Docker image - run:
+
+     docker build -t unpaper-alpine -f .Dockerfile-unpaper .
+
+Test run:
+
+     docker run --rm unpaper-alpine --version
+
+
