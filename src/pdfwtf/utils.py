@@ -2,6 +2,7 @@ import os
 import shutil
 from pathlib import Path
 import fitz  # PyMuPDF
+from PIL import Image, ImageFilter
 
 RELATIVE_OUTPUT_DIR = "_data/out-pdf"
 
@@ -22,8 +23,13 @@ def find_project_root(marker="instance") -> Path:
 
 def get_temp_dir(clean: bool = False) -> Path:
 
-    base_dir = find_project_root()
-    temp_dir = base_dir / "instance" / "temp"
+    env_temp_dir = os.environ.get("PDFWTF_TEMP_DIR")
+    if env_temp_dir:
+        temp_dir = Path(env_temp_dir).resolve()
+    else:
+        base_dir = find_project_root()
+        temp_dir = base_dir / "instance" / "temp"
+
     temp_dir.mkdir(parents=True, exist_ok=True)
 
     if clean:
@@ -46,12 +52,11 @@ def get_output_dir(output_dir=None) -> Path:
     else:
         env_outdir = os.environ.get("PDFWTF_OUTPUT_DIR")
         if env_outdir:
-            output_dir = env_outdir
+            output_dir = Path(env_outdir).resolve()
         else:
             base_dir = find_project_root()
             output_dir = base_dir / "instance" / RELATIVE_OUTPUT_DIR
-
-    output_dir.mkdir(parents=True, exist_ok=True)
+            output_dir.mkdir(parents=True, exist_ok=True)
 
     return output_dir
 
@@ -76,7 +81,6 @@ def get_output_dir_final(
         input_str.split(prefix_str, 1)[1].strip("/").strip("\\")
     ).parent
 
-    # Compute final output directory
     output_dir = output_dir / relative_subpath
 
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -114,3 +118,38 @@ def parse_page_ranges(pages_str, total_pages=None):
                 raise ValueError(f"Page {page} is out of range (1-{total_pages})")
             pages.add(page)
     return sorted(pages)
+
+
+def export_thumbnails(
+    images_dir: "Path",
+    thumbs_dir: "Path",
+    thumb_size=(400, 400),
+    fext="jpg",
+    quality=75,
+):
+    """
+    Create thumbnails from existing images.
+
+    :param images_dir: Path object for source images
+    :param thumbs_dir: Path object for output thumbnails
+    :param thumb_size: max (width, height) for thumbnails
+    :param fext: output image format
+    :param quality: JPEG quality
+    """
+
+    for img_path in sorted(images_dir.iterdir()):
+        if img_path.is_file() and img_path.suffix.lower() in [".png", ".jpg"]:
+            with Image.open(img_path) as img:
+                img.thumbnail(thumb_size, Image.LANCZOS)
+
+                # Optional: slight sharpening for crisper results
+                # img = img.filter(ImageFilter.SHARPEN)
+
+                out_path = thumbs_dir / f"{img_path.stem}.{fext}"
+
+                save_kwargs = (
+                    {"quality": quality, "optimize": True}
+                    if fext.lower() == "jpg"
+                    else {}
+                )
+                img.save(out_path, **save_kwargs)

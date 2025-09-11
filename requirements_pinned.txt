@@ -10,8 +10,15 @@ ocrmypdf==16.10.4      # MPL-2.0 License (Mozilla Public License 2.0)
 ## CLI helper
 click==8.1.7          # BSD-3-Clause License
 # https://click.palletsprojects.com/en/stable/
-### --- External non-Python dependencies (required by OCRmyPDF) ---
-## Tesseract OCR (Apache License 2.0)
+### --- External non-Python dependencies ---
+## Tesseract OCR (Apache License 2.0) - required by OCRmyPDF and PyMuPDF
 # https://github.com/UB-Mannheim/tesseract
-## Ghostscript (AGPL-3.0, or commercial license from Artifex)
+## Ghostscript (AGPL-3.0, or commercial license from Artifex) - required by OCRmyPDF
 # https://www.ghostscript.com/releases/gsdnld.html
+## unpaper - required by OCRmyPDF with --clean params
+# https://github.com/unpaper/unpaper
+# On Windows you MUST:
+# - install unpaper via Docker and set up ENV vars:
+# setx PDFWTF_HOME_DIR d:\Decko\pdf-wtf
+# setx PDFWTF_TEMP_DIR %PDFWTF_HOME_DIR\%instance\temp
+# - and create these dir if applicable !

@@ -1,0 +1,16 @@
+# Use a lightweight Alpine base
+FROM alpine:20250108
+
+# Install unpaper
+RUN apk add --no-cache unpaper
+
+# Set default temp environment variables
+ENV TMP=/data/tmp
+ENV TEMP=/data/tmp
+
+# Create working directories inside container
+WORKDIR /data
+RUN mkdir -p /data/tmp
+
+# Entrypoint for unpaper
+ENTRYPOINT ["unpaper"]

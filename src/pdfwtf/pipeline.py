@@ -1,12 +1,25 @@
 import hashlib
+import os
 import shutil
 from pathlib import Path
 import fitz  # PyMuPDF
 import pikepdf
+
+from typing import List
+from .utils import (
+    get_output_dir_final,
+    get_temp_dir,
+    is_scanned_pdf,
+    parse_page_ranges,
+    export_thumbnails,
+)
+
+if os.environ.get("PDFWTF_TEMP_DIR"):
+    os.environ["TMP"] = os.environ.get("PDFWTF_TEMP_DIR")
+    os.environ["TEMP"] = os.environ.get("PDFWTF_TEMP_DIR")
+
 import ocrmypdf
 from ocrmypdf.api import configure_logging, Verbosity
-from typing import List
-from .utils import get_output_dir_final, get_temp_dir, is_scanned_pdf, parse_page_ranges
 
 configure_logging(verbosity=Verbosity.quiet, progress_bar_friendly=False)
 
@@ -39,17 +52,29 @@ def extract_pages(
 
 
 def run_ocr(
-    input_pdf, output_pdf, img_dir, lang="eng", clean_scanned_flag=False, ocrlib=None
+    input_pdf,
+    output_pdf,
+    img_dir,
+    layout="single",
+    lang="eng",
+    clean_scanned_flag=False,
+    ocrlib=None,
+    debug_flag=False,
 ):
-    if ocrlib == "ocrmypdf":
-        run_ocrmypdf(
-            input_pdf, output_pdf, lang=lang, clean_scanned_flag=clean_scanned_flag
-        )
+    if ocrlib == "pymupdf":
+        run_pdfocr(img_dir, output_pdf, language=lang, debug_flag=debug_flag)
     else:
-        run_pdfocr(img_dir, output_pdf, language=lang)
+        run_ocrmypdf(
+            input_pdf,
+            output_pdf,
+            lang=lang,
+            layout=layout,
+            clean_scanned_flag=clean_scanned_flag,
+            debug_flag=debug_flag,
+        )
 
 
-def run_pdfocr(img_dir, output_pdf, language="eng", dpi=300):
+def run_pdfocr(img_dir, output_pdf, language="eng", dpi=300, debug_flag=False):
     img_dir = Path(img_dir)
     final_doc = fitz.open()
 
@@ -65,14 +90,24 @@ def run_pdfocr(img_dir, output_pdf, language="eng", dpi=300):
     final_doc.close()
 
 
-def run_ocrmypdf(input_pdf, output_pdf, lang="eng", clean_scanned_flag=False):
+def run_ocrmypdf(
+    input_pdf, output_pdf, lang="eng", clean_scanned_flag=False, layout="single", debug_flag=False
+):
     """Run OCR with Tesseract via OCRmyPDF."""
+
+    keep_temporary_files = False
+    if debug_flag:
+        keep_temporary_files = True
+
     if clean_scanned_flag:
+        layout_mode = f"--layout {layout}"
+
         ocrmypdf.ocr(
             input_pdf,
             output_pdf,
             language=lang,
             force_ocr=True,
+            unpaper_args=layout_mode,
             rotate_pages=True,
             optimize=0,
             progress_bar=False,
@@ -82,6 +117,7 @@ def run_ocrmypdf(input_pdf, output_pdf, lang="eng", clean_scanned_flag=False):
             clean_final=True,
             continue_on_soft_render_error=True,
             output_type="pdf",
+            keep_temporary_files=keep_temporary_files,
         )
     else:
         ocrmypdf.ocr(
@@ -96,10 +132,11 @@ def run_ocrmypdf(input_pdf, output_pdf, lang="eng", clean_scanned_flag=False):
             progress_bar=False,
             continue_on_soft_render_error=True,
             output_type="pdf",
+            keep_temporary_files=keep_temporary_files,
         )
 
 
-def export_images(pdf_path, out_dir, dpi=300):
+def export_images(pdf_path, out_dir, dpi=300, fext="png"):
 
     out_dir = Path(out_dir)
 
@@ -112,7 +149,7 @@ def export_images(pdf_path, out_dir, dpi=300):
     try:
         for i, page in enumerate(doc, start=1):
             pix = page.get_pixmap(dpi=dpi)
-            out_path = out_dir / f"page_{str(i).zfill(3)}.png"
+            out_path = out_dir / f"page_{str(i).zfill(3)}.{fext}"
             pix.save(str(out_path))  # PyMuPDF expects a str path
     finally:
         doc.close()
@@ -153,13 +190,18 @@ def process_pdf(
     input_path_prefix=None,
     extract_pages_str=None,
     ocrlib="ocrmypdf",
+    layout="single",
     languages="eng",
     clean_scanned_flag=False,
     clear_temp_flag=False,
+    dpi=300,
+    export_images_flag=False,
+    export_thumbs_flag=False,
     export_texts_flag=False,
     txt_dir="_txt",
-    dpi=300,
-    img_dir="_img",
+    img_dir="_png",
+    thumb_dir="_thumb",
+    debug_flag=False,
 ):
     """Full PDF pipeline: remove pages, OCR if needed, export images."""
     input_pdf = Path(input_pdf).resolve()
@@ -168,6 +210,9 @@ def process_pdf(
     output_pdf = output_dir / input_pdf.name
 
     temp_dir = get_temp_dir(clean=clear_temp_flag)
+
+    if debug_flag:
+        print(f"[DEBUG] Using temporary dir: {temp_dir}")
 
     base_hash = hashlib.md5(str(input_pdf).encode("utf-8")).hexdigest()[:8]
     tmp_pdf = temp_dir / f"{base_hash}_{input_pdf.stem}.tmp.pdf"
@@ -187,21 +232,26 @@ def process_pdf(
 
     is_scan = is_scanned_pdf(tmp_pdf)
 
-    # Step 2: Extract images
+    # Step 2: Extract images and/or thumbnails
     images_dir = None
     if tmp_pdf.exists():
-        images_dir = output_dir / f"{img_dir}_{input_pdf.stem}"
-        images_dir.mkdir(parents=True, exist_ok=True)
-        export_images(tmp_pdf, images_dir, dpi=dpi)
+        if is_scan or export_images_flag or export_thumbs_flag:
+            images_dir = output_dir / f"{img_dir}_{input_pdf.stem}"
+            images_dir.mkdir(parents=True, exist_ok=True)
+            export_images(tmp_pdf, images_dir, dpi=dpi, fext="png")
 
-    # Step 3: OCR if scanned
-    if is_scan:
+        if export_thumbs_flag and images_dir:
+            thumbs_dir = output_dir / f"{thumb_dir}_{input_pdf.stem}"
+            thumbs_dir.mkdir(parents=True, exist_ok=True)
+            # export_images(tmp_pdf, thumbs_dir, dpi=48, fext="jpg")
+            export_thumbnails(images_dir, thumbs_dir)
 
-        # Use unpaper via Docker to enhance the images before OCR
-        if images_dir:
-            if clean_scanned_flag and ocrlib != "ocrmypdf":
-                # TBD: unpaper call
-                pass
+    # Step 3: Perform OCR if scanned document
+    if is_scan and images_dir:
+        # TBD: Use unpaper directly to enhance the images before OCR
+        if clean_scanned_flag and ocrlib != "ocrmypdf":
+            # TBD: unpaper call
+            pass
 
         run_ocr(
             tmp_pdf,
@@ -209,7 +259,9 @@ def process_pdf(
             images_dir,
             lang=languages,
             clean_scanned_flag=clean_scanned_flag,
+            layout=layout,
             ocrlib=ocrlib,
+            debug_flag=debug_flag,
         )
     else:
         if tmp_pdf.resolve() != output_pdf:

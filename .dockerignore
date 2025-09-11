@@ -1,0 +1,80 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv/
+
+# Jupyter Notebooks
+.ipynb_checkpoints
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+*.egg
+*.whl
+
+# PyInstaller
+*.spec
+
+# Coverage and test files
+.coverage
+.tox/
+.nox/
+.cache/
+.pytest_cache/
+nosetests.xml
+coverage.xml
+htmlcov/
+
+# Logs and local state
+*.log
+*.pid
+*.lock
+*.tmp
+
+# Environment / Secrets
+.env
+.env.*
+secrets.yaml
+*.pem
+*.key
+
+# Database and backup files
+*.db
+*.bak
+
+# Docker-related
+Dockerfile
+.dockerignore
+
+# Git and version control
+.git/
+.gitignore
+
+# System / Editor files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/
+
+# Static build outputs (if using tools like Webpack or React frontend)
+static/build/
+frontend/node_modules/
+frontend/dist/
+
+# Optional: ignore client-side deps if you're mixing front+back
+node_modules/
+package-lock.json
+yarn.lock

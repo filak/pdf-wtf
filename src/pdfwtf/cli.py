@@ -1,4 +1,5 @@
 import click
+import sys
 from .pipeline import process_pdf
 from .utils import get_output_dir
 
@@ -34,7 +35,11 @@ from .utils import get_output_dir
     "--lang", "languages", default="eng", help="OCR language(s), e.g. 'eng+ces'"
 )
 @click.option(
-    "--ocrlib", "ocrlib", default="ocrmypdf", help="Python library to use"
+    "--ocrlib",
+    "ocrlib",
+    default="ocrmypdf",
+    help="Python library to use",
+    type=click.Choice(["ocrmypdf", "pymupdf"]),
 )
 @click.option(
     "--clean",
@@ -42,13 +47,30 @@ from .utils import get_output_dir
     is_flag=True,
     help="Clean scanned PDF files - uses unpaper !",
 )
+@click.option(
+    "--layout",
+    "layout",
+    default="single",
+    help="Layout for unpaper: single or double",
+    type=click.Choice(["single", "double"]),
+)
 @click.option("--dpi", default=300, help="DPI for image export")
+@click.option(
+    "--get-png", "export_images_flag", is_flag=True, help="Export pages as PNG files"
+)
+@click.option(
+    "--get-thumb",
+    "export_thumbs_flag",
+    is_flag=True,
+    help="Export pages as thumbnail PNG files",
+)
 @click.option(
     "--get-text", "export_texts_flag", is_flag=True, help="Export pages as text files"
 )
 @click.option(
     "--clear-temp", "clear_temp_flag", is_flag=True, help="Clear temporary files"
 )
+@click.option("--debug", "debug_flag", is_flag=True, help="Debugging mode")
 def main(
     input_pdf,
     output_dir,
@@ -58,14 +80,21 @@ def main(
     languages,
     clean_scanned_flag,
     clear_temp_flag,
+    layout,
     dpi,
+    export_images_flag,
+    export_thumbs_flag,
     export_texts_flag,
+    debug_flag,
 ):
     output_dir = get_output_dir(output_dir=output_dir)
 
     """PDF processing pipeline with page removal, OCR, and image export."""
     click.echo(f"Input file :  {input_pdf}")
     click.echo(f"Output dir :  {output_dir}")
+
+    if debug_flag:
+        click.echo(f"[DEBUG] {' '.join(sys.argv)}")
 
     process_pdf(
         input_pdf,
@@ -74,10 +103,14 @@ def main(
         extract_pages_str=extract_pages_str,
         ocrlib=ocrlib,
         languages=languages,
+        layout=layout,
         clean_scanned_flag=clean_scanned_flag,
         clear_temp_flag=clear_temp_flag,
         dpi=dpi,
+        export_images_flag=export_images_flag,
+        export_thumbs_flag=export_thumbs_flag,
         export_texts_flag=export_texts_flag,
+        debug_flag=debug_flag,
     )
 
     click.echo("Done!")
