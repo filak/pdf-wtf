@@ -8,19 +8,23 @@
             "module": "pdfwtf.cli",
             "cwd": "${workspaceFolder}",
             "env": {
-                "PYTHONPATH": "${workspaceFolder}/src"
+                "PYTHONPATH": "${workspaceFolder}/src",
+                "PDFWTF_HOME_DIR": "${env:PDFWTF_HOME_DIR}",
+                "PDFWTF_TEMP_DIR": "${env:PDFWTF_TEMP_DIR}",
+                "PATH": "${env:PDFWTF_HOME_DIR};${env:PATH}",
             },
             "console": "integratedTerminal",
             "justMyCode": true,
             "args": [
                 //"--help"
-                "--infile=d:\\Decko\\AZV-data-flow\\instance\\_data\\in\\2023\\NV18-01-00399\\190141.pdf",
-                //"--infile=f:\\Docas\\azv-data-flow\\instance\\_data\\in\\2023\\NV18-01-00399\\190141.pdf", "--extract=3-",
-                //"--infile=f:\\Docas\\azv-data-flow\\instance\\_data\\in\\2023\\NU20J-08-00009\\172463.pdf", "--extract=20",
-                //"--infile=f:\\Docas\\azv-data-flow\\instance\\_data\\in\\2023\\NV19-08-00250\\150070.pdf", "--extract=3-4,7-17",
-                "--infile=f:\\Docas\\azv-data-flow\\instance\\_data\\in\\2022\\NV18-07-00272\\168731.pdf", "--extract=4-10",
+                "--infile=f:\\Docas\\AZV-data-flow\\instance\\_data\\in\\2023\\NV18-01-00399\\190141.pdf",
+                //"--infile=f:\\Docas\\AZV-data-flow\\instance\\_data\\in\\2023\\NV18-01-00399\\190141.pdf",
+                "--extract=3-4",
+                //"--infile=f:\\Docas\\AZV-data-flow\\instance\\_data\\in\\2023\\NU20J-08-00009\\172463.pdf", "--extract=20",
+                //"--infile=f:\\Docas\\AZV-data-flow\\instance\\_data\\in\\2023\\NV19-08-00250\\150070.pdf", "--extract=3-4,7-17",
+                "--infile=f:\\Docas\\AZV-data-flow\\instance\\_data\\in\\2022\\NV18-07-00272\\168731.pdf", "--extract=4-10",
                 "--lang=ces",
-                "--outdir=f:\\Docas\\azv-data-flow\\instance\\_data\\out-pdf",
+                //"--outdir=f:\\Docas\\AZV-data-flow\\instance\\_data\\out-pdf",
                 "--relative=_data/in",
                 "--get-text",
             ]
