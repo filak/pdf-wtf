@@ -54,9 +54,22 @@ Create ENV vars:
      setx PDFWTF_HOME_DIR d:\Decko\pdf-wtf
      setx PDFWTF_TEMP_DIR %PDFWTF_HOME_DIR%\instance\temp
 
+Add %PDFWTF_HOME_DIR% to PATH so OCRmyPDF can find the unpaper.cmd
+
+Check:
+
      echo  %PDFWTF_HOME_DIR%  %PDFWTF_TEMP_DIR%
 
-Add %PDFWTF_HOME_DIR% to PATH so OCRmyPDF can find the unpaper.cmd
+     unpaper.cmd --version
+
+Patch 
+
+    F:\Decko\pdf-wtf\venv\Lib\site-packages\ocrmypdf\subprocess\__init__.py#60 
+
+    # Patch for ".\\unpaper" on Windows
+    if sys.platform.startswith("win"):
+        if args[0].startswith(".\\unpaper."):
+            args[0] = args[0].lstrip(".\\")
 
 
 
