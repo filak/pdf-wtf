@@ -197,8 +197,6 @@ def process_pdf(
     if is_scan:
 
         # Use unpaper via Docker to enhance the images before OCR
-        # Try to use https://pymupdf.readthedocs.io/en/latest/recipes-ocr.html
-        # instead of ocrmypdf for better performance
 
         if images_dir:
             # TBD: unpaper call
