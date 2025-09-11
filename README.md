@@ -56,8 +56,7 @@ Create ENV vars:
 
      echo  %PDFWTF_HOME_DIR%  %PDFWTF_TEMP_DIR%
 
-
-
+Add PDFWTF_HOME_DIR to PATH so OCRmyPDF can find the unpaper.cmd
 
 
 
