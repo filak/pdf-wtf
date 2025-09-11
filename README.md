@@ -62,5 +62,14 @@ Check:
 
      unpaper.cmd --version
 
+Patch 
+
+    F:\Decko\pdf-wtf\venv\Lib\site-packages\ocrmypdf\subprocess\__init__.py#60 
+
+    # Patch for ".\\unpaper" on Windows
+    if sys.platform.startswith("win"):
+        if args[0].startswith(".\\unpaper."):
+            args[0] = args[0].lstrip(".\\")
+
 
 
