@@ -1,6 +1,7 @@
 import os
 import shutil
 from pathlib import Path
+import fitz  # PyMuPDF
 
 RELATIVE_OUTPUT_DIR = "_data/out-pdf"
 
@@ -81,6 +82,15 @@ def get_output_dir_final(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     return output_dir
+
+
+def is_scanned_pdf(filepath):
+    """Check if a PDF is likely scanned (no embedded text)."""
+    with fitz.open(filepath) as doc:
+        for page in doc:
+            if page.get_text().strip():
+                return False
+    return True
 
 
 def parse_page_ranges(pages_str, total_pages=None):
