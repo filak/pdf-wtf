@@ -7,7 +7,6 @@ import ocrmypdf
 from ocrmypdf.api import configure_logging, Verbosity
 from typing import List
 from .utils import get_output_dir_final, get_temp_dir, is_scanned_pdf, parse_page_ranges
-from .imaging import process_img_folder
 
 configure_logging(verbosity=Verbosity.quiet, progress_bar_friendly=False)
 
@@ -40,12 +39,30 @@ def extract_pages(
 
 
 def run_ocr(
-    input_pdf, output_pdf, lang="eng", clean_scanned_flag=False, backend="ocrmypdf"
+    input_pdf, output_pdf, img_dir, lang="eng", clean_scanned_flag=False, backend=None
 ):
     if backend == "ocrmypdf":
         run_ocrmypdf(
             input_pdf, output_pdf, lang=lang, clean_scanned_flag=clean_scanned_flag
         )
+    else:
+        run_pdfocr(img_dir, output_pdf, language=lang)
+
+
+def run_pdfocr(img_dir, output_pdf, language="eng", dpi=300):
+    img_dir = Path(img_dir)
+    final_doc = fitz.open()
+
+    for img_file in sorted(img_dir.glob("*.png")):
+        pix = fitz.Pixmap(str(img_file))
+        ocr_bytes = pix.pdfocr_tobytes(language=language)
+        tmp_doc = fitz.open(stream=ocr_bytes, filetype="pdf")
+        final_doc.insert_pdf(tmp_doc)
+        tmp_doc.close()
+        pix = None
+
+    final_doc.save(output_pdf)
+    final_doc.close()
 
 
 def run_ocrmypdf(input_pdf, output_pdf, lang="eng", clean_scanned_flag=False):
@@ -184,12 +201,16 @@ def process_pdf(
         # instead of ocrmypdf for better performance
 
         if images_dir:
-            proc_images_dir = output_dir / f"{img_dir}_proc_{input_pdf.stem}"
-            proc_images_dir.mkdir(parents=True, exist_ok=True)
-            process_img_folder(images_dir, proc_images_dir)
+            # TBD: unpaper call
+            pass
 
         run_ocr(
-            tmp_pdf, output_pdf, lang=languages, clean_scanned_flag=clean_scanned_flag
+            tmp_pdf,
+            output_pdf,
+            images_dir,
+            lang=languages,
+            clean_scanned_flag=clean_scanned_flag,
+            # backend="ocrmypdf",
         )
     else:
         if tmp_pdf.resolve() != output_pdf:
