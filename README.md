@@ -37,7 +37,7 @@ PDF files parsing and data extraction
 
 ## Using unpaper on Windows
 
-> OCRmyPDF requires unpaper installed to be abel to use --clean and --clean_final params
+> OCRmyPDF requires unpaper installed to be able to use --clean and --clean_final params
 
 Install and start Docker Desktop
 
