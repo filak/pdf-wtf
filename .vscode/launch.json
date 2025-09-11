@@ -63,9 +63,11 @@
             },
             "justMyCode": false,
             "args": [
-                "-v", "--dpi", "300.062827", "--layout", "double",
-                "f:\\Decko\\pdf-wtf\\instance\\temp\\ocrmypdf.io.qvwwdgbk\\000001_pp_deskew.png",
-                "f:\\Decko\\pdf-wtf\\instance\\temp\\tmpwdrzuf72\\output.pnm"
+                "-v", "--dpi", "300.062827",
+                "--output-pages=2",
+                //"--layout", "double",
+                "f:\\Decko\\pdf-wtf\\instance\\_data\\out-pdf\\2023\\NV18-01-00399\\_png_190141\\page_001.png",
+                "f:\\Decko\\pdf-wtf\\instance\\temp\\test\\page_001_%03d.pnm"
             ]
         },
     ]
