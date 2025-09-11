@@ -91,7 +91,12 @@ def run_pdfocr(img_dir, output_pdf, language="eng", dpi=300, debug_flag=False):
 
 
 def run_ocrmypdf(
-    input_pdf, output_pdf, lang="eng", clean_scanned_flag=False, layout="single", debug_flag=False
+    input_pdf,
+    output_pdf,
+    lang="eng",
+    clean_scanned_flag=False,
+    layout="single",
+    debug_flag=False,
 ):
     """Run OCR with Tesseract via OCRmyPDF."""
 
@@ -100,14 +105,18 @@ def run_ocrmypdf(
         keep_temporary_files = True
 
     if clean_scanned_flag:
+        unpaper_args_list = []
+
         layout_mode = f"--layout {layout}"
+
+        unpaper_args_list.append(layout_mode)
 
         ocrmypdf.ocr(
             input_pdf,
             output_pdf,
             language=lang,
             force_ocr=True,
-            unpaper_args=layout_mode,
+            unpaper_args=" ".join(unpaper_args_list),
             rotate_pages=True,
             optimize=0,
             progress_bar=False,
