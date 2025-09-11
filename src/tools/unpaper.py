@@ -1,9 +1,9 @@
-import os
 import sys
 import subprocess
 from pathlib import Path
 
 DOCKER_IMAGE = "unpaper-alpine"
+
 
 def main():
     args = sys.argv[1:]
