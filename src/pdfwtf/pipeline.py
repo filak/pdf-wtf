@@ -39,9 +39,9 @@ def extract_pages(
 
 
 def run_ocr(
-    input_pdf, output_pdf, img_dir, lang="eng", clean_scanned_flag=False, backend=None
+    input_pdf, output_pdf, img_dir, lang="eng", clean_scanned_flag=False, ocrlib=None
 ):
-    if backend == "ocrmypdf":
+    if ocrlib == "ocrmypdf":
         run_ocrmypdf(
             input_pdf, output_pdf, lang=lang, clean_scanned_flag=clean_scanned_flag
         )
@@ -152,6 +152,7 @@ def process_pdf(
     output_dir,
     input_path_prefix=None,
     extract_pages_str=None,
+    ocrlib="ocrmypdf",
     languages="eng",
     clean_scanned_flag=False,
     clear_temp_flag=False,
@@ -197,10 +198,10 @@ def process_pdf(
     if is_scan:
 
         # Use unpaper via Docker to enhance the images before OCR
-
         if images_dir:
-            # TBD: unpaper call
-            pass
+            if clean_scanned_flag and ocrlib != "ocrmypdf":
+                # TBD: unpaper call
+                pass
 
         run_ocr(
             tmp_pdf,
@@ -208,7 +209,7 @@ def process_pdf(
             images_dir,
             lang=languages,
             clean_scanned_flag=clean_scanned_flag,
-            # backend="ocrmypdf",
+            ocrlib=ocrlib,
         )
     else:
         if tmp_pdf.resolve() != output_pdf:

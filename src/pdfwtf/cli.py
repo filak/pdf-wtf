@@ -34,6 +34,9 @@ from .utils import get_output_dir
     "--lang", "languages", default="eng", help="OCR language(s), e.g. 'eng+ces'"
 )
 @click.option(
+    "--ocrlib", "ocrlib", default="ocrmypdf", help="Python library to use"
+)
+@click.option(
     "--clean",
     "clean_scanned_flag",
     is_flag=True,
@@ -51,6 +54,7 @@ def main(
     output_dir,
     input_path_prefix,
     extract_pages_str,
+    ocrlib,
     languages,
     clean_scanned_flag,
     clear_temp_flag,
@@ -68,6 +72,7 @@ def main(
         output_dir,
         input_path_prefix=input_path_prefix,
         extract_pages_str=extract_pages_str,
+        ocrlib=ocrlib,
         languages=languages,
         clean_scanned_flag=clean_scanned_flag,
         clear_temp_flag=clear_temp_flag,
