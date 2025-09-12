@@ -62,10 +62,9 @@ Check:
 
      unpaper.cmd --version
 
-Patch 
+Patch  
 
-    F:\Decko\pdf-wtf\venv\Lib\site-packages\ocrmypdf\subprocess\_windows.py#60  
-
+    \venv\Lib\site-packages\ocrmypdf\subprocess\_windows.py#60  
 
     def fix_windows_args():
     ...
