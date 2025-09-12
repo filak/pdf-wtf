@@ -330,6 +330,11 @@ def process_pdf(
         if pnm_subdir.exists() and pnm_subdir.is_dir():
             if any(pnm_subdir.iterdir()):
 
+                if images_dir.is_dir():
+                    clear_dir(images_dir)
+
+                images_dir.mkdir(parents=True, exist_ok=True)
+
                 for pnm_file in pnm_subdir.glob("*.pnm"):
                     temp_outfile = pnm_subdir / f"{pnm_file.stem}.pnm"
                     final_path = images_dir / f"{pnm_file.stem}.png"
