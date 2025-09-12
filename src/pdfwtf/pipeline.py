@@ -1,9 +1,12 @@
 import hashlib
 import os
 import shutil
+import tempfile
 from pathlib import Path
 import fitz  # PyMuPDF
 import pikepdf
+from PIL import Image
+from pdfwtf.unpaper_run import run_unpaper_simple, run_unpaper_version
 
 from typing import List
 from .utils import (
@@ -19,7 +22,7 @@ from .utils import (
 )
 
 if os.environ.get("PDFWTF_TEMP_DIR"):
-    os.environ["TMP"] = os.environ.get("PDFWTF_TEMP_DIR")
+    os.environ["TMPDIR"] = os.environ.get("PDFWTF_TEMP_DIR")
     os.environ["TEMP"] = os.environ.get("PDFWTF_TEMP_DIR")
 
 import ocrmypdf
@@ -130,6 +133,13 @@ def run_ocrmypdf(
     if debug_flag:
         keep_temporary_files = True
 
+    # DO NOT use --output-pages and --pre-rotate with ocrmypdf
+    if output_pages:
+        output_pages = None
+
+    if pre_rotate:
+        pre_rotate = None
+
     unpaper_args = get_unpaper_args(layout=layout, output_pages=output_pages, pre_rotate=pre_rotate, as_string=True)
 
     if unpaper_args:
@@ -145,7 +155,7 @@ def run_ocrmypdf(
         optimize=3,
         progress_bar=False,
         deskew=True,
-        fast_web_view=False,
+        fast_web_view=0.75,
         clean=clean_scanned_flag,
         clean_final=clean_scanned_flag,
         continue_on_soft_render_error=True,
@@ -267,13 +277,65 @@ def process_pdf(
 
     # Step 2: Process scanned documents
     if is_scan:
+        # Copy the PDF to a working location
         shutil.copy2(tmp_pdf, scan_pdf)
-        scans_dir = temp_dir / f"{scan_dir}_{input_pdf.stem}"
+
+        # Safe temp folder for exported PNGs and Unpaper outputs
+        temp_subdir = Path(tempfile.mkdtemp())
+        temp_subdir.mkdir(parents=True, exist_ok=True)
+
+        # Directory where PNGs will be exported
+        scans_dir = temp_subdir / f"scans_{input_pdf.stem}"
         export_images(tmp_pdf, scans_dir, dpi=dpi, fext="png")
 
-        # TBD: Use unpaper directly to enhance the scan_dir images before OCR
-        # - now just copy scans to images dir
-        shutil.copytree(scans_dir, images_dir, dirs_exist_ok=True)
+        pnm_subdir = temp_subdir / "pnm"
+        pnm_subdir.mkdir(parents=True, exist_ok=True)
+
+        # Collect PNG files to process
+        files_to_process = sorted(scans_dir.glob("*.png"))
+
+        # TBD - check page orientation !
+        # for files, orientation in files_to_process...
+
+        if debug_flag:
+            run_unpaper_version()
+
+        # Get Unpaper arguments
+        unpaper_args = get_unpaper_args(layout=layout, output_pages=output_pages, pre_rotate=pre_rotate)
+
+        for infile in files_to_process:
+            try:
+                if output_pages:
+                    temp_outfile = pnm_subdir / f"{infile.stem}_%03d.pnm"
+                else:
+                    temp_outfile = pnm_subdir / f"{infile.stem}.pnm"
+
+                # Run Unpaper
+                run_unpaper_simple(
+                    input_file=infile,
+                    output_file=temp_outfile,
+                    dpi=dpi,
+                    mode_args=unpaper_args,
+                    tmpdir=temp_subdir,
+                )
+
+            except Exception as e:
+                print(f"Unpaper failed for {infile}: {e}")
+                # Optional: print the command for debugging
+                if debug_flag:
+                    cmd_debug = ['unpaper', '-v', '--dpi', str(round(dpi, 6))] + unpaper_args
+                    cmd_debug.extend([str(infile.resolve()), str(temp_outfile.resolve())])
+                    print(" ".join(cmd_debug))
+
+        if pnm_subdir.exists() and pnm_subdir.is_dir():
+            if any(pnm_subdir.iterdir()):
+
+                for pnm_file in pnm_subdir.glob("*.pnm"):
+                    temp_outfile = pnm_subdir / f"{pnm_file.stem}.pnm"
+                    final_path = images_dir / f"{pnm_file.stem}.png"
+                    with Image.open(temp_outfile) as im:
+                        im.save(final_path, dpi=(dpi, dpi))
+
         images_to_pdf(images_dir, tmp_pdf, dpi=dpi, fext="png")
 
 

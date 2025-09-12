@@ -44,9 +44,9 @@ from .utils import get_output_dir
 @click.option(
     "--ocrlib",
     "ocrlib",
-    default=None,
+    default="ocrmypdf",
     help="Python library to do OCR",
-    type=click.Choice(["ocrmypdf", "pymupdf", "pytesseract"]),
+    type=click.Choice(["ocrmypdf", "pymupdf"]),
 )
 @click.option(
     "--clean",
@@ -57,7 +57,7 @@ from .utils import get_output_dir
 @click.option(
     "--layout",
     "layout",
-    default=None,
+    default="single",
     help="[unpaper]: single or double",
     type=click.Choice(["single", "double"]),
 )

@@ -180,20 +180,30 @@ def export_thumbnails(
                 img.save(out_path, **save_kwargs)
 
 
-def get_unpaper_args(layout=None, output_pages=None, pre_rotate=None, as_string=False):
+def get_unpaper_args(layout=None, output_pages=None, pre_rotate=None, as_string=False, full=False):
     unpaper_args_list = []
+    if full:
+        default_args = [
+            '--mask-scan-size',
+            '100',  # don't blank out narrow columns
+            '--no-border-align',  # don't align visible content to borders
+            '--no-mask-center',  # don't center visible content within page
+            '--no-grayfilter',  # don't remove light gray areas
+            '--no-blackfilter',  # don't remove solid black areas
+        ]
+        unpaper_args_list.extend(default_args)
 
     if layout is not None:
-        layout_mode = f"--layout {layout}"
-        unpaper_args_list.append(layout_mode)
+        unpaper_args_list.append("--layout")
+        unpaper_args_list.append(layout)
 
     if pre_rotate is not None:
-        rotate_arg = f"--pre-rotate {pre_rotate}"
-        unpaper_args_list.append(rotate_arg)
+        unpaper_args_list.append("--pre-rotate")
+        unpaper_args_list.append(pre_rotate)
 
-    if output_pages in [1, 2]:
-        pages_arg = f"--output-pages {output_pages}"
-        unpaper_args_list.append(pages_arg)
+    if output_pages in ["1", "2"]:
+        unpaper_args_list.append("--output-pages")
+        unpaper_args_list.append(output_pages)
 
     if as_string:
         return " ".join(unpaper_args_list)
@@ -201,14 +211,24 @@ def get_unpaper_args(layout=None, output_pages=None, pre_rotate=None, as_string=
     return unpaper_args_list
 
 
-def contains_files(p: Path, extensions: Union[str, List[str]]) -> bool:
-    if not p.exists():
-        return False
-    if not p.is_dir():
-        return False
+def find_files(
+    p: Path,
+    extensions: Union[str, List[str]],
+    as_string: bool = False
+) -> List[Union[Path, str]]:
+    if not p.exists() or not p.is_dir():
+        return []
+
     if isinstance(extensions, str):
         extensions = [extensions]
-    return any(p.glob(f"*{ext}") for ext in extensions)
+
+    files: List[Path] = []
+    for ext in extensions:
+        files.extend(p.glob(f"*{ext}"))
+
+    if as_string:
+        return [str(f) for f in files]
+    return files
 
 
 def clear_dir(p: Path):
