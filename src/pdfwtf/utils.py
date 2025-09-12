@@ -2,7 +2,12 @@ import os
 import shutil
 from pathlib import Path
 import fitz  # PyMuPDF
+import img2pdf
+import pikepdf
 from PIL import Image, ImageFilter
+from typing import Union, List
+from pdfminer.high_level import extract_text
+
 
 RELATIVE_OUTPUT_DIR = "_data/out-pdf"
 
@@ -88,8 +93,8 @@ def get_output_dir_final(
     return output_dir
 
 
-def is_scanned_pdf(filepath):
-    """Check if a PDF is likely scanned (no embedded text)."""
+def was_scanned_pdf(filepath):
+    """Check if a PDF has been likely scanned (no embedded text)."""
     with fitz.open(filepath) as doc:
         for page in doc:
             if page.get_text().strip():
@@ -120,6 +125,18 @@ def parse_page_ranges(pages_str, total_pages=None):
     return sorted(pages)
 
 
+def images_to_pdf(images_dir: Path, output_pdf: Path, dpi=300, fext="png"):
+    # collect all images in natural sort order
+    image_files = sorted(images_dir.glob(f"*.{fext}"))
+    if not image_files:
+        raise ValueError(f"No PNG images found in {images_dir}")
+
+    with output_pdf.open("wb") as f:
+        f.write(img2pdf.convert(
+            [str(p) for p in image_files]
+        ))
+
+
 def export_thumbnails(
     images_dir: "Path",
     thumbs_dir: "Path",
@@ -137,6 +154,14 @@ def export_thumbnails(
     :param quality: JPEG quality
     """
 
+    if thumbs_dir.is_dir():
+        clear_dir(thumbs_dir)
+
+    thumbs_dir.mkdir(parents=True, exist_ok=True)
+
+    if not images_dir.is_dir():
+        return
+
     for img_path in sorted(images_dir.iterdir()):
         if img_path.is_file() and img_path.suffix.lower() in [".png", ".jpg"]:
             with Image.open(img_path) as img:
@@ -153,3 +178,53 @@ def export_thumbnails(
                     else {}
                 )
                 img.save(out_path, **save_kwargs)
+
+
+def get_unpaper_args(layout=None, output_pages=None, pre_rotate=None, as_string=False):
+    unpaper_args_list = []
+
+    if layout is not None:
+        layout_mode = f"--layout {layout}"
+        unpaper_args_list.append(layout_mode)
+
+    if pre_rotate is not None:
+        rotate_arg = f"--pre-rotate {pre_rotate}"
+        unpaper_args_list.append(rotate_arg)
+
+    if output_pages in [1, 2]:
+        pages_arg = f"--output-pages {output_pages}"
+        unpaper_args_list.append(pages_arg)
+
+    if as_string:
+        return " ".join(unpaper_args_list)
+
+    return unpaper_args_list
+
+
+def contains_files(p: Path, extensions: Union[str, List[str]]) -> bool:
+    if not p.exists():
+        return False
+    if not p.is_dir():
+        return False
+    if isinstance(extensions, str):
+        extensions = [extensions]
+    return any(p.glob(f"*{ext}") for ext in extensions)
+
+
+def clear_dir(p: Path):
+    if not p.exists():
+        return False
+    if not p.is_dir():
+        return False
+    for item in p.iterdir():
+        if item.is_file():
+            item.unlink()
+
+    return True
+
+
+def count_pdf_pages(pdf_path: Path) -> int:
+    if not pdf_path.is_file():
+        return 0
+    with pikepdf.open(pdf_path) as pdf:
+        return len(pdf.pages)

@@ -17,7 +17,9 @@ click==8.1.7          # BSD-3-Clause License
 # https://www.ghostscript.com/releases/gsdnld.html
 ## unpaper - required by OCRmyPDF with --clean params
 # https://github.com/unpaper/unpaper
-# On Windows you MUST:
+## pngquant (GNU) - required by OCRmyPDF with optimize>0
+# https://pngquant.org/
+### On Windows you MUST:
 # - install unpaper via Docker and set up ENV vars:
 # setx PDFWTF_HOME_DIR d:\Decko\pdf-wtf
 # setx PDFWTF_TEMP_DIR %PDFWTF_HOME_DIR\%instance\temp

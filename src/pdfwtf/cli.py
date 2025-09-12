@@ -32,14 +32,21 @@ from .utils import get_output_dir
     help="Pages to extract, e.g. '1-3,5,8-'",
 )
 @click.option(
+    "--skip-post",
+    "skip_pages_str",
+    default=None,
+    help="Pages to skip after processing, e.g. '1,8-'",
+)
+@click.option(
     "--lang", "languages", default="eng", help="OCR language(s), e.g. 'eng+ces'"
 )
+@click.option("--dpi", default=300, help="DPI for image export")
 @click.option(
     "--ocrlib",
     "ocrlib",
-    default="ocrmypdf",
-    help="Python library to use",
-    type=click.Choice(["ocrmypdf", "pymupdf"]),
+    default=None,
+    help="Python library to do OCR",
+    type=click.Choice(["ocrmypdf", "pymupdf", "pytesseract"]),
 )
 @click.option(
     "--clean",
@@ -50,11 +57,12 @@ from .utils import get_output_dir
 @click.option(
     "--layout",
     "layout",
-    default="single",
-    help="Layout for unpaper: single or double",
+    default=None,
+    help="[unpaper]: single or double",
     type=click.Choice(["single", "double"]),
 )
-@click.option("--dpi", default=300, help="DPI for image export")
+@click.option("--output-pages", "output_pages", default=None, help="[unpaper]: 1 or 2", type=click.Choice(["1", "2"]))
+@click.option("--pre-rotate", "pre_rotate", default=None, help="[unpaper]: 0, 90, 180, 270", type=int)
 @click.option(
     "--get-png", "export_images_flag", is_flag=True, help="Export pages as PNG files"
 )
@@ -76,12 +84,15 @@ def main(
     output_dir,
     input_path_prefix,
     extract_pages_str,
+    skip_pages_str,
     ocrlib,
     languages,
     clean_scanned_flag,
     clear_temp_flag,
-    layout,
     dpi,
+    layout,
+    output_pages,
+    pre_rotate,
     export_images_flag,
     export_thumbs_flag,
     export_texts_flag,
@@ -101,12 +112,15 @@ def main(
         output_dir,
         input_path_prefix=input_path_prefix,
         extract_pages_str=extract_pages_str,
+        skip_pages_str=skip_pages_str,
         ocrlib=ocrlib,
         languages=languages,
+        dpi=dpi,
         layout=layout,
+        output_pages=output_pages,
+        pre_rotate=pre_rotate,
         clean_scanned_flag=clean_scanned_flag,
         clear_temp_flag=clear_temp_flag,
-        dpi=dpi,
         export_images_flag=export_images_flag,
         export_thumbs_flag=export_thumbs_flag,
         export_texts_flag=export_texts_flag,

@@ -7,9 +7,13 @@ import pikepdf
 
 from typing import List
 from .utils import (
+    clear_dir,
+    count_pdf_pages,
     get_output_dir_final,
     get_temp_dir,
-    is_scanned_pdf,
+    get_unpaper_args,
+    images_to_pdf,
+    was_scanned_pdf,
     parse_page_ranges,
     export_thumbnails,
 )
@@ -25,25 +29,36 @@ configure_logging(verbosity=Verbosity.quiet, progress_bar_friendly=False)
 
 
 def extract_pages(
-    input_pikepdf: str,
-    output_pdf: str,
-    pages_to_keep: List[int],
+    input_pdf: Path,
+    output_pdf: Path,
+    pages_to_keep: List[int] = None,
+    pages_to_skip: List[int] = None,
     zero_based: bool = False,
 ):
     """
     Create a new PDF with specified pages.
     """
+    if not pages_to_keep and not pages_to_skip:
+        return
+
     # Convert to 0-based if needed
     if not zero_based:
-        pages_to_keep = [p - 1 for p in pages_to_keep]
+        if pages_to_keep:
+            pages_to_keep = [p - 1 for p in pages_to_keep]
+        if pages_to_skip:
+            pages_to_skip = [p - 1 for p in pages_to_skip]
 
     try:
         new_pdf = pikepdf.Pdf.new()
 
-        # Add only pages not in pages_to_remove
-        for i, page in enumerate(input_pikepdf.pages):
-            if i in pages_to_keep:
-                new_pdf.pages.append(page)
+        with pikepdf.open(input_pdf) as pdf:
+            for i, page in enumerate(pdf.pages):
+                if pages_to_keep:
+                    if i in pages_to_keep:
+                        new_pdf.pages.append(page)
+                elif pages_to_skip:
+                    if i not in pages_to_skip:
+                        new_pdf.pages.append(page)
 
         new_pdf.save(output_pdf)
         new_pdf.close()
@@ -55,26 +70,35 @@ def run_ocr(
     input_pdf,
     output_pdf,
     img_dir,
-    layout="single",
+    ocrlib=None,
     lang="eng",
     clean_scanned_flag=False,
-    ocrlib=None,
+    layout=None,
+    output_pages=None,
+    pre_rotate=None,
     debug_flag=False,
 ):
     if ocrlib == "pymupdf":
         run_pdfocr(img_dir, output_pdf, language=lang, debug_flag=debug_flag)
-    else:
+
+    elif ocrlib == "ocrmypdf":
         run_ocrmypdf(
             input_pdf,
             output_pdf,
             lang=lang,
             layout=layout,
             clean_scanned_flag=clean_scanned_flag,
+            output_pages=output_pages,
+            pre_rotate=pre_rotate,
             debug_flag=debug_flag,
         )
+    else:
+        shutil.copy2(input_pdf, output_pdf)
 
 
 def run_pdfocr(img_dir, output_pdf, language="eng", dpi=300, debug_flag=False):
+    """Run OCR with Tesseract via PyMuPDF."""
+
     img_dir = Path(img_dir)
     final_doc = fitz.open()
 
@@ -95,7 +119,9 @@ def run_ocrmypdf(
     output_pdf,
     lang="eng",
     clean_scanned_flag=False,
-    layout="single",
+    layout=None,
+    output_pages=None,
+    pre_rotate=None,
     debug_flag=False,
 ):
     """Run OCR with Tesseract via OCRmyPDF."""
@@ -104,55 +130,39 @@ def run_ocrmypdf(
     if debug_flag:
         keep_temporary_files = True
 
-    if clean_scanned_flag:
-        unpaper_args_list = []
+    unpaper_args = get_unpaper_args(layout=layout, output_pages=output_pages, pre_rotate=pre_rotate, as_string=True)
 
-        layout_mode = f"--layout {layout}"
+    if unpaper_args:
+        clean_scanned_flag = True
 
-        unpaper_args_list.append(layout_mode)
-
-        ocrmypdf.ocr(
-            input_pdf,
-            output_pdf,
-            language=lang,
-            force_ocr=True,
-            unpaper_args=" ".join(unpaper_args_list),
-            rotate_pages=True,
-            optimize=0,
-            progress_bar=False,
-            deskew=True,
-            fast_web_view=False,
-            clean=True,
-            clean_final=True,
-            continue_on_soft_render_error=True,
-            output_type="pdf",
-            keep_temporary_files=keep_temporary_files,
-        )
-    else:
-        ocrmypdf.ocr(
-            input_pdf,
-            output_pdf,
-            language=lang,
-            force_ocr=True,
-            deskew=True,
-            fast_web_view=False,
-            rotate_pages=True,
-            optimize=0,
-            progress_bar=False,
-            continue_on_soft_render_error=True,
-            output_type="pdf",
-            keep_temporary_files=keep_temporary_files,
-        )
+    ocrmypdf.ocr(
+        input_pdf,
+        output_pdf,
+        language=lang,
+        force_ocr=True,
+        unpaper_args=unpaper_args,
+        rotate_pages=True,
+        optimize=3,
+        progress_bar=False,
+        deskew=True,
+        fast_web_view=False,
+        clean=clean_scanned_flag,
+        clean_final=clean_scanned_flag,
+        continue_on_soft_render_error=True,
+        output_type="pdf",
+        keep_temporary_files=keep_temporary_files,
+    )
 
 
-def export_images(pdf_path, out_dir, dpi=300, fext="png"):
+def export_images(pdf_path: "Path", out_dir: "Path", dpi=300, fext="png"):
 
-    out_dir = Path(out_dir)
-
-    if out_dir.exists():
-        shutil.rmtree(out_dir)
+    if out_dir.is_dir():
+        clear_dir(out_dir)
 
     out_dir.mkdir(parents=True, exist_ok=True)
+
+    if not pdf_path.exists():
+        return
 
     doc = fitz.open(pdf_path)
     try:
@@ -164,14 +174,15 @@ def export_images(pdf_path, out_dir, dpi=300, fext="png"):
         doc.close()
 
 
-def export_text(pdf_path, out_dir, level="text") -> dict:
+def export_text(pdf_path: "Path", out_dir: "Path", level="text") -> dict:
 
-    out_dir = Path(out_dir)
+    if out_dir.is_dir():
+        clear_dir(out_dir)
 
-    if out_dir.exists():
-        shutil.rmtree(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
 
-    out_dir.mkdir(parents=True, exist_ok=True)  # ensure output dir exists
+    if not pdf_path.exists():
+        return {}
 
     doc = fitz.open(pdf_path)
     text_pages = {}
@@ -198,96 +209,111 @@ def process_pdf(
     output_dir,
     input_path_prefix=None,
     extract_pages_str=None,
-    ocrlib="ocrmypdf",
-    layout="single",
+    skip_pages_str=None,
+    ocrlib=None,
     languages="eng",
     clean_scanned_flag=False,
     clear_temp_flag=False,
     dpi=300,
+    layout=None,
+    output_pages=None,
+    pre_rotate=None,
     export_images_flag=False,
     export_thumbs_flag=False,
     export_texts_flag=False,
-    txt_dir="_txt",
-    img_dir="_png",
-    thumb_dir="_thumb",
+    scan_dir="_scans",
+    txt_dir="_texts",
+    img_dir="_images",
+    thumb_dir="_thumbs",
     debug_flag=False,
 ):
-    """Full PDF pipeline: remove pages, OCR if needed, export images."""
+
     input_pdf = Path(input_pdf).resolve()
 
     output_dir = get_output_dir_final(output_dir, input_pdf, input_path_prefix)
     output_pdf = output_dir / input_pdf.name
 
+    base_hash = hashlib.md5(str(input_pdf).encode("utf-8")).hexdigest()[:8]
+
     temp_dir = get_temp_dir(clean=clear_temp_flag)
 
-    if debug_flag:
-        print(f"[DEBUG] Using temporary dir: {temp_dir}")
-
-    base_hash = hashlib.md5(str(input_pdf).encode("utf-8")).hexdigest()[:8]
     tmp_pdf = temp_dir / f"{base_hash}_{input_pdf.stem}.tmp.pdf"
+    scan_pdf = temp_dir / f"{base_hash}_{input_pdf.stem}.scan.pdf"
+
+    images_dir = output_dir / f"{img_dir}_{input_pdf.stem}"
+    thumbs_dir = output_dir / f"{thumb_dir}_{input_pdf.stem}"
+
+    # is_scan = was_scanned_pdf(input_pdf)
+    is_scan = was_scanned_pdf(input_pdf)
+
+    if debug_flag:
+        print(f"[DEBUG] Using temporary dir:  {temp_dir}")
+        print(f"[DEBUG] PDF was scanned:  {is_scan}")
 
     # try:
-    input_pikepdf = pikepdf.open(input_pdf)
-    total_pages_in = len(input_pikepdf.pages)
+
+    total_pages_in = count_pdf_pages(input_pdf)
+
+    output_orig = output_dir / f"{input_pdf.stem}.orig.pdf"
+
+    shutil.copy2(input_pdf, output_orig)
 
     # Step 1: Extract pages
     if extract_pages_str:
         pages_to_keep = parse_page_ranges(extract_pages_str, total_pages=total_pages_in)
-        extract_pages(input_pikepdf, str(tmp_pdf), pages_to_keep)
+        extract_pages(input_pdf, tmp_pdf, pages_to_keep=pages_to_keep)
     else:
         shutil.copy2(input_pdf, tmp_pdf)
 
-    input_pikepdf.close()
+    # Step 2: Process scanned documents
+    if is_scan:
+        shutil.copy2(tmp_pdf, scan_pdf)
+        scans_dir = temp_dir / f"{scan_dir}_{input_pdf.stem}"
+        export_images(tmp_pdf, scans_dir, dpi=dpi, fext="png")
 
-    is_scan = is_scanned_pdf(tmp_pdf)
+        # TBD: Use unpaper directly to enhance the scan_dir images before OCR
+        # - now just copy scans to images dir
+        shutil.copytree(scans_dir, images_dir, dirs_exist_ok=True)
+        images_to_pdf(images_dir, tmp_pdf, dpi=dpi, fext="png")
 
-    # Step 2: Extract images and/or thumbnails
-    images_dir = None
-    if tmp_pdf.exists():
-        if is_scan or export_images_flag or export_thumbs_flag:
-            images_dir = output_dir / f"{img_dir}_{input_pdf.stem}"
-            images_dir.mkdir(parents=True, exist_ok=True)
-            export_images(tmp_pdf, images_dir, dpi=dpi, fext="png")
-
-        if export_thumbs_flag and images_dir:
-            thumbs_dir = output_dir / f"{thumb_dir}_{input_pdf.stem}"
-            thumbs_dir.mkdir(parents=True, exist_ok=True)
-            # export_images(tmp_pdf, thumbs_dir, dpi=48, fext="jpg")
-            export_thumbnails(images_dir, thumbs_dir)
 
     # Step 3: Perform OCR if scanned document
-    if is_scan and images_dir:
-        # TBD: Use unpaper directly to enhance the images before OCR
-        if clean_scanned_flag and ocrlib != "ocrmypdf":
-            # TBD: unpaper call
-            pass
-
+    if is_scan:
         run_ocr(
             tmp_pdf,
             output_pdf,
             images_dir,
             lang=languages,
+            ocrlib=ocrlib,
             clean_scanned_flag=clean_scanned_flag,
             layout=layout,
-            ocrlib=ocrlib,
+            output_pages=output_pages,
+            pre_rotate=pre_rotate,
             debug_flag=debug_flag,
         )
     else:
         if tmp_pdf.resolve() != output_pdf:
             shutil.copy2(tmp_pdf, output_pdf)
 
-    total_pages_out = 0
+    # Step 4: Remove pages to skip
+    if skip_pages_str:
+        pages_to_skip = parse_page_ranges(skip_pages_str, total_pages=total_pages_in)
+        extract_pages(output_pdf, output_pdf, pages_to_skip=pages_to_skip)
 
+    # Step 5: Extract images and thumbnails
     if output_pdf.exists():
-        print(f"Output PDF :  {str(output_pdf)}")
-        output_pikepdf = pikepdf.open(output_pdf)
-        total_pages_out = len(output_pikepdf.pages)
-        output_pikepdf.close()
+        if export_images_flag or export_thumbs_flag:
+            export_images(output_pdf, images_dir, dpi=dpi, fext="png")
 
-    # Step 4: Extract texts
+        if export_thumbs_flag:
+            # export_images(output_pdf, thumbs_dir, dpi=48, fext="jpg")
+            export_thumbnails(images_dir, thumbs_dir)
+
+    total_pages_out = count_pdf_pages(output_pdf)
+
+    # Step 6: Export texts
     if export_texts_flag and total_pages_out > 0:
         texts_dir = output_dir / f"{txt_dir}_{input_pdf.stem}"
-        texts_dir.mkdir(parents=True, exist_ok=True)
         text_pages = export_text(output_pdf, texts_dir)
 
         if text_pages:
