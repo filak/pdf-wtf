@@ -63,11 +63,16 @@
             },
             "justMyCode": false,
             "args": [
-                "-v", "--dpi", "300.062827",
-                "--output-pages=2",
-                //"--layout", "double",
-                "f:\\Decko\\pdf-wtf\\instance\\_data\\out-pdf\\2023\\NV18-01-00399\\_png_190141\\page_001.png",
-                "f:\\Decko\\pdf-wtf\\instance\\temp\\test\\page_001_%03d.pnm"
+                "-v",
+                "--dpi", "300.062827",
+                //"--output-pages=2",
+                "--pre-rotate=90",
+                "--layout", "double",
+                "f:\\Decko\\pdf-wtf\\instance\\temp\\test_in\\page_001.png",
+                "f:\\Decko\\pdf-wtf\\instance\\temp\\test_out\\page_001r.pnm",
+                //"f:\\Decko\\pdf-wtf\\instance\\temp\\test_out\\page_001x_%03d.pnm",
+                //"f:\\Decko\\pdf-wtf\\instance\\_data\\out-pdf\\2023\\NV18-01-00399\\_png_190141\\page_001.png",
+                //"f:\\Decko\\pdf-wtf\\instance\\temp\\test\\page_001a_%03d.pnm"
             ]
         },
     ]
