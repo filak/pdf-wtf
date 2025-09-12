@@ -13,7 +13,7 @@ from .utils import (
     get_temp_dir,
     get_unpaper_args,
     images_to_pdf,
-    was_scanned_pdf,
+    has_no_text,
     parse_page_ranges,
     export_thumbnails,
 )
@@ -244,7 +244,7 @@ def process_pdf(
     thumbs_dir = output_dir / f"{thumb_dir}_{input_pdf.stem}"
 
     # is_scan = was_scanned_pdf(input_pdf)
-    is_scan = was_scanned_pdf(input_pdf)
+    is_scan = has_no_text(input_pdf)
 
     if debug_flag:
         print(f"[DEBUG] Using temporary dir:  {temp_dir}")

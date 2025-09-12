@@ -93,7 +93,7 @@ def get_output_dir_final(
     return output_dir
 
 
-def was_scanned_pdf(filepath):
+def has_no_text(filepath):
     """Check if a PDF has been likely scanned (no embedded text)."""
     with fitz.open(filepath) as doc:
         for page in doc:
