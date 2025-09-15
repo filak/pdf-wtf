@@ -303,7 +303,9 @@ def process_pdf(
             run_unpaper_version()
 
         # Get Unpaper arguments
-        unpaper_args = get_unpaper_args(layout=layout, output_pages=output_pages, pre_rotate=pre_rotate, full=True)
+        unpaper_args = get_unpaper_args(
+            layout=layout, output_pages=output_pages, pre_rotate=pre_rotate, full=True
+        )
 
         for infile in files_to_process:
             try:
@@ -325,8 +327,15 @@ def process_pdf(
                 print(f"Unpaper failed for {infile}: {e}")
                 # Optional: print the command for debugging
                 if debug_flag:
-                    cmd_debug = ['unpaper', '-v', '--dpi', str(round(dpi, 6))] + unpaper_args
-                    cmd_debug.extend([str(infile.resolve()), str(temp_outfile.resolve())])
+                    cmd_debug = [
+                        "unpaper",
+                        "-v",
+                        "--dpi",
+                        str(round(dpi, 6)),
+                    ] + unpaper_args
+                    cmd_debug.extend(
+                        [str(infile.resolve()), str(temp_outfile.resolve())]
+                    )
                     print(" ".join(cmd_debug))
 
         if pnm_subdir.exists() and pnm_subdir.is_dir():
@@ -344,7 +353,6 @@ def process_pdf(
                         im.save(final_path, dpi=(dpi, dpi))
 
         images_to_pdf(images_dir, tmp_pdf, dpi=dpi, fext="png")
-
 
     # Step 3: Perform OCR if scanned document
     if is_scan:

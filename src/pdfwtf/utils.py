@@ -133,9 +133,7 @@ def images_to_pdf(images_dir: Path, output_pdf: Path, dpi=300, fext="png"):
         raise ValueError(f"No PNG images found in {images_dir}")
 
     with output_pdf.open("wb") as f:
-        f.write(img2pdf.convert(
-            [str(p) for p in image_files]
-        ))
+        f.write(img2pdf.convert([str(p) for p in image_files]))
 
 
 def export_thumbnails(
@@ -182,9 +180,7 @@ def export_thumbnails(
 
 
 def find_files(
-    p: Path,
-    extensions: Union[str, List[str]],
-    as_string: bool = False
+    p: Path, extensions: Union[str, List[str]], as_string: bool = False
 ) -> List[Union[Path, str]]:
     if not p.exists() or not p.is_dir():
         return []

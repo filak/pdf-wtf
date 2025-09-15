@@ -61,8 +61,20 @@ from .utils import get_output_dir
     help="[unpaper]: single or double - ignored when --output-pages is used",
     type=click.Choice(["single", "double", "none"]),
 )
-@click.option("--output-pages", "output_pages", default=None, help="[Pre-process with unpaper]: 1 or 2", type=click.Choice(["1", "2"]))
-@click.option("--pre-rotate", "pre_rotate", default=None, help="[Pre-process with unpaper]: 0, 90, 180, 270", type=int)
+@click.option(
+    "--output-pages",
+    "output_pages",
+    default=None,
+    help="[Pre-process with unpaper]: 1 or 2",
+    type=click.Choice(["1", "2"]),
+)
+@click.option(
+    "--pre-rotate",
+    "pre_rotate",
+    default=None,
+    help="[Pre-process with unpaper]: 0, 90, 180, 270",
+    type=int,
+)
 @click.option(
     "--get-png", "export_images_flag", is_flag=True, help="Export pages as PNG files"
 )

@@ -11,16 +11,18 @@ def patch_windows_unpaper_args(args):
     return args
 
 
-def get_unpaper_args(layout=None, output_pages=None, pre_rotate=None, as_string=False, full=False):
+def get_unpaper_args(
+    layout=None, output_pages=None, pre_rotate=None, as_string=False, full=False
+):
     unpaper_args_list = []
     if full:
         default_args = [
-            '--mask-scan-size',
-            '100',  # don't blank out narrow columns
-            '--no-border-align',  # don't align visible content to borders
-            '--no-mask-center',  # don't center visible content within page
-            '--no-grayfilter',  # don't remove light gray areas
-            '--no-blackfilter',  # don't remove solid black areas
+            "--mask-scan-size",
+            "100",  # don't blank out narrow columns
+            "--no-border-align",  # don't align visible content to borders
+            "--no-mask-center",  # don't center visible content within page
+            "--no-grayfilter",  # don't remove light gray areas
+            "--no-blackfilter",  # don't remove solid black areas
         ]
         unpaper_args_list.extend(default_args)
 
@@ -88,12 +90,16 @@ def run_unpaper_simple(
     # Ensure output directory exists
     output_file.parent.mkdir(parents=True, exist_ok=True)
 
-    cmd = [
-        "unpaper",
-        "-v",
-        "--dpi",
-        str(round(dpi, 6)),
-    ] + mode_args + [str(input_file), str(output_file)]
+    cmd = (
+        [
+            "unpaper",
+            "-v",
+            "--dpi",
+            str(round(dpi, 6)),
+        ]
+        + mode_args
+        + [str(input_file), str(output_file)]
+    )
 
     cmd = patch_windows_unpaper_args(cmd)
 
