@@ -64,11 +64,11 @@ Check:
 
 Patch  
 
-    \venv\Lib\site-packages\ocrmypdf\subprocess\_windows.py#60  
+    \venv\Lib\site-packages\ocrmypdf\subprocess\_windows.py#180  
 
     def fix_windows_args():
     ...
-    # Patch for ".\\unpaper" on Windows
+    # Patch for Windows - ".\\unpaper"
     if sys.platform.startswith("win"):
         if args[0].startswith(".\\unpaper."):
             args[0] = args[0].lstrip(".\\")
