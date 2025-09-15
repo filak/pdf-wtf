@@ -238,7 +238,7 @@ def correct_images_orientation(image_paths: list[Path]) -> bool:
     for path in image_paths:
         with Image.open(path) as img:
             osd = pytesseract.image_to_osd(img, output_type=pytesseract.Output.DICT)
-            rotate_angle = osd.get('rotate', 0)
+            rotate_angle = osd.get("rotate", 0)
 
             if rotate_angle != 0:
                 img = img.rotate(-rotate_angle, expand=True)
@@ -276,12 +276,14 @@ def crop_dark_background_opencv(image_paths: list[Path]) -> int:
             gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 15, -10
         )
 
-        contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        contours, _ = cv2.findContours(
+            thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+        )
         if contours:
             c = max(contours, key=cv2.contourArea)
             x, y, w, h = cv2.boundingRect(c)
             if w < img.shape[1] or h < img.shape[0]:
-                cropped = img[y:y+h, x:x+w]
+                cropped = img[y : y + h, x : x + w]
                 cv2.imwrite(str(path), cropped)
                 cropped_count += 1
 
