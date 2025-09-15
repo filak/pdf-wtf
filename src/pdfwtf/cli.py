@@ -29,13 +29,13 @@ from .utils import get_output_dir
     "--extract",
     "extract_pages_str",
     default=None,
-    help="Pages to extract, e.g. '1-3,5,8-'",
+    help="[Pre-process with pikepdf]: Pages to extract before processing, e.g. '1-3,5,8-'",
 )
 @click.option(
     "--skip-post",
     "skip_pages_str",
     default=None,
-    help="Pages to skip after processing, e.g. '1,8-'",
+    help="[Post-process with pikepdf]: Pages to skip after processing, e.g. '1,8-'",
 )
 @click.option(
     "--lang", "languages", default="eng", help="OCR language(s), e.g. 'eng+ces'"
@@ -58,11 +58,11 @@ from .utils import get_output_dir
     "--layout",
     "layout",
     default=None,
-    help="[unpaper]: single or double",
+    help="[unpaper]: single or double - ignored when --output-pages is used",
     type=click.Choice(["single", "double", "none"]),
 )
-@click.option("--output-pages", "output_pages", default=None, help="[unpaper]: 1 or 2", type=click.Choice(["1", "2"]))
-@click.option("--pre-rotate", "pre_rotate", default=None, help="[unpaper]: 0, 90, 180, 270", type=int)
+@click.option("--output-pages", "output_pages", default=None, help="[Pre-process with unpaper]: 1 or 2", type=click.Choice(["1", "2"]))
+@click.option("--pre-rotate", "pre_rotate", default=None, help="[Pre-process with unpaper]: 0, 90, 180, 270", type=int)
 @click.option(
     "--get-png", "export_images_flag", is_flag=True, help="Export pages as PNG files"
 )
