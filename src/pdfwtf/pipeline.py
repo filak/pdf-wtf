@@ -16,6 +16,8 @@ from .utils import (
     count_pdf_pages,
     get_output_dir_final,
     get_temp_dir,
+    correct_images_orientation,
+    crop_dark_background,
     images_to_pdf,
     has_no_text,
     parse_page_ranges,
@@ -76,10 +78,10 @@ def run_ocr(
     img_dir,
     ocrlib=None,
     lang="eng",
-    clean_scanned_flag=False,
     layout=None,
     output_pages=None,
     pre_rotate=None,
+    rotated=False,
     debug_flag=False,
 ):
     if ocrlib == "pymupdf":
@@ -91,8 +93,8 @@ def run_ocr(
             output_pdf,
             lang=lang,
             layout=layout,
-            clean_scanned_flag=clean_scanned_flag,
             output_pages=output_pages,
+            rotated=rotated,
             pre_rotate=pre_rotate,
             debug_flag=debug_flag,
         )
@@ -122,10 +124,10 @@ def run_ocrmypdf(
     input_pdf,
     output_pdf,
     lang="eng",
-    clean_scanned_flag=False,
     layout=None,
     output_pages=None,
-    pre_rotate=None,
+    rotated=False,
+    clean_flag=True,
     debug_flag=False,
 ):
     """Run OCR with Tesseract via OCRmyPDF."""
@@ -141,11 +143,11 @@ def run_ocrmypdf(
         layout = None
 
     # Skip --output-pages and --pre-rotate with ocrmypdf
-
     unpaper_args = get_unpaper_args(layout=layout, as_string=True, full=False)
 
-    if unpaper_args:
-        clean_scanned_flag = True
+    rotate_pages = True
+    if rotated:
+        rotate_pages = False
 
     ocrmypdf.ocr(
         input_pdf,
@@ -153,13 +155,13 @@ def run_ocrmypdf(
         language=lang,
         force_ocr=True,
         unpaper_args=unpaper_args,
-        rotate_pages=True,
+        rotate_pages=rotate_pages,
         optimize=3,
         progress_bar=False,
         deskew=True,
         fast_web_view=0.75,
-        clean=clean_scanned_flag,
-        clean_final=clean_scanned_flag,
+        clean=clean_flag,
+        clean_final=clean_flag,
         continue_on_soft_render_error=True,
         output_type="pdf",
         keep_temporary_files=keep_temporary_files,
@@ -223,8 +225,8 @@ def process_pdf(
     extract_pages_str=None,
     skip_pages_str=None,
     ocrlib=None,
+    remove_background_flag=False,
     languages="eng",
-    clean_scanned_flag=False,
     clear_temp_flag=False,
     dpi=300,
     layout=None,
@@ -257,6 +259,7 @@ def process_pdf(
 
     # is_scan = was_scanned_pdf(input_pdf)
     is_scan = has_no_text(input_pdf)
+    rotated = False
 
     if debug_flag:
         print(f"[DEBUG] Using temporary dir:  {temp_dir}")
@@ -298,9 +301,20 @@ def process_pdf(
 
         # TBD - check page orientation !
         # for files, orientation in files_to_process...
+        if not pre_rotate:
+            rotated = correct_images_orientation(files_to_process)
+        elif pre_rotate:
+            rotated = True
+
+        background_removed = False
+        if remove_background_flag:
+            # background_removed = crop_dark_background(files_to_process, tool="opencv")
+            background_removed = crop_dark_background(files_to_process, tool="pillow")
 
         if debug_flag:
             run_unpaper_version()
+            print(f"[DEBUG] Rotated pages:  {rotated}")
+            print(f"[DEBUG] Background removed from:  {background_removed}")
 
         # Get Unpaper arguments
         unpaper_args = get_unpaper_args(
@@ -362,10 +376,10 @@ def process_pdf(
             images_dir,
             lang=languages,
             ocrlib=ocrlib,
-            clean_scanned_flag=clean_scanned_flag,
             layout=layout,
             output_pages=output_pages,
             pre_rotate=pre_rotate,
+            rotated=rotated,
             debug_flag=debug_flag,
         )
     else:

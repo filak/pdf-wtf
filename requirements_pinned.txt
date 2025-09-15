@@ -7,6 +7,9 @@ PyMuPDF==1.26.4      # AGPL-3.0 License (GNU Affero General Public License v3.0)
 ## OCR wrapper (uses Tesseract + Ghostscript)
 ocrmypdf==16.11.0      # MPL-2.0 License (Mozilla Public License 2.0)
 # https://ocrmypdf.readthedocs.io/en/latest/installation.html
+## Tesseract Python wrapper
+pytesseract==0.3.13   # Apache 2.0
+# https://github.com/madmaze/pytesseract
 ## CLI helper
 click==8.2.1          # BSD-3-Clause License
 # https://click.palletsprojects.com/en/stable/

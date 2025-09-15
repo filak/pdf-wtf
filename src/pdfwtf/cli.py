@@ -49,12 +49,6 @@ from .utils import get_output_dir
     type=click.Choice(["ocrmypdf", "pymupdf"]),
 )
 @click.option(
-    "--clean",
-    "clean_scanned_flag",
-    is_flag=True,
-    help="Clean scanned PDF files - uses unpaper !",
-)
-@click.option(
     "--layout",
     "layout",
     default=None,
@@ -74,6 +68,12 @@ from .utils import get_output_dir
     default=None,
     help="[Pre-process with unpaper]: 0, 90, 180, 270",
     type=int,
+)
+@click.option(
+    "--remove-bg",
+    "remove_background_flag",
+    is_flag=True,
+    help="Pre-process: Remove background",
 )
 @click.option(
     "--get-png", "export_images_flag", is_flag=True, help="Export pages as PNG files"
@@ -99,7 +99,7 @@ def main(
     skip_pages_str,
     ocrlib,
     languages,
-    clean_scanned_flag,
+    remove_background_flag,
     clear_temp_flag,
     dpi,
     layout,
@@ -127,11 +127,11 @@ def main(
         skip_pages_str=skip_pages_str,
         ocrlib=ocrlib,
         languages=languages,
+        remove_background_flag=remove_background_flag,
         dpi=dpi,
         layout=layout,
         output_pages=output_pages,
         pre_rotate=pre_rotate,
-        clean_scanned_flag=clean_scanned_flag,
         clear_temp_flag=clear_temp_flag,
         export_images_flag=export_images_flag,
         export_thumbs_flag=export_thumbs_flag,

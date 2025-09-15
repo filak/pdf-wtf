@@ -5,9 +5,11 @@ from pathlib import Path
 import fitz  # PyMuPDF
 import img2pdf
 import pikepdf
-from PIL import Image, ImageFilter
+import cv2
+from PIL import Image, ImageOps
 from typing import Union, List
 from pdfminer.high_level import extract_text
+import pytesseract
 
 
 RELATIVE_OUTPUT_DIR = "_data/out-pdf"
@@ -214,3 +216,93 @@ def count_pdf_pages(pdf_path: Path) -> int:
         return 0
     with pikepdf.open(pdf_path) as pdf:
         return len(pdf.pages)
+
+
+def detect_orientation(image_path: Path) -> dict:
+    """Detect page orientation using Tesseract OSD."""
+    with Image.open(image_path) as img:
+        osd_dict = pytesseract.image_to_osd(img, output_type=pytesseract.Output.DICT)
+    return osd_dict
+
+
+def correct_images_orientation(image_paths: list[Path]) -> bool:
+    """
+    Detects the orientation of multiple images, rotates them in-place if needed,
+    and returns True if any image was rotated.
+
+    :param image_paths: List of Path objects pointing to image files
+    :return: True if at least one image was rotated, False otherwise
+    """
+    rotated_count = 0
+
+    for path in image_paths:
+        with Image.open(path) as img:
+            osd = pytesseract.image_to_osd(img, output_type=pytesseract.Output.DICT)
+            rotate_angle = osd.get('rotate', 0)
+
+            if rotate_angle != 0:
+                img = img.rotate(-rotate_angle, expand=True)
+                img.save(path)  # Overwrite original
+                rotated_count += 1
+
+    return rotated_count
+
+
+def crop_dark_background(image_paths: List[Path], tool="opencv") -> int:
+    """
+    Crop the main content of multiple images with dark backgrounds.
+
+    :param image_paths: List of Path objects pointing to image files
+    :param tool: "opencv" or "pillow" to choose the cropping method
+    :return: Number of images that were actually cropped
+    """
+    if tool == "opencv":
+        return crop_dark_background_opencv(image_paths)
+    elif tool == "pillow":
+        return crop_dark_background_pillow(image_paths)
+    else:
+        raise ValueError("Invalid tool specified. Use 'opencv' or 'pillow'.")
+
+
+def crop_dark_background_opencv(image_paths: list[Path]) -> int:
+    cropped_count = 0
+
+    for path in image_paths:
+        img = cv2.imread(str(path))
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+        # Use adaptive threshold to handle uneven backgrounds
+        thresh = cv2.adaptiveThreshold(
+            gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 15, -10
+        )
+
+        contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        if contours:
+            c = max(contours, key=cv2.contourArea)
+            x, y, w, h = cv2.boundingRect(c)
+            if w < img.shape[1] or h < img.shape[0]:
+                cropped = img[y:y+h, x:x+w]
+                cv2.imwrite(str(path), cropped)
+                cropped_count += 1
+
+    return cropped_count
+
+
+def crop_dark_background_pillow(image_paths: list[Path]) -> int:
+    cropped_count = 0
+
+    for path in image_paths:
+        with Image.open(path) as img:
+            # Convert to grayscale
+            gray = img.convert("L")
+            # Invert so that content is dark, background is white
+            inverted = ImageOps.invert(gray)
+            # Optional: enhance contrast
+            bw = inverted.point(lambda x: 0 if x < 30 else 255, mode="1")
+            bbox = bw.getbbox()
+            if bbox and (bbox[2] < img.width or bbox[3] < img.height):
+                cropped = img.crop(bbox)
+                cropped.save(path)
+                cropped_count += 1
+
+    return cropped_count

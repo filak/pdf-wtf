@@ -5,17 +5,18 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "pdfwtf"
 version = "0.1.0"
-description = "Smart PDF parsing pipeline: remove pages, OCR scanned PDFs, export images"
+description = "Smart PDF parsing pipeline: remove pages, OCR scanned PDFs, export images & text"
 authors = [
-    { name = "Fila Kriz", email = "your_email@example.com" }
+    { name = "Filip Kriz", email = "1353748+filak@users.noreply.github.com" }
 ]
 readme = "README.md"
-license = { text = "Mixed: MPL-2.0, AGPL-3.0, BSD-3-Clause" }
+license = { text = "AGPL-3.0" }
 requires-python = ">=3.9"
 dependencies = [
     "PyMuPDF==1.26.4",
     "ocrmypdf==16.11.0",
     "pikepdf==9.11.0",
+    "pytesseract==0.3.13",
     "click==8.2.1"
 ]
 
