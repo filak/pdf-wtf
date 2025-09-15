@@ -8,16 +8,17 @@ PDF files parsing and data extraction
 
 ## Built on top of
 
-PDF manipulation and content editing
+
 **pikepdf** 
+- PDF manipulation and content editing
 - https://pikepdf.readthedocs.io/en/latest/installation.html
 
-PDF processing, text/image extraction, rendering
 **PyMuPDF** 
+- PDF processing, text/image extraction, rendering
 - https://pymupdf.readthedocs.io/en/latest/installation.html
 
-OCR wrapper (uses Tesseract + Ghostscript)
 **ocrmypdf** 
+- OCR wrapper (uses Tesseract + Ghostscript)
 - https://ocrmypdf.readthedocs.io/en/latest/installation.html
 
 ## External non-Python dependencies
