@@ -14,8 +14,9 @@ license = { text = "Mixed: MPL-2.0, AGPL-3.0, BSD-3-Clause" }
 requires-python = ">=3.9"
 dependencies = [
     "PyMuPDF==1.26.4",
-    "ocrmypdf==16.10.4",
-    "click"
+    "ocrmypdf==16.11.0",
+    "pikepdf==9.11.0",
+    "click==8.2.1"
 ]
 
 [project.scripts]

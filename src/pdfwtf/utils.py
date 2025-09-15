@@ -1,4 +1,5 @@
 import os
+import sys
 import shutil
 from pathlib import Path
 import fitz  # PyMuPDF
@@ -178,37 +179,6 @@ def export_thumbnails(
                     else {}
                 )
                 img.save(out_path, **save_kwargs)
-
-
-def get_unpaper_args(layout=None, output_pages=None, pre_rotate=None, as_string=False, full=False):
-    unpaper_args_list = []
-    if full:
-        default_args = [
-            '--mask-scan-size',
-            '100',  # don't blank out narrow columns
-            '--no-border-align',  # don't align visible content to borders
-            '--no-mask-center',  # don't center visible content within page
-            '--no-grayfilter',  # don't remove light gray areas
-            '--no-blackfilter',  # don't remove solid black areas
-        ]
-        unpaper_args_list.extend(default_args)
-
-    if layout is not None:
-        unpaper_args_list.append("--layout")
-        unpaper_args_list.append(layout)
-
-    if pre_rotate is not None:
-        unpaper_args_list.append("--pre-rotate")
-        unpaper_args_list.append(pre_rotate)
-
-    if output_pages in ["1", "2"]:
-        unpaper_args_list.append("--output-pages")
-        unpaper_args_list.append(output_pages)
-
-    if as_string:
-        return " ".join(unpaper_args_list)
-
-    return unpaper_args_list
 
 
 def find_files(

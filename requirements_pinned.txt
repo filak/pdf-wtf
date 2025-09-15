@@ -5,10 +5,11 @@
 PyMuPDF==1.26.4      # AGPL-3.0 License (GNU Affero General Public License v3.0)
 # https://pymupdf.readthedocs.io/en/latest/installation.html
 ## OCR wrapper (uses Tesseract + Ghostscript)
-ocrmypdf==16.10.4      # MPL-2.0 License (Mozilla Public License 2.0)
+ocrmypdf==16.11.0      # MPL-2.0 License (Mozilla Public License 2.0)
 # https://ocrmypdf.readthedocs.io/en/latest/installation.html
+pikepdf==9.11.0
 ## CLI helper
-click==8.1.7          # BSD-3-Clause License
+click==8.2.1          # BSD-3-Clause License
 # https://click.palletsprojects.com/en/stable/
 ### --- External non-Python dependencies ---
 ## Tesseract OCR (Apache License 2.0) - required by OCRmyPDF and PyMuPDF

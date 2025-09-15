@@ -1,12 +1,14 @@
 import hashlib
+import logging
 import os
+import sys
 import shutil
 import tempfile
 from pathlib import Path
 import fitz  # PyMuPDF
 import pikepdf
 from PIL import Image
-from pdfwtf.unpaper_run import run_unpaper_simple, run_unpaper_version
+from pdfwtf.unpaper_run import get_unpaper_args, run_unpaper_simple, run_unpaper_version
 
 from typing import List
 from .utils import (
@@ -14,7 +16,6 @@ from .utils import (
     count_pdf_pages,
     get_output_dir_final,
     get_temp_dir,
-    get_unpaper_args,
     images_to_pdf,
     has_no_text,
     parse_page_ranges,
@@ -133,14 +134,15 @@ def run_ocrmypdf(
     if debug_flag:
         keep_temporary_files = True
 
-    # DO NOT use --output-pages and --pre-rotate with ocrmypdf
+    if layout == "none":
+        layout = None
+
     if output_pages:
-        output_pages = None
+        layout = None
 
-    if pre_rotate:
-        pre_rotate = None
+    # Skip --output-pages and --pre-rotate with ocrmypdf
 
-    unpaper_args = get_unpaper_args(layout=layout, output_pages=output_pages, pre_rotate=pre_rotate, as_string=True)
+    unpaper_args = get_unpaper_args(layout=layout, as_string=True, full=False)
 
     if unpaper_args:
         clean_scanned_flag = True
@@ -301,7 +303,7 @@ def process_pdf(
             run_unpaper_version()
 
         # Get Unpaper arguments
-        unpaper_args = get_unpaper_args(layout=layout, output_pages=output_pages, pre_rotate=pre_rotate)
+        unpaper_args = get_unpaper_args(layout=layout, output_pages=output_pages, pre_rotate=pre_rotate, full=True)
 
         for infile in files_to_process:
             try:

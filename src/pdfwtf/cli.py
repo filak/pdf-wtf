@@ -57,9 +57,9 @@ from .utils import get_output_dir
 @click.option(
     "--layout",
     "layout",
-    default="single",
+    default=None,
     help="[unpaper]: single or double",
-    type=click.Choice(["single", "double"]),
+    type=click.Choice(["single", "double", "none"]),
 )
 @click.option("--output-pages", "output_pages", default=None, help="[unpaper]: 1 or 2", type=click.Choice(["1", "2"]))
 @click.option("--pre-rotate", "pre_rotate", default=None, help="[unpaper]: 0, 90, 180, 270", type=int)
