@@ -6,6 +6,39 @@ PDF files parsing and data extraction
 
 > Work in progress ...
 
+## Built on top of
+
+
+**pikepdf** 
+- PDF manipulation and content editing
+- https://pikepdf.readthedocs.io/en/latest/installation.html
+
+**PyMuPDF** 
+- PDF processing, text/image extraction, rendering
+- https://pymupdf.readthedocs.io/en/latest/installation.html
+
+**ocrmypdf** 
+- OCR wrapper (uses Tesseract + Ghostscript)
+- https://ocrmypdf.readthedocs.io/en/latest/installation.html
+
+## External non-Python dependencies
+
+**Tesseract OCR** 
+- required by OCRmyPDF and PyMuPDF
+- https://github.com/UB-Mannheim/tesseract
+
+**Ghostscript** 
+- required by OCRmyPDF
+- https://www.ghostscript.com/releases/gsdnld.html
+
+**unpaper** 
+- required by OCRmyPDF with some params: --clean etc. 
+- https://github.com/unpaper/unpaper
+
+**pngquant** 
+- required by OCRmyPDF with optimize > 0 
+- https://pngquant.org/
+
 ## Local dev installation
 
 1. Create virtualenv &amp; activate it:
