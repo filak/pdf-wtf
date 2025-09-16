@@ -76,16 +76,19 @@ from .utils import get_output_dir
     help="Pre-process: Remove background",
 )
 @click.option(
+    "--get-doi", "get_doi_flag", is_flag=True, help="Extract DOI from the first page"
+)
+@click.option(
     "--get-png", "export_images_flag", is_flag=True, help="Export pages as PNG files"
+)
+@click.option(
+    "--get-text", "export_texts_flag", is_flag=True, help="Export pages as text files"
 )
 @click.option(
     "--get-thumb",
     "export_thumbs_flag",
     is_flag=True,
     help="Export pages as thumbnail PNG files",
-)
-@click.option(
-    "--get-text", "export_texts_flag", is_flag=True, help="Export pages as text files"
 )
 @click.option(
     "--clear-temp", "clear_temp_flag", is_flag=True, help="Clear temporary files"
@@ -105,9 +108,10 @@ def main(
     layout,
     output_pages,
     pre_rotate,
+    get_doi_flag,
     export_images_flag,
-    export_thumbs_flag,
     export_texts_flag,
+    export_thumbs_flag,
     debug_flag,
 ):
     output_dir = get_output_dir(output_dir=output_dir)
@@ -133,6 +137,7 @@ def main(
         output_pages=output_pages,
         pre_rotate=pre_rotate,
         clear_temp_flag=clear_temp_flag,
+        get_doi_flag=get_doi_flag,
         export_images_flag=export_images_flag,
         export_thumbs_flag=export_thumbs_flag,
         export_texts_flag=export_texts_flag,

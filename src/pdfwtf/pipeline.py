@@ -22,6 +22,7 @@ from .utils import (
     has_no_text,
     parse_page_ranges,
     export_thumbnails,
+    get_doi,
 )
 
 if os.environ.get("PDFWTF_TEMP_DIR"):
@@ -230,9 +231,10 @@ def process_pdf(
     layout=None,
     output_pages=None,
     pre_rotate=None,
+    get_doi_flag=False,
     export_images_flag=False,
-    export_thumbs_flag=False,
     export_texts_flag=False,
+    export_thumbs_flag=False,
     scan_dir="_scans",
     txt_dir="_texts",
     img_dir="_images",
@@ -418,3 +420,9 @@ def process_pdf(
                     f.write(f"--- Page {page_num} of {total_pages_out} ---\n")
                     f.write(text)
                     f.write("\n\n")
+
+            # Step 7: Detect DOI on first page
+            if get_doi_flag:
+                doi = get_doi(texts_dir)
+                print("DOI: ", doi)
+

@@ -1,5 +1,5 @@
 import os
-import sys
+import re
 import shutil
 from pathlib import Path
 import fitz  # PyMuPDF
@@ -7,10 +7,11 @@ import img2pdf
 import pikepdf
 import cv2
 from PIL import Image, ImageOps
-from typing import Union, List
+from typing import Union, List, Optional
 from pdfminer.high_level import extract_text
 import pytesseract
 
+PAT_DOI = re.compile(r'10\.\d{4,9}/[^\s]+', re.IGNORECASE)
 
 RELATIVE_OUTPUT_DIR = "_data/out-pdf"
 
@@ -308,3 +309,52 @@ def crop_dark_background_pillow(image_paths: list[Path]) -> int:
                 cropped_count += 1
 
     return cropped_count
+
+
+def get_doi(texts_dir: Path) -> List[str]:
+    """
+    Return all DOIs (lowercased) found in the first sorted .txt file inside texts_dir.
+    Returns an empty list on any problem (no exceptions raised).
+    """
+    if not texts_dir or not texts_dir.exists() or not texts_dir.is_dir():
+        return []
+
+    txt_files = sorted(texts_dir.glob("*.txt"))
+    if not txt_files:
+        return []
+
+    try:
+        content = txt_files[0].read_text(encoding="utf-8", errors="ignore")
+    except Exception:
+        return []
+
+    # Normalize dashes → hyphen
+    content = content.replace("\u2013", "-").replace("\u2014", "-")
+
+    # Fix hyphenation at line breaks
+    content = re.sub(r'-\s*\n\s*', '-', content)
+
+    # Replace remaining newlines with space
+    content = content.replace("\n", " ")
+
+    matches = PAT_DOI.findall(content)
+
+    # strip trailing punctuation & lowercase
+    matches = [m.rstrip('.,;:)"\'').lower() for m in matches]
+
+    # deduplicate while preserving order
+    seen = set()
+    deduped = []
+    for m in matches:
+        if m not in seen:
+            seen.add(m)
+            deduped.append(m)
+
+    # remove truncated prefixes (keep longest match)
+    final = []
+    for m in deduped:
+        if any(other != m and other.startswith(m) for other in deduped):
+            continue
+        final.append(m)
+
+    return final
