@@ -1,3 +1,4 @@
+import json
 import os
 import re
 import shutil
@@ -7,11 +8,11 @@ import img2pdf
 import pikepdf
 import cv2
 from PIL import Image, ImageOps
-from typing import Union, List, Optional
+from typing import Union, List, Dict, Any
 from pdfminer.high_level import extract_text
 import pytesseract
 
-PAT_DOI = re.compile(r'10\.\d{4,9}/[^\s]+', re.IGNORECASE)
+PAT_DOI = re.compile(r"10\.\d{4,9}/[^\s]+", re.IGNORECASE)
 
 RELATIVE_OUTPUT_DIR = "_data/out-pdf"
 
@@ -332,7 +333,7 @@ def get_doi(texts_dir: Path) -> List[str]:
     content = content.replace("\u2013", "-").replace("\u2014", "-")
 
     # Fix hyphenation at line breaks
-    content = re.sub(r'-\s*\n\s*', '-', content)
+    content = re.sub(r"-\s*\n\s*", "-", content)
 
     # Replace remaining newlines with space
     content = content.replace("\n", " ")
@@ -340,7 +341,7 @@ def get_doi(texts_dir: Path) -> List[str]:
     matches = PAT_DOI.findall(content)
 
     # strip trailing punctuation & lowercase
-    matches = [m.rstrip('.,;:)"\'').lower() for m in matches]
+    matches = [m.rstrip(".,;:)\"'").lower() for m in matches]
 
     # deduplicate while preserving order
     seen = set()
@@ -358,3 +359,8 @@ def get_doi(texts_dir: Path) -> List[str]:
         final.append(m)
 
     return final
+
+
+def write_json(data: Dict[str, Any], filepath: Path) -> None:
+    with filepath.open("w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=4)

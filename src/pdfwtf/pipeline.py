@@ -23,6 +23,7 @@ from .utils import (
     parse_page_ranges,
     export_thumbnails,
     get_doi,
+    write_json,
 )
 
 if os.environ.get("PDFWTF_TEMP_DIR"):
@@ -241,6 +242,7 @@ def process_pdf(
     thumb_dir="_thumbs",
     debug_flag=False,
 ):
+    metadata = {}
 
     input_pdf = Path(input_pdf).resolve()
 
@@ -423,6 +425,10 @@ def process_pdf(
 
             # Step 7: Detect DOI on first page
             if get_doi_flag:
-                doi = get_doi(texts_dir)
-                print("DOI: ", doi)
+                doi_list = get_doi(texts_dir)
+                metadata["doi"] = doi_list
+                if doi_list:
+                    print("DOI: ", doi_list)
 
+    output_json = output_dir / f"{input_pdf.stem}.meta.json"
+    write_json(metadata, output_json)
