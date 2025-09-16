@@ -80,7 +80,6 @@ def run_ocr(
     lang="eng",
     layout=None,
     output_pages=None,
-    pre_rotate=None,
     rotated=False,
     debug_flag=False,
 ):
@@ -95,7 +94,6 @@ def run_ocr(
             layout=layout,
             output_pages=output_pages,
             rotated=rotated,
-            pre_rotate=pre_rotate,
             debug_flag=debug_flag,
         )
     else:
@@ -116,7 +114,7 @@ def run_pdfocr(img_dir, output_pdf, language="eng", dpi=300, debug_flag=False):
         tmp_doc.close()
         pix = None
 
-    final_doc.save(output_pdf)
+    final_doc.save(output_pdf, clean=True, deflate=True)
     final_doc.close()
 
 
@@ -301,10 +299,10 @@ def process_pdf(
 
         # TBD - check page orientation !
         # for files, orientation in files_to_process...
-        if not pre_rotate:
-            rotated = correct_images_orientation(files_to_process)
-        elif pre_rotate:
+        if pre_rotate:
             rotated = True
+        else:
+            rotated = correct_images_orientation(files_to_process)
 
         background_removed = False
         if remove_background_flag:
@@ -352,6 +350,7 @@ def process_pdf(
                     )
                     print(" ".join(cmd_debug))
 
+        has_images = False
         if pnm_subdir.exists() and pnm_subdir.is_dir():
             if any(pnm_subdir.iterdir()):
 
@@ -366,7 +365,13 @@ def process_pdf(
                     with Image.open(temp_outfile) as im:
                         im.save(final_path, dpi=(dpi, dpi))
 
-        images_to_pdf(images_dir, tmp_pdf, dpi=dpi, fext="png")
+                if any(images_dir.iterdir()):
+                    has_images = True
+
+        if has_images:
+            images_to_pdf(images_dir, tmp_pdf, dpi=dpi, fext="png")
+        else:
+            shutil.copytree(scans_dir, images_dir, dirs_exist_ok=True)
 
     # Step 3: Perform OCR if scanned document
     if is_scan:
@@ -378,7 +383,6 @@ def process_pdf(
             ocrlib=ocrlib,
             layout=layout,
             output_pages=output_pages,
-            pre_rotate=pre_rotate,
             rotated=rotated,
             debug_flag=debug_flag,
         )
