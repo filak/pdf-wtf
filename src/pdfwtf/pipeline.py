@@ -114,7 +114,7 @@ def run_pdfocr(img_dir, output_pdf, language="eng", dpi=300, debug_flag=False):
         tmp_doc.close()
         pix = None
 
-    final_doc.save(output_pdf, clean=True, deflate=True)
+    final_doc.save(output_pdf, clean=True, deflate=True, use_objstms=True)
     final_doc.close()
 
 
@@ -288,7 +288,7 @@ def process_pdf(
         temp_subdir.mkdir(parents=True, exist_ok=True)
 
         # Directory where PNGs will be exported
-        scans_dir = temp_subdir / f"scans_{input_pdf.stem}"
+        scans_dir = temp_subdir / f"{scan_dir}_{input_pdf.stem}"
         export_images(tmp_pdf, scans_dir, dpi=dpi, fext="png")
 
         pnm_subdir = temp_subdir / "pnm"
