@@ -12,7 +12,7 @@ from typing import Union, List, Dict, Any
 from pdfminer.high_level import extract_text
 import pytesseract
 
-PAT_DOI = re.compile(r"10\.\d{4,9}/[^\s]+", re.IGNORECASE)
+PAT_DOI = re.compile(r"(?:https?://)?doi\.org/(10\.\d{4,9}/[^\s]+)", re.IGNORECASE)
 
 RELATIVE_OUTPUT_DIR = "_data/out-pdf"
 
