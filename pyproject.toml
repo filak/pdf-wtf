@@ -17,7 +17,9 @@ dependencies = [
     "ocrmypdf==16.11.0",
     "pikepdf==9.11.0",
     "pytesseract==0.3.13",
-    "click==8.2.1"
+    "click==8.3.0",
+    "selenium==4.35.0",
+    "webdriver-manager==4.0.2"
 ]
 
 [project.scripts]
@@ -30,5 +32,6 @@ where = ["src"]
 dev = [
     "flake8",
     "black",
-    "pytest"
+    "pytest",
+    "pip-audit"
 ]

@@ -1,16 +1,34 @@
 import click
 import sys
+from pydantic import BaseModel, HttpUrl, model_validator, ValidationError
 from .pipeline import process_pdf
 from .utils import get_output_dir
+
+
+class InputModel(BaseModel):
+    infile: str | None = None
+    url: HttpUrl | None = None
+
+    @model_validator(mode="before")  # validate before parsing fields
+    def check_exclusivity(cls, values):
+        infile, url = values.get("infile"), values.get("url")
+        # Ensure exactly one of infile or url is provided
+        if bool(infile) == bool(url):
+            raise ValueError("You must provide exactly one of --infile or --url")
+        return values
 
 
 @click.command()
 @click.option(
     "--infile",
     "input_pdf",
-    required=True,
     type=click.Path(exists=True, dir_okay=False),
     help="Input PDF file",
+)
+@click.option(
+    "--url",
+    type=str,
+    help="Input URL to fetch PDF from",
 )
 @click.option(
     "--outdir",
@@ -96,6 +114,7 @@ from .utils import get_output_dir
 @click.option("--debug", "debug_flag", is_flag=True, help="Debugging mode")
 def main(
     input_pdf,
+    url,
     output_dir,
     input_path_prefix,
     extract_pages_str,
@@ -114,9 +133,14 @@ def main(
     export_thumbs_flag,
     debug_flag,
 ):
+    # Validate input using Pydantic
+    try:
+        data = InputModel(infile=input_pdf, url=url)  # noqa: F841
+    except ValidationError as e:
+        raise click.UsageError(str(e))
+
     output_dir = get_output_dir(output_dir=output_dir)
 
-    """PDF processing pipeline with page removal, OCR, and image export."""
     click.echo(f"Input file :  {input_pdf}")
     click.echo(f"Output dir :  {output_dir}")
 
@@ -125,6 +149,7 @@ def main(
 
     process_pdf(
         input_pdf,
+        url,
         output_dir,
         input_path_prefix=input_path_prefix,
         extract_pages_str=extract_pages_str,

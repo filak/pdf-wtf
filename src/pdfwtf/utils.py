@@ -9,7 +9,6 @@ import pikepdf
 import cv2
 from PIL import Image, ImageOps
 from typing import Union, List, Dict, Any
-from pdfminer.high_level import extract_text
 import pytesseract
 
 PAT_DOI = re.compile(r"(?:https?://)?doi\.org/(10\.\d{4,9}/[^\s]+)", re.IGNORECASE)
@@ -285,7 +284,7 @@ def crop_dark_background_opencv(image_paths: list[Path]) -> int:
             c = max(contours, key=cv2.contourArea)
             x, y, w, h = cv2.boundingRect(c)
             if w < img.shape[1] or h < img.shape[0]:
-                cropped = img[y : y + h, x : x + w]
+                cropped = img[y : y + h, x : x + w]  # noqa: E203
                 cv2.imwrite(str(path), cropped)
                 cropped_count += 1
 

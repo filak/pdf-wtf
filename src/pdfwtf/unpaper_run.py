@@ -97,8 +97,8 @@ def run_unpaper_simple(
             "--dpi",
             str(round(dpi, 6)),
         ]
-        + mode_args
-        + [str(input_file), str(output_file)]
+        + mode_args  # noqa: W503
+        + [str(input_file), str(output_file)]  # noqa: W503
     )
 
     cmd = patch_windows_unpaper_args(cmd)

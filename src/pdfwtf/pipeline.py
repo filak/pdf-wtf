@@ -1,7 +1,6 @@
 import hashlib
-import logging
+import logging  # noqa: F401
 import os
-import sys
 import shutil
 import tempfile
 from pathlib import Path
@@ -9,6 +8,7 @@ import fitz  # PyMuPDF
 import pikepdf
 from PIL import Image
 from pdfwtf.unpaper_run import get_unpaper_args, run_unpaper_simple, run_unpaper_version
+from pdfwtf.scraper.tools import save_page_as_pdf
 
 from typing import List
 from .utils import (
@@ -220,6 +220,7 @@ def export_text(pdf_path: "Path", out_dir: "Path", level="text") -> dict:
 
 def process_pdf(
     input_pdf,
+    url,
     output_dir,
     input_path_prefix=None,
     extract_pages_str=None,
@@ -244,14 +245,17 @@ def process_pdf(
 ):
     metadata = {}
 
-    input_pdf = Path(input_pdf).resolve()
+    temp_dir = get_temp_dir(clean=clear_temp_flag)
+
+    if not input_pdf:
+        handle, input_pdf, img_shot = save_page_as_pdf(url)
+    else:
+        input_pdf = Path(input_pdf).resolve()
 
     output_dir = get_output_dir_final(output_dir, input_pdf, input_path_prefix)
     output_pdf = output_dir / input_pdf.name
 
     base_hash = hashlib.md5(str(input_pdf).encode("utf-8")).hexdigest()[:8]
-
-    temp_dir = get_temp_dir(clean=clear_temp_flag)
 
     tmp_pdf = temp_dir / f"{base_hash}_{input_pdf.stem}.tmp.pdf"
     scan_pdf = temp_dir / f"{base_hash}_{input_pdf.stem}.scan.pdf"

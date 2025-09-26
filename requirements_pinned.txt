@@ -11,7 +11,7 @@ ocrmypdf==16.11.0      # MPL-2.0 License (Mozilla Public License 2.0)
 pytesseract==0.3.13   # Apache 2.0
 # https://github.com/madmaze/pytesseract
 ## CLI helper
-click==8.2.1          # BSD-3-Clause License
+click==8.3.0          # BSD-3-Clause License
 # https://click.palletsprojects.com/en/stable/
 ### --- External non-Python dependencies ---
 ## Tesseract OCR (Apache License 2.0) - required by OCRmyPDF and PyMuPDF
@@ -22,6 +22,9 @@ click==8.2.1          # BSD-3-Clause License
 # https://github.com/unpaper/unpaper
 ## pngquant (GNU) - required by OCRmyPDF with optimize>0
 # https://pngquant.org/
+# Web scraping
+selenium==4.35.0
+webdriver-manager==4.0.2
 ### On Windows you MUST:
 # - install unpaper via Docker and set up ENV vars:
 # setx PDFWTF_HOME_DIR d:\Decko\pdf-wtf
