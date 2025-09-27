@@ -10,7 +10,7 @@
             "env": {
                 "PYTHONPATH": "${workspaceFolder}/src",
                 "PDFWTF_HOME_DIR": "${env:PDFWTF_HOME_DIR}",
-                //"PDFWTF_TEMP_DIR": "${env:PDFWTF_TEMP_DIR}",
+                "PDFWTF_TEMP_DIR": "${env:PDFWTF_TEMP_DIR}",
                 "PATH": "${env:PDFWTF_HOME_DIR};${env:PATH}",
             },
             "console": "integratedTerminal",
