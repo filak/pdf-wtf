@@ -86,8 +86,6 @@ def save_page_as_pdf(
     download_dir = output_dir / "_downloads"
     download_dir.mkdir(parents=True, exist_ok=True)
 
-    # Generate filename from URL
-    # fname = url_to_path(url)
     fname = hash_url(url)
     output_pdf = output_dir / pdf_dir / f"{fname}.pdf"
 
@@ -100,7 +98,6 @@ def save_page_as_pdf(
         if debug:
             print(f"File already exists: {output_pdf}")
     else:
-        # --- Launch Chrome ---
         driver = create_custom_driver(
             download_dir=download_dir,
             force_download_pdf=True,
@@ -120,8 +117,6 @@ def save_page_as_pdf(
         if main_status == 200 and mime_type:
 
             if "application/pdf" in mime_type.lower() or url.lower().endswith(".pdf"):
-                # --- Handle direct PDF ---
-
                 pdf_name = (
                     filename_from_url(url).removesuffix(".pdf").removesuffix(".PDF")
                 )
@@ -141,7 +136,6 @@ def save_page_as_pdf(
                         print(f"PDF saved to {output_pdf}")
 
             else:
-                # --- Handle HTML page ---
                 if debug:
                     print("HTML page detected - rendering to PDF")
                 WebDriverWait(driver, 20).until(
@@ -163,7 +157,6 @@ def save_page_as_pdf(
     shot_created = False
 
     if make_shot and output_pdf.exists():
-        # --- Take first-page screenshot ---
         if screenshot_path:
             output_image = Path(screenshot_path).resolve(strict=True)
         else:

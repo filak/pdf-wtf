@@ -32,18 +32,14 @@ def create_custom_driver(
     if _driver is None:
         options = Options()
 
-        # Default: normal
         options.page_load_strategy = "normal"
 
-        # Set user-agent
         if ua:
             options.add_argument(f"--user-agent={ua}")
 
-        # Set locale/language
         if locale:
             options.add_argument(f"--lang={locale}")
 
-        # Optional headless mode
         if headless:
             options.add_argument("--headless=new")
             options.add_argument("--disable-gpu")
@@ -79,10 +75,8 @@ def create_custom_driver(
 
         service = get_service()
 
-        # Launch browser
         _driver = webdriver.Chrome(service=service, options=options)
 
-        # Set viewport via window size
         if viewport:
             try:
                 width, height = map(int, viewport.split("x"))
