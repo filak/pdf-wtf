@@ -250,7 +250,7 @@ def process_pdf(
     if not input_pdf and url:
         handle, input_pdf, img_shot = save_page_as_pdf(url, debug=debug_flag)
     else:
-        input_pdf = Path(input_pdf).resolve()
+        input_pdf = Path(input_pdf).resolve(strict=True)
 
     if not input_pdf:
         print("ERROR: No input !")
@@ -275,16 +275,13 @@ def process_pdf(
         print(f"[DEBUG] Using temporary dir:  {temp_dir}")
         print(f"[DEBUG] PDF was scanned:  {is_scan}")
 
-    # try:
-
     total_pages_in = count_pdf_pages(input_pdf)
-
-    output_orig = output_dir / f"{input_pdf.stem}.orig.pdf"
-
-    shutil.copy2(input_pdf, output_orig)
 
     # Step 1: Extract pages
     if extract_pages_str:
+        output_orig = output_dir / f"{input_pdf.stem}.orig.pdf"
+        shutil.copy2(input_pdf, output_orig)
+
         pages_to_keep = parse_page_ranges(extract_pages_str, total_pages=total_pages_in)
         extract_pages(input_pdf, tmp_pdf, pages_to_keep=pages_to_keep)
     else:
@@ -300,10 +297,10 @@ def process_pdf(
         temp_subdir.mkdir(parents=True, exist_ok=True)
 
         # Directory where PNGs will be exported
-        scans_dir = temp_subdir / f"{scan_dir}_{input_pdf.stem}"
+        scans_dir = temp_subdir / scan_dir
         export_images(tmp_pdf, scans_dir, dpi=dpi, fext="png")
 
-        pnm_subdir = temp_subdir / "pnm"
+        pnm_subdir = temp_subdir / "_pnm"
         pnm_subdir.mkdir(parents=True, exist_ok=True)
 
         # Collect PNG files to process
@@ -358,7 +355,10 @@ def process_pdf(
                         str(round(dpi, 6)),
                     ] + unpaper_args
                     cmd_debug.extend(
-                        [str(infile.resolve()), str(temp_outfile.resolve())]
+                        [
+                            str(infile.resolve(strict=True)),
+                            str(temp_outfile.resolve(strict=True)),
+                        ]
                     )
                     print(" ".join(cmd_debug))
 
@@ -399,8 +399,11 @@ def process_pdf(
             debug_flag=debug_flag,
         )
     else:
-        if tmp_pdf.resolve() != output_pdf:
+        if tmp_pdf != output_pdf:
             shutil.copy2(tmp_pdf, output_pdf)
+
+    if tmp_pdf.exists():
+        tmp_pdf.unlink()
 
     # Step 4: Remove pages to skip
     if skip_pages_str:

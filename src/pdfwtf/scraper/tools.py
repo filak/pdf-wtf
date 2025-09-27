@@ -12,7 +12,8 @@ from pdfwtf.utils import (
 from pdfwtf.scraper.utils import (
     get_user_agent,
     get_main_status_code,
-    url_to_path,
+    hash_url,
+    # url_to_path,
     filename_from_url,
 )
 
@@ -33,7 +34,7 @@ def wait_for_download(folder: Path, pdf_name: str, timeout: int = 30) -> Path:
                 # Normalize the stem: strip " (number)" or "(number)" at the end
                 clean_stem = re.sub(r"\s*\(\d+\)$", "", f.stem)
                 if clean_stem == expected_stem:
-                    return f.resolve()
+                    return f.resolve(strict=True)
 
         time.sleep(0.5)
 
@@ -73,7 +74,7 @@ def save_page_as_pdf(
     debug: bool = False,
 ):
     if temp_dir:
-        output_dir = Path(temp_dir).resolve()
+        output_dir = Path(temp_dir).resolve(strict=True)
     else:
         output_dir = get_temp_dir()
 
@@ -87,7 +88,8 @@ def save_page_as_pdf(
     download_dir.mkdir(parents=True, exist_ok=True)
 
     # Generate filename from URL
-    fname = url_to_path(url)
+    # fname = url_to_path(url)
+    fname = hash_url(url)
     output_pdf = output_dir / pdf_dir / f"{fname}.pdf"
 
     output_pdf.parent.mkdir(parents=True, exist_ok=True)
@@ -164,7 +166,7 @@ def save_page_as_pdf(
     if make_shot and output_pdf.exists():
         # --- Take first-page screenshot ---
         if screenshot_path:
-            output_image = Path(screenshot_path).resolve()
+            output_image = Path(screenshot_path).resolve(strict=True)
         else:
             output_image = output_dir / shot_dir / f"{fname}.png"
             output_image.parent.mkdir(parents=True, exist_ok=True)
@@ -173,7 +175,7 @@ def save_page_as_pdf(
             if debug:
                 print(f"File already exists: {output_image}")
         else:
-            shot_created = screenshot_first_page(
+            shot_created = screenshot_first_page(  # noqa: F841
                 output_pdf, output_image, zoom=screenshot_zoom, debug=debug
             )
 

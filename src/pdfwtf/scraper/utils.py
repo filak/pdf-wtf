@@ -60,3 +60,11 @@ def url_to_path(url: str, length: int = 32) -> str:
 
     # Truncate to desired length
     return folder_name[:length]
+
+
+def hash_url(url: str):
+    hash = hashlib.md5()
+    hash.update(url.encode("utf-8"))
+    digest = hash.hexdigest()
+
+    return digest

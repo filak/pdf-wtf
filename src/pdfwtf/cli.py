@@ -12,9 +12,10 @@ class InputModel(BaseModel):
     @model_validator(mode="before")  # validate before parsing fields
     def check_exclusivity(cls, values):
         infile, url = values.get("infile"), values.get("url")
-        # Ensure exactly one of infile or url is provided
         if bool(infile) == bool(url):
             raise ValueError("You must provide exactly one of --infile or --url")
+        if url and not url.startswith(("http://", "https://")):
+            raise ValueError("Only http(s) URLs are allowed")
         return values
 
 
@@ -34,7 +35,7 @@ class InputModel(BaseModel):
     "--outdir",
     "output_dir",
     required=False,
-    type=click.Path(exists=False, file_okay=False),
+    type=click.Path(file_okay=False, resolve_path=True),
     help="Output directory",
 )
 @click.option(
@@ -58,7 +59,9 @@ class InputModel(BaseModel):
 @click.option(
     "--lang", "languages", default="eng", help="OCR language(s), e.g. 'eng+ces'"
 )
-@click.option("--dpi", default=300, help="DPI for image export")
+@click.option(
+    "--dpi", default=300, type=click.IntRange(72, 1200), help="DPI for image export"
+)
 @click.option(
     "--ocrlib",
     "ocrlib",
@@ -85,7 +88,7 @@ class InputModel(BaseModel):
     "pre_rotate",
     default=None,
     help="[Pre-process with unpaper]: 0, 90, 180, 270",
-    type=int,
+    type=click.Choice([0, 90, 180, 270]),
 )
 @click.option(
     "--remove-bg",
@@ -153,27 +156,31 @@ def main(
     if debug_flag:
         click.echo(f"[DEBUG] {' '.join(sys.argv)}")
 
-    process_pdf(
-        input_pdf,
-        url,
-        output_dir,
-        input_path_prefix=input_path_prefix,
-        extract_pages_str=extract_pages_str,
-        skip_pages_str=skip_pages_str,
-        ocrlib=ocrlib,
-        languages=languages,
-        remove_background_flag=remove_background_flag,
-        dpi=dpi,
-        layout=layout,
-        output_pages=output_pages,
-        pre_rotate=pre_rotate,
-        clear_temp_flag=clear_temp_flag,
-        get_doi_flag=get_doi_flag,
-        export_images_flag=export_images_flag,
-        export_thumbs_flag=export_thumbs_flag,
-        export_texts_flag=export_texts_flag,
-        debug_flag=debug_flag,
-    )
+    try:
+        process_pdf(
+            input_pdf,
+            url,
+            output_dir,
+            input_path_prefix=input_path_prefix,
+            extract_pages_str=extract_pages_str,
+            skip_pages_str=skip_pages_str,
+            ocrlib=ocrlib,
+            languages=languages,
+            remove_background_flag=remove_background_flag,
+            dpi=dpi,
+            layout=layout,
+            output_pages=output_pages,
+            pre_rotate=pre_rotate,
+            clear_temp_flag=clear_temp_flag,
+            get_doi_flag=get_doi_flag,
+            export_images_flag=export_images_flag,
+            export_thumbs_flag=export_thumbs_flag,
+            export_texts_flag=export_texts_flag,
+            debug_flag=debug_flag,
+        )
+    except Exception as e:
+        click.echo(f"Error: {e}", err=True)
+        # sys.exit(1)
 
     click.echo("Done!")
 
