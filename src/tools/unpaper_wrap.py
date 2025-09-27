@@ -57,7 +57,7 @@ def main():
     # Handle calls like "--version" or "--help" (no input/output paths)
     if len(paths) < 2:
         docker_cmd = ["docker", "run", "--rm", DOCKER_IMAGE] + args
-        log.info("Running Docker command (no input/output paths): %s", docker_cmd)
+        log.info("Running Docker command: %s", docker_cmd)
         subprocess.run(docker_cmd)
         sys.exit(0)
 
@@ -67,13 +67,10 @@ def main():
 
     # Ensure output folder exists on the host
     if not output_file.parent.exists():
-        log.debug("Creating output folder: %s", output_file.parent)
         output_file.parent.mkdir(parents=True, exist_ok=True)
 
     log.debug("Input file: %s", input_file)
     log.debug("Output file: %s", output_file)
-    log.debug("Input exists: %s", input_file.exists())
-    log.debug("Output parent exists: %s", output_file.parent.exists())
 
     mounts = {}
     container_paths = {}
@@ -100,7 +97,6 @@ def main():
 
     try:
         result = subprocess.run(docker_cmd, check=True)
-        log.info("Unpaper completed successfully: return code %s", result.returncode)
         sys.exit(result.returncode)
     except subprocess.CalledProcessError as e:
         log.error("Unpaper failed: %s", e)
