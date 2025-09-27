@@ -1,0 +1,39 @@
+name: "CodeQL"
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Checkout the repository
+      - uses: actions/checkout@v4
+
+      # Set up Python
+      - uses: actions/setup-python@v4
+        with:
+          python-version: 3.11
+
+      # Upgrade pip and install dependencies
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # Install runtime dependencies from pyproject.toml
+          pip install .
+
+      # Initialize CodeQL
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: python
+
+      # Run CodeQL analysis
+      - uses: github/codeql-action/analyze@v3
