@@ -39,7 +39,6 @@
                 "--get-png",
                 "--get-text",
                 "--get-thumb",
-                "--clear-temp",
                 //"--debug",
             ]
         },

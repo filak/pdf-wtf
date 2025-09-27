@@ -26,7 +26,6 @@ class CliOptions(BaseModel):
     ocrlib: str = "ocrmypdf"
     languages: str = "eng"
     remove_background_flag: bool = False
-    clear_temp_flag: bool = False
     dpi: int = 300
     layout: str | None = None
     output_pages: str | None = None
@@ -84,7 +83,6 @@ def show_info(input_pdf: str | None, url: str | None, output_dir, debug_flag: bo
 @click.option("--get-png", "export_images_flag", is_flag=True)
 @click.option("--get-text", "export_texts_flag", is_flag=True)
 @click.option("--get-thumb", "export_thumbs_flag", is_flag=True)
-@click.option("--clear-temp", "clear_temp_flag", is_flag=True)
 @click.option("--debug", "debug_flag", is_flag=True)
 def main(input_pdf, url, output_dir, **kwargs):
     """Main entrypoint for PDF WTF CLI"""

@@ -34,6 +34,11 @@ from ocrmypdf.api import configure_logging, Verbosity
 configure_logging(verbosity=Verbosity.quiet, progress_bar_friendly=False)
 
 
+# -----------------------------
+# OCR helpers
+# -----------------------------
+
+
 def run_ocr(
     input_pdf,
     output_pdf,
@@ -92,9 +97,7 @@ def run_ocrmypdf(
 ):
     """Run OCR with Tesseract via OCRmyPDF."""
 
-    keep_temporary_files = False
-    if debug_flag:
-        keep_temporary_files = True
+    keep_temporary_files = bool(debug_flag)
 
     if layout == "none":
         layout = None
@@ -105,9 +108,7 @@ def run_ocrmypdf(
     # Skip --output-pages and --pre-rotate with ocrmypdf
     unpaper_args = get_unpaper_args(layout=layout, as_string=True, full=False)
 
-    rotate_pages = True
-    if rotated:
-        rotate_pages = False
+    rotate_pages = not rotated
 
     ocrmypdf.ocr(
         input_pdf,
@@ -128,7 +129,12 @@ def run_ocrmypdf(
     )
 
 
-def export_images(pdf_path: "Path", out_dir: "Path", dpi=300, fext="png"):
+# -----------------------------
+# Export helpers
+# -----------------------------
+
+
+def export_images(pdf_path: Path, out_dir: Path, dpi=300, fext="png"):
 
     if out_dir.is_dir():
         clear_dir(out_dir)
@@ -148,7 +154,7 @@ def export_images(pdf_path: "Path", out_dir: "Path", dpi=300, fext="png"):
         doc.close()
 
 
-def export_text(pdf_path: "Path", out_dir: "Path", level="text") -> dict:
+def export_text(pdf_path: Path, out_dir: Path, level="text") -> dict:
 
     if out_dir.is_dir():
         clear_dir(out_dir)
@@ -178,6 +184,150 @@ def export_text(pdf_path: "Path", out_dir: "Path", level="text") -> dict:
     return text_pages
 
 
+# -----------------------------
+# Internal helpers for process_pdf
+# -----------------------------
+
+
+def _prepare_temp_and_paths(
+    input_pdf, url, pdf_dir_name, img_dir_name, thumb_dir_name, debug_flag
+):
+    temp_dir = get_temp_dir(clean=False, debug=debug_flag)
+    if not input_pdf and url:
+        handle, input_pdf, img_shot = save_page_as_pdf(url, debug=debug_flag)
+        input_pdf = Path(input_pdf) if input_pdf else None
+    else:
+        input_pdf = Path(input_pdf).resolve(strict=True)
+
+    return temp_dir, input_pdf
+
+
+def _build_output_paths(
+    input_pdf: Path, output_dir, input_path_prefix, img_dir, thumb_dir
+):
+    output_dir = get_output_dir_final(output_dir, input_pdf, input_path_prefix)
+    output_pdf = output_dir / input_pdf.name
+
+    base_hash = hashlib.md5(str(input_pdf).encode("utf-8")).hexdigest()[:8]
+    tmp_pdf = Path(tempfile.gettempdir()) / f"{base_hash}_{input_pdf.stem}.tmp.pdf"
+    scan_pdf = Path(tempfile.gettempdir()) / f"{base_hash}_{input_pdf.stem}.scan.pdf"
+
+    images_dir = output_dir / f"{img_dir}_{input_pdf.stem}"
+    thumbs_dir = output_dir / f"{thumb_dir}_{input_pdf.stem}"
+
+    return output_dir, output_pdf, tmp_pdf, scan_pdf, images_dir, thumbs_dir
+
+
+def _extract_or_copy_pages(input_pdf, tmp_pdf, extract_pages_str, total_pages_in):
+    if extract_pages_str:
+        output_orig = tmp_pdf.parent / f"{input_pdf.stem}.orig.pdf"
+        shutil.copy2(input_pdf, output_orig)
+        pages_to_keep = parse_page_ranges(extract_pages_str, total_pages=total_pages_in)
+        extract_pages(input_pdf, tmp_pdf, pages_to_keep=pages_to_keep)
+    else:
+        shutil.copy2(input_pdf, tmp_pdf)
+
+
+def _process_scanned(
+    tmp_pdf,
+    scan_pdf,
+    dpi,
+    pre_rotate,
+    layout,
+    output_pages,
+    remove_background_flag,
+    debug_flag,
+    scan_dir_name,
+    img_dir,
+):
+    # Copy working PDF
+    shutil.copy2(tmp_pdf, scan_pdf)
+
+    temp_subdir = Path(tempfile.mkdtemp())
+    scans_dir = temp_subdir / scan_dir_name
+    export_images(tmp_pdf, scans_dir, dpi=dpi, fext="png")
+
+    pnm_subdir = temp_subdir / "_pnm"
+    pnm_subdir.mkdir(parents=True, exist_ok=True)
+
+    files_to_process = sorted(scans_dir.glob("*.png"))
+
+    rotated = bool(pre_rotate) or correct_images_orientation(files_to_process)
+
+    background_removed = False
+    if remove_background_flag:
+        background_removed = crop_dark_background(files_to_process, tool="pillow")
+
+    if debug_flag:
+        run_unpaper_version()
+        print(f"[DEBUG] Rotated pages:  {rotated}")
+        print(f"[DEBUG] Background removed from:  {background_removed}")
+
+    unpaper_args = get_unpaper_args(
+        layout=layout, output_pages=output_pages, pre_rotate=pre_rotate, full=True
+    )
+
+    # Run unpaper over each image
+    for infile in files_to_process:
+        try:
+            if output_pages:
+                temp_outfile = pnm_subdir / f"{infile.stem}_%03d.pnm"
+            else:
+                temp_outfile = pnm_subdir / f"{infile.stem}.pnm"
+
+            run_unpaper_simple(
+                input_file=infile,
+                output_file=temp_outfile,
+                dpi=dpi,
+                mode_args=unpaper_args,
+                tmpdir=temp_subdir,
+            )
+
+        except Exception as e:
+            print(f"Unpaper failed for {infile}: {e}")
+            if debug_flag:
+                cmd_debug = [
+                    "unpaper",
+                    "-v",
+                    "--dpi",
+                    str(round(dpi, 6)),
+                ] + unpaper_args
+                cmd_debug.extend(
+                    [
+                        str(infile.resolve(strict=True)),
+                        str(temp_outfile.resolve(strict=True)),
+                    ]
+                )
+                print(" ".join(cmd_debug))
+
+    # Convert PNM -> PNG and collect
+    has_images = False
+    if pnm_subdir.exists() and any(pnm_subdir.iterdir()):
+        if Path(images_dir := Path(img_dir)).is_dir():
+            clear_dir(images_dir)
+        Path(images_dir).mkdir(parents=True, exist_ok=True)
+
+        for pnm_file in pnm_subdir.glob("*.pnm"):
+            final_path = Path(images_dir) / f"{pnm_file.stem}.png"
+            with Image.open(pnm_file) as im:
+                im.save(final_path, dpi=(dpi, dpi))
+
+        if any(Path(images_dir).iterdir()):
+            has_images = True
+
+    if has_images:
+        images_to_pdf(images_dir, tmp_pdf, dpi=dpi, fext="png")
+    else:
+        shutil.copytree(scans_dir, images_dir, dirs_exist_ok=True)
+
+    return tmp_pdf, images_dir
+
+
+# -----------------------------
+# Main process_pdf (refactored)
+# -----------------------------
+
+
 def process_pdf(
     input_pdf,
     url,
@@ -188,7 +338,6 @@ def process_pdf(
     ocrlib=None,
     remove_background_flag=False,
     languages="eng",
-    clear_temp_flag=False,
     dpi=300,
     layout=None,
     output_pages=None,
@@ -205,147 +354,53 @@ def process_pdf(
 ):
     metadata = {}
 
-    temp_dir = get_temp_dir(clean=clear_temp_flag, debug=debug_flag)
-
-    if not input_pdf and url:
-        handle, input_pdf, img_shot = save_page_as_pdf(url, debug=debug_flag)
-    else:
-        input_pdf = Path(input_pdf).resolve(strict=True)
+    # Prepare temp dir and input PDF
+    temp_dir, input_pdf = _prepare_temp_and_paths(
+        input_pdf, url, img_dir, img_dir, thumb_dir, debug_flag
+    )
 
     if not input_pdf:
         print("ERROR: No input !")
         return
 
-    output_dir = get_output_dir_final(output_dir, input_pdf, input_path_prefix)
-    output_pdf = output_dir / input_pdf.name
+    # Build output and working paths
+    output_dir, output_pdf, tmp_pdf, scan_pdf, images_dir, thumbs_dir = (
+        _build_output_paths(
+            input_pdf, output_dir, input_path_prefix, img_dir, thumb_dir
+        )
+    )
 
-    base_hash = hashlib.md5(str(input_pdf).encode("utf-8")).hexdigest()[:8]
+    if debug_flag:
+        print(f"[DEBUG] Using temporary dir:  {temp_dir}")
 
-    tmp_pdf = temp_dir / f"{base_hash}_{input_pdf.stem}.tmp.pdf"
-    scan_pdf = temp_dir / f"{base_hash}_{input_pdf.stem}.scan.pdf"
+    total_pages_in = count_pdf_pages(input_pdf)
 
-    images_dir = output_dir / f"{img_dir}_{input_pdf.stem}"
-    thumbs_dir = output_dir / f"{thumb_dir}_{input_pdf.stem}"
+    # Extract or copy pages -> tmp_pdf
+    _extract_or_copy_pages(input_pdf, tmp_pdf, extract_pages_str, total_pages_in)
 
-    # is_scan = was_scanned_pdf(input_pdf)
+    # Detect if scanned
     is_scan = has_no_text(input_pdf)
     rotated = False
 
     if debug_flag:
-        print(f"[DEBUG] Using temporary dir:  {temp_dir}")
         print(f"[DEBUG] PDF was scanned:  {is_scan}")
 
-    total_pages_in = count_pdf_pages(input_pdf)
-
-    # Step 1: Extract pages
-    if extract_pages_str:
-        output_orig = output_dir / f"{input_pdf.stem}.orig.pdf"
-        shutil.copy2(input_pdf, output_orig)
-
-        pages_to_keep = parse_page_ranges(extract_pages_str, total_pages=total_pages_in)
-        extract_pages(input_pdf, tmp_pdf, pages_to_keep=pages_to_keep)
-    else:
-        shutil.copy2(input_pdf, tmp_pdf)
-
-    # Step 2: Process scanned documents
+    # If scanned -> process scanned pipeline
     if is_scan:
-        # Copy the PDF to a working location
-        shutil.copy2(tmp_pdf, scan_pdf)
-
-        # Safe temp folder for exported PNGs and Unpaper outputs
-        temp_subdir = Path(tempfile.mkdtemp())
-        temp_subdir.mkdir(parents=True, exist_ok=True)
-
-        # Directory where PNGs will be exported
-        scans_dir = temp_subdir / scan_dir
-        export_images(tmp_pdf, scans_dir, dpi=dpi, fext="png")
-
-        pnm_subdir = temp_subdir / "_pnm"
-        pnm_subdir.mkdir(parents=True, exist_ok=True)
-
-        # Collect PNG files to process
-        files_to_process = sorted(scans_dir.glob("*.png"))
-
-        # TBD - check page orientation !
-        # for files, orientation in files_to_process...
-        if pre_rotate:
-            rotated = True
-        else:
-            rotated = correct_images_orientation(files_to_process)
-
-        background_removed = False
-        if remove_background_flag:
-            # background_removed = crop_dark_background(files_to_process, tool="opencv")
-            background_removed = crop_dark_background(files_to_process, tool="pillow")
-
-        if debug_flag:
-            run_unpaper_version()
-            print(f"[DEBUG] Rotated pages:  {rotated}")
-            print(f"[DEBUG] Background removed from:  {background_removed}")
-
-        # Get Unpaper arguments
-        unpaper_args = get_unpaper_args(
-            layout=layout, output_pages=output_pages, pre_rotate=pre_rotate, full=True
+        tmp_pdf, images_dir = _process_scanned(
+            tmp_pdf,
+            scan_pdf,
+            dpi,
+            pre_rotate,
+            layout,
+            output_pages,
+            remove_background_flag,
+            debug_flag,
+            scan_dir,
+            images_dir,
         )
 
-        for infile in files_to_process:
-            try:
-                if output_pages:
-                    temp_outfile = pnm_subdir / f"{infile.stem}_%03d.pnm"
-                else:
-                    temp_outfile = pnm_subdir / f"{infile.stem}.pnm"
-
-                # Run Unpaper
-                run_unpaper_simple(
-                    input_file=infile,
-                    output_file=temp_outfile,
-                    dpi=dpi,
-                    mode_args=unpaper_args,
-                    tmpdir=temp_subdir,
-                )
-
-            except Exception as e:
-                print(f"Unpaper failed for {infile}: {e}")
-                # Optional: print the command for debugging
-                if debug_flag:
-                    cmd_debug = [
-                        "unpaper",
-                        "-v",
-                        "--dpi",
-                        str(round(dpi, 6)),
-                    ] + unpaper_args
-                    cmd_debug.extend(
-                        [
-                            str(infile.resolve(strict=True)),
-                            str(temp_outfile.resolve(strict=True)),
-                        ]
-                    )
-                    print(" ".join(cmd_debug))
-
-        has_images = False
-        if pnm_subdir.exists() and pnm_subdir.is_dir():
-            if any(pnm_subdir.iterdir()):
-
-                if images_dir.is_dir():
-                    clear_dir(images_dir)
-
-                images_dir.mkdir(parents=True, exist_ok=True)
-
-                for pnm_file in pnm_subdir.glob("*.pnm"):
-                    temp_outfile = pnm_subdir / f"{pnm_file.stem}.pnm"
-                    final_path = images_dir / f"{pnm_file.stem}.png"
-                    with Image.open(temp_outfile) as im:
-                        im.save(final_path, dpi=(dpi, dpi))
-
-                if any(images_dir.iterdir()):
-                    has_images = True
-
-        if has_images:
-            images_to_pdf(images_dir, tmp_pdf, dpi=dpi, fext="png")
-        else:
-            shutil.copytree(scans_dir, images_dir, dirs_exist_ok=True)
-
-    # Step 3: Perform OCR if scanned document
+    # OCR or copy final
     if is_scan:
         run_ocr(
             tmp_pdf,
@@ -365,23 +420,22 @@ def process_pdf(
     if tmp_pdf.exists():
         tmp_pdf.unlink()
 
-    # Step 4: Remove pages to skip
+    # Remove pages to skip
     if skip_pages_str:
         pages_to_skip = parse_page_ranges(skip_pages_str, total_pages=total_pages_in)
         extract_pages(output_pdf, output_pdf, pages_to_skip=pages_to_skip)
 
-    # Step 5: Extract images and thumbnails
+    # Extract images and thumbnails
     if output_pdf.exists():
         if export_images_flag or export_thumbs_flag:
             export_images(output_pdf, images_dir, dpi=dpi, fext="png")
 
         if export_thumbs_flag:
-            # export_images(output_pdf, thumbs_dir, dpi=48, fext="jpg")
             export_thumbnails(images_dir, thumbs_dir)
 
     total_pages_out = count_pdf_pages(output_pdf)
 
-    # Step 6: Export texts
+    # Export texts and detect DOI
     if (export_texts_flag or get_doi_flag) and total_pages_out > 0:
         texts_dir = output_dir / f"{txt_dir}_{input_pdf.stem}"
         text_pages = export_text(output_pdf, texts_dir)
@@ -394,7 +448,6 @@ def process_pdf(
                     f.write(text)
                     f.write("\n\n")
 
-            # Step 7: Detect DOI on first page
             if get_doi_flag:
                 doi_list = get_doi(texts_dir)
                 metadata["doi"] = doi_list
