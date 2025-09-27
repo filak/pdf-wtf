@@ -24,10 +24,13 @@ log_dir.mkdir(parents=True, exist_ok=True)
 log_file = log_dir / "unpaper_wrap.log"
 
 log = logging.getLogger("unpaper_wrap")
-log.setLevel(logging.DEBUG)
+# log.setLevel(logging.DEBUG)
+log.setLevel(logging.ERROR)
 
 fh = logging.FileHandler(log_file, mode="a", encoding="utf-8")
-fh.setLevel(logging.DEBUG)
+# fh.setLevel(logging.DEBUG)
+fh.setLevel(logging.ERROR)
+
 formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
 fh.setFormatter(formatter)
 log.addHandler(fh)

@@ -13,7 +13,6 @@ from pdfwtf.scraper.utils import (
     get_user_agent,
     get_main_status_code,
     hash_url,
-    # url_to_path,
     filename_from_url,
 )
 
@@ -183,18 +182,3 @@ def save_page_as_pdf(
         return fname, output_pdf, output_image
 
     return (None, None, None)
-
-
-# ------------------------
-# Example usage
-# ------------------------
-if __name__ == "__main__":
-    resp = save_page_as_pdf(
-        # "https://www.apsscr.cz/files/files/%C5%BDivot%20s%20demenc%C3%AD_Tipy%20pro%20rodinn%C3%A9%20p%C5%99%C3%ADslu%C5%A1n%C3%ADky.pdf",
-        # "https://www.medvik.cz/medlike/",
-        # "https://doi.org/10.1002/pbc.29779", # "https://onlinelibrary.wiley.com/doi/10.1002/pbc.29779",
-        "https://nlk.cz/sluzby/vzdaleny-pristup/",
-        # force_download=True,
-        debug=True,
-    )
-    print(resp)
