@@ -6,11 +6,13 @@ on:
     paths-ignore:
       - 'README.md'
       - 'docs/**'
+      - '.vscode/**'
   pull_request:
     branches: [ main ]
     paths-ignore:
       - 'README.md'
       - 'docs/**'
+      - '.vscode/**'
 
 permissions:
   contents: read
