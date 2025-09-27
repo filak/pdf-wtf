@@ -351,10 +351,6 @@ def crop_dark_background_pillow(image_paths: list[Path]) -> int:
 
 
 def get_doi(texts_dir: Path) -> List[str]:
-    """
-    Return all DOIs (lowercased) found in the first sorted .txt file inside texts_dir.
-    Returns an empty list on any problem (no exceptions raised).
-    """
     if not texts_dir or not texts_dir.exists() or not texts_dir.is_dir():
         return []
 
@@ -381,7 +377,6 @@ def get_doi(texts_dir: Path) -> List[str]:
     # strip trailing punctuation & lowercase
     matches = [m.rstrip(".,;:)\"'").lower() for m in matches]
 
-    # deduplicate while preserving order
     seen = set()
     deduped = []
     for m in matches:
@@ -389,7 +384,6 @@ def get_doi(texts_dir: Path) -> List[str]:
             seen.add(m)
             deduped.append(m)
 
-    # remove truncated prefixes (keep longest match)
     final = []
     for m in deduped:
         if any(other != m and other.startswith(m) for other in deduped):
