@@ -106,5 +106,5 @@ Patch
         if args[0].startswith(".\\unpaper."):
             args[0] = args[0].lstrip(".\\")
 
-> **If you reinstall the package - you MUST insert the fix again !
+> **If you reinstall the package - you MUST insert the fix again !**
 
