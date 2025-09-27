@@ -1,7 +1,5 @@
 import os
-
 from selenium import webdriver
-
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
@@ -19,6 +17,59 @@ def get_service():
     return _service
 
 
+def _configure_options(ua=None, locale=None, headless=True) -> Options:
+    options = Options()
+    options.page_load_strategy = "normal"
+
+    if ua:
+        options.add_argument(f"--user-agent={ua}")
+
+    if locale:
+        options.add_argument(f"--lang={locale}")
+
+    if headless:
+        options.add_argument("--headless=new")
+        options.add_argument("--disable-gpu")
+
+    # Common flags
+    options.add_argument("--allow-insecure-localhost")
+    options.add_argument("--log-level=3")
+    options.add_argument("--mute-audio")
+    options.add_argument("--no-first-run")
+    options.add_argument("--no-default-browser-check")
+    options.add_argument("--disable-extensions")
+
+    options.set_capability("goog:loggingPrefs", {"performance": "ALL"})
+    options.add_experimental_option("excludeSwitches", ["enable-logging"])
+    return options
+
+
+def _configure_user_data_dir(options: Options, user_data_dir):
+    if user_data_dir:
+        user_data_dir.mkdir(parents=True, exist_ok=True)
+        options.add_argument(f"--user-data-dir={str(user_data_dir)}")
+
+
+def _configure_prefs(options: Options, download_dir=None, force_download_pdf=False):
+    prefs = {}
+    if force_download_pdf:
+        prefs["plugins.always_open_pdf_externally"] = True
+    if download_dir:
+        prefs["download.default_directory"] = str(download_dir)
+    if prefs:
+        options.add_experimental_option("prefs", prefs)
+
+
+def _set_viewport(driver, viewport: str):
+    if not viewport:
+        return
+    try:
+        width, height = map(int, viewport.split("x"))
+        driver.set_window_size(width, height)
+    except ValueError:
+        print(f"Invalid viewport format: {viewport}")
+
+
 def create_custom_driver(
     locale=None,
     viewport="1440x900",
@@ -30,60 +81,15 @@ def create_custom_driver(
 ):
     global _driver
     if _driver is None:
-        options = Options()
-
-        options.page_load_strategy = "normal"
-
-        if ua:
-            options.add_argument(f"--user-agent={ua}")
-
-        if locale:
-            options.add_argument(f"--lang={locale}")
-
-        if headless:
-            options.add_argument("--headless=new")
-            options.add_argument("--disable-gpu")
-
-        options.add_argument("--allow-insecure-localhost")
-        options.add_argument("--log-level=3")
-        options.add_argument("--mute-audio")
-
-        options.add_argument("--no-first-run")
-        options.add_argument("--no-default-browser-check")
-        options.add_argument("--disable-extensions")
-
-        options.set_capability("goog:loggingPrefs", {"performance": "ALL"})
-        options.add_experimental_option("excludeSwitches", ["enable-logging"])
-
-        # options.add_argument("--ignore-certificate-errors")
-
-        if user_data_dir:
-            if not user_data_dir.exists():
-                user_data_dir.mkdir(parents=True, exist_ok=True)
-            options.add_argument(f"--user-data-dir={str(user_data_dir)}")
-
-        # Configure PDF download preferences
-        prefs = {}
-        if force_download_pdf:
-            prefs["plugins.always_open_pdf_externally"] = True
-
-        if download_dir:
-            prefs["download.default_directory"] = str(download_dir)
-
-        if prefs:
-            options.add_experimental_option("prefs", prefs)
+        options = _configure_options(ua=ua, locale=locale, headless=headless)
+        _configure_user_data_dir(options, user_data_dir)
+        _configure_prefs(
+            options, download_dir=download_dir, force_download_pdf=force_download_pdf
+        )
 
         service = get_service()
-
         _driver = webdriver.Chrome(service=service, options=options)
-
-        if viewport:
-            try:
-                width, height = map(int, viewport.split("x"))
-                _driver.set_window_size(width, height)
-            except ValueError:
-                print(f"Invalid viewport format: {viewport}")
-                return
+        _set_viewport(_driver, viewport)
 
     return _driver
 

@@ -58,6 +58,83 @@ def screenshot_first_page(
             print(f"Could not create screenshot: {e}")
 
 
+def _prepare_paths(url, temp_dir, pdf_dir, shot_dir, debug):
+    output_dir = (
+        Path(temp_dir).resolve(strict=True) if temp_dir else get_temp_dir(debug=debug)
+    )
+    fname = hash_url(url)
+
+    download_dir = output_dir / "_downloads"
+    download_dir.mkdir(parents=True, exist_ok=True)
+
+    output_pdf = output_dir / pdf_dir / f"{fname}.pdf"
+    output_pdf.parent.mkdir(parents=True, exist_ok=True)
+
+    output_image = output_dir / shot_dir / f"{fname}.png"
+
+    return output_dir, download_dir, output_pdf, output_image, fname
+
+
+def _download_pdf(driver, url, download_dir, output_pdf, timeout, debug):
+    main_status, mime_type = get_main_status_code(driver, url, mime=True)
+    if debug:
+        print(f"Detected Status: {main_status}")
+        print(f"Detected Content-Type: {mime_type}")
+
+    if main_status != 200 or not mime_type:
+        return False
+
+    if "application/pdf" in mime_type.lower() or url.lower().endswith(".pdf"):
+        pdf_name = filename_from_url(url).removesuffix(".pdf").removesuffix(".PDF")
+        if debug:
+            print(f"PDF response detected - file: {pdf_name}")
+        downloaded_pdf = wait_for_download(download_dir, pdf_name, timeout=timeout)
+        if downloaded_pdf:
+            if output_pdf.exists():
+                output_pdf.unlink()
+            downloaded_pdf.rename(output_pdf)
+            if debug:
+                print(f"PDF saved to {output_pdf}")
+            return True
+    else:
+        if debug:
+            print("HTML page detected - rendering to PDF")
+        WebDriverWait(driver, 20).until(
+            lambda d: d.execute_script("return document.readyState") == "complete"
+        )
+        pdf_data = driver.execute_cdp_cmd(
+            "Page.printToPDF",
+            {"printBackground": True, "preferCSSPageSize": True, "scale": 1.0},
+        )
+        with open(output_pdf, "wb") as f:
+            f.write(base64.b64decode(pdf_data["data"]))
+        if debug:
+            print(f"Page rendered to {output_pdf}")
+        return True
+
+    return False
+
+
+def _take_screenshot(
+    output_pdf, output_image, screenshot_path, force_download, zoom, debug
+):
+    if not output_pdf.exists():
+        return None
+
+    if screenshot_path:
+        output_image = Path(screenshot_path).resolve(strict=True)
+    else:
+        output_image.parent.mkdir(parents=True, exist_ok=True)
+
+    if output_image.exists() and not force_download:
+        if debug:
+            print(f"File already exists: {output_image}")
+        return output_image
+
+    screenshot_first_page(output_pdf, output_image, zoom=zoom, debug=debug)
+    return output_image
+
+
 def save_page_as_pdf(
     url: str,
     temp_dir: str = None,
@@ -72,106 +149,39 @@ def save_page_as_pdf(
     shot_dir: str = "shots",
     debug: bool = False,
 ):
-    if temp_dir:
-        output_dir = Path(temp_dir).resolve(strict=True)
-    else:
-        output_dir = get_temp_dir(debug=debug)
+    output_dir, download_dir, output_pdf, output_image, fname = _prepare_paths(
+        url, temp_dir, pdf_dir, shot_dir, debug
+    )
 
-    if not ua:
-        ua = get_user_agent()
-
+    ua = ua or get_user_agent()
     if debug:
         print("USER_AGENT: ", ua)
 
-    download_dir = output_dir / "_downloads"
-    download_dir.mkdir(parents=True, exist_ok=True)
-
-    fname = hash_url(url)
-    output_pdf = output_dir / pdf_dir / f"{fname}.pdf"
-
-    output_pdf.parent.mkdir(parents=True, exist_ok=True)
-
-    main_status = None
-
-    # If file already exists and force_download=False, skip download
-    if output_pdf.exists() and not force_download:
-        if debug:
-            print(f"File already exists: {output_pdf}")
-    else:
+    # Skip download if file exists
+    if not (output_pdf.exists() and not force_download):
         driver = create_custom_driver(
             download_dir=download_dir,
             force_download_pdf=True,
             ua=ua,
             viewport=viewport,
         )
-        # driver.requests.clear()
         driver.get(url)
         time.sleep(1)
-
-        main_status, mime_type = get_main_status_code(driver, url, mime=True)
-
-        if debug:
-            print(f"Detected Status: {main_status}")
-            print(f"Detected Content-Type: {mime_type}")
-
-        if main_status == 200 and mime_type:
-
-            if "application/pdf" in mime_type.lower() or url.lower().endswith(".pdf"):
-                pdf_name = (
-                    filename_from_url(url).removesuffix(".pdf").removesuffix(".PDF")
-                )
-
-                if debug:
-                    print(f"PDF response detected - file:  {pdf_name}")
-
-                downloaded_pdf = wait_for_download(
-                    download_dir, pdf_name, timeout=timeout
-                )
-                if downloaded_pdf:
-                    if output_pdf.exists():
-                        output_pdf.unlink()
-
-                    downloaded_pdf.rename(output_pdf)
-                    if debug:
-                        print(f"PDF saved to {output_pdf}")
-
-            else:
-                if debug:
-                    print("HTML page detected - rendering to PDF")
-                WebDriverWait(driver, 20).until(
-                    lambda d: d.execute_script("return document.readyState")
-                    == "complete"  # noqa: W503
-                )  # noqa: W503
-                pdf_data = driver.execute_cdp_cmd(
-                    "Page.printToPDF",
-                    {"printBackground": True, "preferCSSPageSize": True, "scale": 1.0},
-                )
-                with open(output_pdf, "wb") as f:
-                    f.write(base64.b64decode(pdf_data["data"]))
-                if debug:
-                    print(f"Page rendered to {output_pdf}")
-
+        _download_pdf(driver, url, download_dir, output_pdf, timeout, debug)
         close_driver()
+    elif debug:
+        print(f"File already exists: {output_pdf}")
 
-    output_image = None
-    shot_created = False
+    # Screenshot if requested
+    shot_file = None
+    if make_shot:
+        shot_file = _take_screenshot(
+            output_pdf,
+            output_image,
+            screenshot_path,
+            force_download,
+            screenshot_zoom,
+            debug,
+        )
 
-    if make_shot and output_pdf.exists():
-        if screenshot_path:
-            output_image = Path(screenshot_path).resolve(strict=True)
-        else:
-            output_image = output_dir / shot_dir / f"{fname}.png"
-            output_image.parent.mkdir(parents=True, exist_ok=True)
-
-        if output_image.exists() and not force_download:
-            if debug:
-                print(f"File already exists: {output_image}")
-        else:
-            shot_created = screenshot_first_page(  # noqa: F841
-                output_pdf, output_image, zoom=screenshot_zoom, debug=debug
-            )
-
-    if output_pdf.exists():
-        return fname, output_pdf, output_image
-
-    return (None, None, None)
+    return (fname, output_pdf if output_pdf.exists() else None, shot_file)
