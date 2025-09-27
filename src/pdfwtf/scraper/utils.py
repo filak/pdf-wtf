@@ -1,8 +1,28 @@
 import json
 import hashlib
 import base64
+import os
 from pathlib import Path
 from urllib.parse import urlparse, unquote
+
+USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36"
+
+
+def get_user_agent():
+
+    env_ua = os.environ.get("PDFWTF_UA")
+
+    if env_ua:
+        return env_ua
+
+    else:
+        return USER_AGENT
+
+
+def filename_from_url(url: str) -> str:
+    path = urlparse(url).path  # get the path part of URL
+    name = Path(path).name  # get the last segment
+    return unquote(name)  # decode URL-encoded characters
 
 
 def get_main_status_code(driver, target_url, mime=False):
@@ -22,12 +42,6 @@ def get_main_status_code(driver, target_url, mime=False):
     if mime:
         return (None, None)
     return None
-
-
-def filename_from_url(url: str) -> str:
-    path = urlparse(url).path  # get the path part of URL
-    name = Path(path).name  # get the last segment
-    return unquote(name)  # decode URL-encoded characters
 
 
 def url_to_path(url: str, length: int = 32) -> str:

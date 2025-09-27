@@ -247,10 +247,14 @@ def process_pdf(
 
     temp_dir = get_temp_dir(clean=clear_temp_flag)
 
-    if not input_pdf:
-        handle, input_pdf, img_shot = save_page_as_pdf(url)
+    if not input_pdf and url:
+        handle, input_pdf, img_shot = save_page_as_pdf(url, debug=debug_flag)
     else:
         input_pdf = Path(input_pdf).resolve()
+
+    if not input_pdf:
+        print("ERROR: No input !")
+        return
 
     output_dir = get_output_dir_final(output_dir, input_pdf, input_path_prefix)
     output_pdf = output_dir / input_pdf.name
@@ -415,7 +419,7 @@ def process_pdf(
     total_pages_out = count_pdf_pages(output_pdf)
 
     # Step 6: Export texts
-    if export_texts_flag and total_pages_out > 0:
+    if (export_texts_flag or get_doi_flag) and total_pages_out > 0:
         texts_dir = output_dir / f"{txt_dir}_{input_pdf.stem}"
         text_pages = export_text(output_pdf, texts_dir)
 

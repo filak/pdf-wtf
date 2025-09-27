@@ -1,8 +1,8 @@
 import click
 import sys
 from pydantic import BaseModel, HttpUrl, model_validator, ValidationError
-from .pipeline import process_pdf
-from .utils import get_output_dir
+from pdfwtf.pipeline import process_pdf
+from pdfwtf.utils import get_output_dir
 
 
 class InputModel(BaseModel):
@@ -141,8 +141,14 @@ def main(
 
     output_dir = get_output_dir(output_dir=output_dir)
 
-    click.echo(f"Input file :  {input_pdf}")
-    click.echo(f"Output dir :  {output_dir}")
+    input_show = None
+    if input_pdf:
+        input_show = input_pdf
+    elif url:
+        input_show = url
+
+    click.echo(f"Input  :  {input_show}")
+    click.echo(f"Output :  {output_dir}")
 
     if debug_flag:
         click.echo(f"[DEBUG] {' '.join(sys.argv)}")
