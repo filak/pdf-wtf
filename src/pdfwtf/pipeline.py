@@ -1,19 +1,17 @@
 import hashlib
-import logging  # noqa: F401
 import os
 import shutil
 import tempfile
 from pathlib import Path
 import fitz  # PyMuPDF
-import pikepdf
 from PIL import Image
 from pdfwtf.unpaper_run import get_unpaper_args, run_unpaper_simple, run_unpaper_version
 from pdfwtf.scraper.tools import save_page_as_pdf
 
-from typing import List
 from .utils import (
     clear_dir,
     count_pdf_pages,
+    extract_pages,
     get_output_dir_final,
     get_temp_dir,
     correct_images_orientation,
@@ -34,44 +32,6 @@ import ocrmypdf
 from ocrmypdf.api import configure_logging, Verbosity
 
 configure_logging(verbosity=Verbosity.quiet, progress_bar_friendly=False)
-
-
-def extract_pages(
-    input_pdf: Path,
-    output_pdf: Path,
-    pages_to_keep: List[int] = None,
-    pages_to_skip: List[int] = None,
-    zero_based: bool = False,
-):
-    """
-    Create a new PDF with specified pages.
-    """
-    if not pages_to_keep and not pages_to_skip:
-        return
-
-    # Convert to 0-based if needed
-    if not zero_based:
-        if pages_to_keep:
-            pages_to_keep = [p - 1 for p in pages_to_keep]
-        if pages_to_skip:
-            pages_to_skip = [p - 1 for p in pages_to_skip]
-
-    try:
-        new_pdf = pikepdf.Pdf.new()
-
-        with pikepdf.open(input_pdf) as pdf:
-            for i, page in enumerate(pdf.pages):
-                if pages_to_keep:
-                    if i in pages_to_keep:
-                        new_pdf.pages.append(page)
-                elif pages_to_skip:
-                    if i not in pages_to_skip:
-                        new_pdf.pages.append(page)
-
-        new_pdf.save(output_pdf)
-        new_pdf.close()
-    except Exception as e:
-        raise RuntimeError(f"Failed to extract pages: {e}")
 
 
 def run_ocr(

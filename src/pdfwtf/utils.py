@@ -140,6 +140,44 @@ def images_to_pdf(images_dir: Path, output_pdf: Path, dpi=300, fext="png"):
         f.write(img2pdf.convert([str(p) for p in image_files]))
 
 
+def extract_pages(
+    input_pdf: Path,
+    output_pdf: Path,
+    pages_to_keep: List[int] = None,
+    pages_to_skip: List[int] = None,
+    zero_based: bool = False,
+):
+    """
+    Create a new PDF with specified pages.
+    """
+    if not pages_to_keep and not pages_to_skip:
+        return
+
+    # Convert to 0-based if needed
+    if not zero_based:
+        if pages_to_keep:
+            pages_to_keep = [p - 1 for p in pages_to_keep]
+        if pages_to_skip:
+            pages_to_skip = [p - 1 for p in pages_to_skip]
+
+    try:
+        new_pdf = pikepdf.Pdf.new()
+
+        with pikepdf.open(input_pdf) as pdf:
+            for i, page in enumerate(pdf.pages):
+                if pages_to_keep:
+                    if i in pages_to_keep:
+                        new_pdf.pages.append(page)
+                elif pages_to_skip:
+                    if i not in pages_to_skip:
+                        new_pdf.pages.append(page)
+
+        new_pdf.save(output_pdf)
+        new_pdf.close()
+    except Exception as e:
+        raise RuntimeError(f"Failed to extract pages: {e}")
+
+
 def export_thumbnails(
     images_dir: "Path",
     thumbs_dir: "Path",

@@ -24,11 +24,9 @@ log_dir.mkdir(parents=True, exist_ok=True)
 log_file = log_dir / "unpaper_wrap.log"
 
 log = logging.getLogger("unpaper_wrap")
-# log.setLevel(logging.DEBUG)
 log.setLevel(logging.ERROR)
 
 fh = logging.FileHandler(log_file, mode="a", encoding="utf-8")
-# fh.setLevel(logging.DEBUG)
 fh.setLevel(logging.ERROR)
 
 formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
@@ -45,7 +43,6 @@ def main():
         log.info("Usage: unpaper_wrap.py [options] [input_file output_file]")
         sys.exit(0)
 
-    # Separate options (starting with '-') from paths
     options = []
     paths = []
 
@@ -78,7 +75,6 @@ def main():
     log.debug("Input exists: %s", input_file.exists())
     log.debug("Output parent exists: %s", output_file.parent.exists())
 
-    # Prepare Docker mounts
     mounts = {}
     container_paths = {}
 
@@ -91,7 +87,6 @@ def main():
     else:
         container_paths[output_file] = container_paths[input_file]
 
-    # Build Docker command
     docker_cmd = ["docker", "run", "--rm", "-e", "TMP=/data0", "-e", "TEMP=/data0"]
     for host_dir, container_dir in mounts.items():
         docker_cmd.extend(["-v", f"{host_dir}:{container_dir}"])
@@ -103,7 +98,6 @@ def main():
 
     log.debug("Docker command: %s", " ".join(docker_cmd))
 
-    # Run Dockerized unpaper
     try:
         result = subprocess.run(docker_cmd, check=True)
         log.info("Unpaper completed successfully: return code %s", result.returncode)
