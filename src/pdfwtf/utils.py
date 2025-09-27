@@ -30,7 +30,7 @@ def find_project_root(marker="instance") -> Path:
     raise RuntimeError(f"Project root with marker '{marker}' not found.")
 
 
-def get_temp_dir(clean: bool = False) -> Path:
+def get_temp_dir(clean: bool = False, debug=False) -> Path:
 
     env_temp_dir = os.environ.get("PDFWTF_TEMP_DIR")
     if env_temp_dir:
@@ -48,8 +48,9 @@ def get_temp_dir(clean: bool = False) -> Path:
                     item.unlink()
                 elif item.is_dir():
                     shutil.rmtree(item)
-            except Exception:
-                pass
+            except Exception as e:
+                if debug:
+                    print(f"Cannot clean the temp dir: {e}")
 
     return temp_dir
 

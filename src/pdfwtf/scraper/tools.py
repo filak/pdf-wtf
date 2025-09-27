@@ -75,7 +75,7 @@ def save_page_as_pdf(
     if temp_dir:
         output_dir = Path(temp_dir).resolve(strict=True)
     else:
-        output_dir = get_temp_dir()
+        output_dir = get_temp_dir(debug=debug)
 
     if not ua:
         ua = get_user_agent()

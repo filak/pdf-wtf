@@ -245,7 +245,7 @@ def process_pdf(
 ):
     metadata = {}
 
-    temp_dir = get_temp_dir(clean=clear_temp_flag)
+    temp_dir = get_temp_dir(clean=clear_temp_flag, debug=debug_flag)
 
     if not input_pdf and url:
         handle, input_pdf, img_shot = save_page_as_pdf(url, debug=debug_flag)

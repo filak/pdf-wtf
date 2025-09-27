@@ -63,8 +63,8 @@ def url_to_path(url: str, length: int = 32) -> str:
 
 
 def hash_url(url: str):
-    hash = hashlib.md5()
-    hash.update(url.encode("utf-8"))
-    digest = hash.hexdigest()
+    uhash = hashlib.md5()
+    uhash.update(url.encode("utf-8"))
+    digest = uhash.hexdigest()
 
     return digest
