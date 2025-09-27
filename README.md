@@ -6,8 +6,6 @@ PDF files parsing and data extraction
 
 > Work in progress ...
 
-[![CodeQL](https://github.com/filak/pdf-wtf/actions/workflows/codeql.yml/badge.svg)](https://github.com/filak/pdf-wtf/security/code-scanning)
-
 ## Built on top of
 
 
