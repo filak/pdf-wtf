@@ -57,8 +57,8 @@ def main():
     # Handle calls like "--version" or "--help" (no input/output paths)
     if len(paths) < 2:
         docker_cmd = ["docker", "run", "--rm", DOCKER_IMAGE] + args
-        log.info("Running Docker command: %s", docker_cmd)
-        subprocess.run(docker_cmd)
+        log.debug(f"Running Docker command: {docker_cmd}")
+        subprocess.run(docker_cmd, timeout=2.0)
         sys.exit(0)
 
     # The last two paths are input and output
@@ -96,10 +96,10 @@ def main():
     log.debug("Docker command: %s", " ".join(docker_cmd))
 
     try:
-        result = subprocess.run(docker_cmd, check=True)
-        sys.exit(result.returncode)
-    except subprocess.CalledProcessError as err:
-        log.error("Unpaper failed: %s", err)
+        subprocess.run(docker_cmd, check=True)
+        sys.exit(0)
+    except Exception as err:
+        log.error(f"Docker unpaper failed: {str(err)}")
         sys.exit(err)
 
 

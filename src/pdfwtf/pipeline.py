@@ -34,7 +34,6 @@ from ocrmypdf.api import configure_logging, Verbosity
 configure_logging(verbosity=Verbosity.quiet, progress_bar_friendly=False)
 
 
-
 def run_ocr(
     input_pdf,
     output_pdf,
@@ -105,12 +104,13 @@ def run_ocrmypdf(
         layout = None
 
     if unpaper_ok is False:
-        unpaper_args = None
         clean_flag = False
 
     else:
         # Skipping --output-pages and --pre-rotate with ocrmypdf
-        unpaper_args = get_unpaper_args(layout=layout, as_string=True, full=False)
+        unpaper_args = get_unpaper_args(
+            layout=layout, as_string=True, full=False, unpaper_ok=unpaper_ok
+        )
 
     rotate_pages = not rotated
 
@@ -131,7 +131,6 @@ def run_ocrmypdf(
         output_type="pdf",
         keep_temporary_files=keep_temporary_files,
     )
-
 
 
 def export_images(pdf_path: Path, out_dir: Path, dpi=300, fext="png"):
@@ -182,7 +181,6 @@ def export_text(pdf_path: Path, out_dir: Path, level="text") -> dict:
         doc.close()
 
     return text_pages
-
 
 
 def _prepare_temp_and_paths(
@@ -268,52 +266,55 @@ def _process_scanned(
     )
 
     # Run unpaper over each image
-    for infile in files_to_process:
-        try:
-            if output_pages:
-                temp_outfile = pnm_subdir / f"{infile.stem}_%03d.pnm"
-            else:
-                temp_outfile = pnm_subdir / f"{infile.stem}.pnm"
+    if unpaper_ok and unpaper_args:
+        for infile in files_to_process:
+            try:
+                if output_pages:
+                    temp_outfile = pnm_subdir / f"{infile.stem}_%03d.pnm"
+                else:
+                    temp_outfile = pnm_subdir / f"{infile.stem}.pnm"
 
-            run_unpaper_simple(
-                input_file=infile,
-                output_file=temp_outfile,
-                dpi=dpi,
-                mode_args=unpaper_args,
-                tmpdir=temp_subdir,
-            )
-
-        except Exception as e:
-            print(f"Unpaper failed for {infile}: {e}")
-            if debug_flag:
-                cmd_debug = [
-                    "unpaper",
-                    "-v",
-                    "--dpi",
-                    str(round(dpi, 6)),
-                ] + unpaper_args
-                cmd_debug.extend(
-                    [
-                        str(infile.resolve(strict=True)),
-                        str(temp_outfile.resolve(strict=True)),
-                    ]
+                run_unpaper_simple(
+                    input_file=infile,
+                    output_file=temp_outfile,
+                    dpi=dpi,
+                    mode_args=unpaper_args,
+                    tmpdir=temp_subdir,
                 )
-                print(" ".join(cmd_debug))
+
+            except Exception as e:
+                print(f"Unpaper failed for {infile}: {e}")
+                if debug_flag:
+                    cmd_debug = [
+                        "unpaper",
+                        "-v",
+                        "--dpi",
+                        str(round(dpi, 6)),
+                    ] + unpaper_args
+                    cmd_debug.extend(
+                        [
+                            str(infile.resolve(strict=True)),
+                            str(temp_outfile.resolve(strict=True)),
+                        ]
+                    )
+                    print(" ".join(cmd_debug))
 
     # Convert PNM -> PNG and collect
     has_images = False
-    if pnm_subdir.exists() and any(pnm_subdir.iterdir()):
-        if Path(images_dir := Path(img_dir)).is_dir():
-            clear_dir(images_dir)
-        Path(images_dir).mkdir(parents=True, exist_ok=True)
 
-        for pnm_file in pnm_subdir.glob("*.pnm"):
-            final_path = Path(images_dir) / f"{pnm_file.stem}.png"
-            with Image.open(pnm_file) as im:
-                im.save(final_path, dpi=(dpi, dpi))
+    if unpaper_ok:
+        if pnm_subdir.exists() and any(pnm_subdir.iterdir()):
+            if Path(images_dir := Path(img_dir)).is_dir():
+                clear_dir(images_dir)
+            Path(images_dir).mkdir(parents=True, exist_ok=True)
 
-        if any(Path(images_dir).iterdir()):
-            has_images = True
+            for pnm_file in pnm_subdir.glob("*.pnm"):
+                final_path = Path(images_dir) / f"{pnm_file.stem}.png"
+                with Image.open(pnm_file) as im:
+                    im.save(final_path, dpi=(dpi, dpi))
+
+            if any(Path(images_dir).iterdir()):
+                has_images = True
 
     if has_images:
         images_to_pdf(images_dir, tmp_pdf, dpi=dpi, fext="png")
@@ -322,8 +323,6 @@ def _process_scanned(
         shutil.copytree(scans_dir, images_dir, dirs_exist_ok=True)
 
     return unpaper_ok, tmp_pdf, images_dir
-
-
 
 
 def process_pdf(

@@ -12,8 +12,16 @@ def patch_windows_unpaper_args(args):
 
 
 def get_unpaper_args(
-    layout=None, output_pages=None, pre_rotate=None, as_string=False, full=False
+    layout=None,
+    output_pages=None,
+    pre_rotate=None,
+    as_string=False,
+    full=False,
+    unpaper_ok=False,
 ):
+    if unpaper_ok is False:
+        return
+
     unpaper_args_list = []
     if full:
         default_args = [
@@ -26,17 +34,25 @@ def get_unpaper_args(
         ]
         unpaper_args_list.extend(default_args)
 
+    todo = 0
+
     if layout is not None:
         unpaper_args_list.append("--layout")
         unpaper_args_list.append(layout)
+        todo += 1
 
     if pre_rotate is not None:
         unpaper_args_list.append("--pre-rotate")
         unpaper_args_list.append(str(pre_rotate))
+        todo += 1
 
     if output_pages in ["1", "2"]:
         unpaper_args_list.append("--output-pages")
         unpaper_args_list.append(str(output_pages))
+        todo += 1
+
+    if todo == 0:
+        return
 
     if as_string:
         return " ".join(unpaper_args_list)
