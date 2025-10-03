@@ -6,7 +6,6 @@ from pathlib import Path
 import fitz  # PyMuPDF
 from PIL import Image
 from pdfwtf.unpaper_run import get_unpaper_args, get_unpaper_version, run_unpaper_simple
-from pdfwtf.scraper.tools import save_page_as_pdf
 
 from .utils import (
     clear_dir,
@@ -184,14 +183,10 @@ def export_text(pdf_path: Path, out_dir: Path, level="text") -> dict:
 
 
 def _prepare_temp_and_paths(
-    input_pdf, url, pdf_dir_name, img_dir_name, thumb_dir_name, debug_flag
+    input_pdf, debug_flag
 ):
     temp_dir = get_temp_dir(clean=False, debug=debug_flag)
-    if not input_pdf and url:
-        handle, input_pdf, img_shot = save_page_as_pdf(url, debug=debug_flag)
-        input_pdf = Path(input_pdf) if input_pdf else None
-    else:
-        input_pdf = Path(input_pdf).resolve(strict=True)
+    input_pdf = Path(input_pdf).resolve(strict=True)
 
     return temp_dir, input_pdf
 
@@ -327,7 +322,6 @@ def _process_scanned(
 
 def process_pdf(
     input_pdf,
-    url,
     output_dir,
     input_path_prefix=None,
     extract_pages_str=None,
@@ -353,7 +347,7 @@ def process_pdf(
 
     # Prepare temp dir and input PDF
     temp_dir, input_pdf = _prepare_temp_and_paths(
-        input_pdf, url, img_dir, img_dir, thumb_dir, debug_flag
+        input_pdf, debug_flag
     )
 
     if not input_pdf:

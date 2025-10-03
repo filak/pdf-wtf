@@ -1,22 +1,8 @@
 import click
 import sys
-from pydantic import BaseModel, HttpUrl, model_validator, ValidationError
+from pydantic import BaseModel, ValidationError
 from pdfwtf.pipeline import process_pdf
 from pdfwtf.utils import get_output_dir
-
-
-class InputModel(BaseModel):
-    infile: str | None = None
-    url: HttpUrl | None = None
-
-    @model_validator(mode="before")
-    def check_exclusivity(cls, values):
-        infile, url = values.get("infile"), values.get("url")
-        if bool(infile) == bool(url):
-            raise ValueError("You must provide exactly one of --infile or --url")
-        if url and not url.startswith(("http://", "https://")):
-            raise ValueError("Only http(s) URLs are allowed")
-        return values
 
 
 class CliOptions(BaseModel):
@@ -37,16 +23,8 @@ class CliOptions(BaseModel):
     debug_flag: bool = False
 
 
-def validate_input(input_pdf: str | None, url: str | None):
-    try:
-        return InputModel(infile=input_pdf, url=url)
-    except ValidationError as e:
-        raise click.UsageError(str(e))
-
-
-def show_info(input_pdf: str | None, url: str | None, output_dir, debug_flag: bool):
-    input_show = input_pdf or url
-    click.echo(f"Input  :  {input_show}")
+def show_info(input_pdf, output_dir, debug_flag: bool):
+    click.echo(f"Input  :  {input_pdf}")
     click.echo(f"Output :  {output_dir}")
     if debug_flag:
         click.echo(f"[DEBUG] {' '.join(sys.argv)}")
@@ -54,7 +32,6 @@ def show_info(input_pdf: str | None, url: str | None, output_dir, debug_flag: bo
 
 @click.command()
 @click.option("--infile", "input_pdf", type=click.Path(exists=True, dir_okay=False))
-@click.option("--url", type=str)
 @click.option(
     "--outdir", "output_dir", type=click.Path(file_okay=False, resolve_path=True)
 )
@@ -81,11 +58,8 @@ def show_info(input_pdf: str | None, url: str | None, output_dir, debug_flag: bo
 @click.option("--get-text", "export_texts_flag", is_flag=True)
 @click.option("--get-thumb", "export_thumbs_flag", is_flag=True)
 @click.option("--debug", "debug_flag", is_flag=True)
-def main(input_pdf, url, output_dir, **kwargs):
-    """Main entrypoint for PDF WTF CLI"""
-
-    # Validate input (infile xor url)
-    validate_input(input_pdf, url)
+def main(input_pdf, output_dir, **kwargs):
+    """Main entrypoint for pdf-wtf CLI"""
 
     # Normalize output directory
     output_dir = get_output_dir(output_dir=output_dir)
@@ -94,13 +68,12 @@ def main(input_pdf, url, output_dir, **kwargs):
     options = CliOptions(**kwargs)
 
     # Show info
-    show_info(input_pdf, url, output_dir, options.debug_flag)
+    show_info(input_pdf, output_dir, options.debug_flag)
 
     # Run processing
     try:
         process_pdf(
             input_pdf,
-            url,
             output_dir,
             **options.model_dump(),
         )
