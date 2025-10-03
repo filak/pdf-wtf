@@ -16,14 +16,14 @@ def get_unpaper_args(
     output_pages=None,
     pre_rotate=None,
     as_string=False,
-    full=False,
+    get_default=False,
     unpaper_ok=False,
 ):
     if unpaper_ok is False:
         return
 
     unpaper_args_list = []
-    if full:
+    if get_default:
         default_args = [
             "--mask-scan-size",
             "100",  # don't blank out narrow columns

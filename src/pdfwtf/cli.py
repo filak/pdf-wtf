@@ -1,6 +1,6 @@
 import click
 import sys
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel
 from pdfwtf.pipeline import process_pdf
 from pdfwtf.utils import get_output_dir
 
@@ -59,7 +59,8 @@ def show_info(input_pdf, output_dir, debug_flag: bool):
 @click.option("--get-thumb", "export_thumbs_flag", is_flag=True)
 @click.option("--debug", "debug_flag", is_flag=True)
 def main(input_pdf, output_dir, **kwargs):
-    """Main entrypoint for pdf-wtf CLI"""
+    """Main entrypoint for pdf-wtf CLI
+    - unpaper required for these options: layout output-pages pre-rotate"""
 
     # Normalize output directory
     output_dir = get_output_dir(output_dir=output_dir)

@@ -108,7 +108,7 @@ def run_ocrmypdf(
     else:
         # Skipping --output-pages and --pre-rotate with ocrmypdf
         unpaper_args = get_unpaper_args(
-            layout=layout, as_string=True, full=False, unpaper_ok=unpaper_ok
+            layout=layout, as_string=True, get_default=False, unpaper_ok=unpaper_ok
         )
 
     rotate_pages = not rotated
@@ -182,9 +182,7 @@ def export_text(pdf_path: Path, out_dir: Path, level="text") -> dict:
     return text_pages
 
 
-def _prepare_temp_and_paths(
-    input_pdf, debug_flag
-):
+def _prepare_temp_and_paths(input_pdf, debug_flag):
     temp_dir = get_temp_dir(clean=False, debug=debug_flag)
     input_pdf = Path(input_pdf).resolve(strict=True)
 
@@ -249,7 +247,7 @@ def _process_scanned(
 
     unpaper_ok, unpaper_msg = get_unpaper_version()
     if not unpaper_ok:
-        print(f"[WARNING] unpaper not running")
+        print("[WARNING] unpaper not running")
 
     if debug_flag:
         print(f"[DEBUG] unpaper version: {unpaper_msg}")
@@ -257,7 +255,11 @@ def _process_scanned(
         print(f"[DEBUG] Background removed from: {background_removed}")
 
     unpaper_args = get_unpaper_args(
-        layout=layout, output_pages=output_pages, pre_rotate=pre_rotate, full=True
+        layout=layout,
+        output_pages=output_pages,
+        pre_rotate=pre_rotate,
+        get_default=True,
+        unpaper_ok=unpaper_ok,
     )
 
     # Run unpaper over each image
@@ -346,9 +348,7 @@ def process_pdf(
     metadata = {}
 
     # Prepare temp dir and input PDF
-    temp_dir, input_pdf = _prepare_temp_and_paths(
-        input_pdf, debug_flag
-    )
+    temp_dir, input_pdf = _prepare_temp_and_paths(input_pdf, debug_flag)
 
     if not input_pdf:
         print("ERROR: No input !")
