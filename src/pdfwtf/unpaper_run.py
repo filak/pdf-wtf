@@ -44,7 +44,7 @@ def get_unpaper_args(
     return unpaper_args_list
 
 
-def run_unpaper_version() -> None:
+def get_unpaper_version():
     cmd = ["unpaper", "--version"]
 
     cmd = patch_windows_unpaper_args(cmd)
@@ -56,13 +56,13 @@ def run_unpaper_version() -> None:
         stderr=subprocess.STDOUT,
         text=True,
         check=False,
+        timeout=2.0,
     )
 
-    # Print the version
-    if result.returncode == 0:
-        print("Unpaper version:", result.stdout.strip())
+    if "error" in result.stdout.strip():
+        return False, "Failed to get the version"
     else:
-        print("Failed to run unpaper. Output:", result.stdout.strip())
+        return True, result.stdout.strip()
 
 
 def run_unpaper_simple(

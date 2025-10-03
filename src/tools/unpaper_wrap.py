@@ -98,9 +98,9 @@ def main():
     try:
         result = subprocess.run(docker_cmd, check=True)
         sys.exit(result.returncode)
-    except subprocess.CalledProcessError as e:
-        log.error("Unpaper failed: %s", e)
-        sys.exit(e.returncode)
+    except subprocess.CalledProcessError as err:
+        log.error("Unpaper failed: %s", err)
+        sys.exit(err)
 
 
 if __name__ == "__main__":

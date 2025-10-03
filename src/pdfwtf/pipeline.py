@@ -5,7 +5,7 @@ import tempfile
 from pathlib import Path
 import fitz  # PyMuPDF
 from PIL import Image
-from pdfwtf.unpaper_run import get_unpaper_args, run_unpaper_simple, run_unpaper_version
+from pdfwtf.unpaper_run import get_unpaper_args, get_unpaper_version, run_unpaper_simple
 from pdfwtf.scraper.tools import save_page_as_pdf
 
 from .utils import (
@@ -34,10 +34,6 @@ from ocrmypdf.api import configure_logging, Verbosity
 configure_logging(verbosity=Verbosity.quiet, progress_bar_friendly=False)
 
 
-# -----------------------------
-# OCR helpers
-# -----------------------------
-
 
 def run_ocr(
     input_pdf,
@@ -48,6 +44,7 @@ def run_ocr(
     layout=None,
     output_pages=None,
     rotated=False,
+    unpaper_ok=False,
     debug_flag=False,
 ):
     if ocrlib == "pymupdf":
@@ -61,6 +58,7 @@ def run_ocr(
             layout=layout,
             output_pages=output_pages,
             rotated=rotated,
+            unpaper_ok=unpaper_ok,
             debug_flag=debug_flag,
         )
     else:
@@ -93,6 +91,7 @@ def run_ocrmypdf(
     output_pages=None,
     rotated=False,
     clean_flag=True,
+    unpaper_ok=False,
     debug_flag=False,
 ):
     """Run OCR with Tesseract via OCRmyPDF."""
@@ -105,8 +104,13 @@ def run_ocrmypdf(
     if output_pages:
         layout = None
 
-    # Skip --output-pages and --pre-rotate with ocrmypdf
-    unpaper_args = get_unpaper_args(layout=layout, as_string=True, full=False)
+    if unpaper_ok is False:
+        unpaper_args = None
+        clean_flag = False
+
+    else:
+        # Skipping --output-pages and --pre-rotate with ocrmypdf
+        unpaper_args = get_unpaper_args(layout=layout, as_string=True, full=False)
 
     rotate_pages = not rotated
 
@@ -128,10 +132,6 @@ def run_ocrmypdf(
         keep_temporary_files=keep_temporary_files,
     )
 
-
-# -----------------------------
-# Export helpers
-# -----------------------------
 
 
 def export_images(pdf_path: Path, out_dir: Path, dpi=300, fext="png"):
@@ -183,10 +183,6 @@ def export_text(pdf_path: Path, out_dir: Path, level="text") -> dict:
 
     return text_pages
 
-
-# -----------------------------
-# Internal helpers for process_pdf
-# -----------------------------
 
 
 def _prepare_temp_and_paths(
@@ -258,10 +254,14 @@ def _process_scanned(
     if remove_background_flag:
         background_removed = crop_dark_background(files_to_process, tool="pillow")
 
+    unpaper_ok, unpaper_msg = get_unpaper_version()
+    if not unpaper_ok:
+        print(f"[WARNING] unpaper not running")
+
     if debug_flag:
-        run_unpaper_version()
-        print(f"[DEBUG] Rotated pages:  {rotated}")
-        print(f"[DEBUG] Background removed from:  {background_removed}")
+        print(f"[DEBUG] unpaper version: {unpaper_msg}")
+        print(f"[DEBUG] Rotated pages: {rotated}")
+        print(f"[DEBUG] Background removed from: {background_removed}")
 
     unpaper_args = get_unpaper_args(
         layout=layout, output_pages=output_pages, pre_rotate=pre_rotate, full=True
@@ -318,14 +318,12 @@ def _process_scanned(
     if has_images:
         images_to_pdf(images_dir, tmp_pdf, dpi=dpi, fext="png")
     else:
+        images_dir = img_dir
         shutil.copytree(scans_dir, images_dir, dirs_exist_ok=True)
 
-    return tmp_pdf, images_dir
+    return unpaper_ok, tmp_pdf, images_dir
 
 
-# -----------------------------
-# Main process_pdf (refactored)
-# -----------------------------
 
 
 def process_pdf(
@@ -386,8 +384,9 @@ def process_pdf(
         print(f"[DEBUG] PDF was scanned:  {is_scan}")
 
     # If scanned -> process scanned pipeline
+    unpaper_ok = False
     if is_scan:
-        tmp_pdf, images_dir = _process_scanned(
+        unpaper_ok, tmp_pdf, images_dir = _process_scanned(
             tmp_pdf,
             scan_pdf,
             dpi,
@@ -411,6 +410,7 @@ def process_pdf(
             layout=layout,
             output_pages=output_pages,
             rotated=rotated,
+            unpaper_ok=unpaper_ok,
             debug_flag=debug_flag,
         )
     else:

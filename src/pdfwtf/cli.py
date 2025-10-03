@@ -52,9 +52,6 @@ def show_info(input_pdf: str | None, url: str | None, output_dir, debug_flag: bo
         click.echo(f"[DEBUG] {' '.join(sys.argv)}")
 
 
-# -----------------------------
-# CLI Command
-# -----------------------------
 @click.command()
 @click.option("--infile", "input_pdf", type=click.Path(exists=True, dir_okay=False))
 @click.option("--url", type=str)
