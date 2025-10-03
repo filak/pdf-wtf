@@ -288,7 +288,7 @@ def correct_images_orientation(image_paths: list[Path]) -> bool:
     return rotated_count
 
 
-def crop_dark_background(image_paths: List[Path], tool="opencv") -> int:
+def crop_dark_background(image_paths: List[Path], tool="pillow") -> int:
     """
     Crop the main content of multiple images with dark backgrounds.
 
