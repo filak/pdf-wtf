@@ -99,7 +99,7 @@ Check:
 
      unpaper.cmd --version
 
-Patch for ocrmypdf to use unpaper in a Docker  
+Patch for ocrmypdf to use unpaper on Windows using Docker
 
     \venv\Lib\site-packages\ocrmypdf\subprocess\_windows.py#180  
 
