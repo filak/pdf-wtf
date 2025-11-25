@@ -6,7 +6,7 @@ from pathlib import Path
 import fitz  # PyMuPDF
 import img2pdf
 import pikepdf
-import cv2
+import cv3
 from PIL import Image, ImageOps
 from typing import Union, List, Dict, Any
 import pytesseract
@@ -308,23 +308,23 @@ def crop_dark_background_opencv(image_paths: list[Path]) -> int:
     cropped_count = 0
 
     for path in image_paths:
-        img = cv2.imread(str(path))
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        img = cv3.imread(str(path))
+        gray = cv3.cvtColor(img, cv3.COLOR_BGR2GRAY)
 
         # Use adaptive threshold to handle uneven backgrounds
-        thresh = cv2.adaptiveThreshold(
-            gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 15, -10
+        thresh = cv3.adaptiveThreshold(
+            gray, 255, cv3.ADAPTIVE_THRESH_MEAN_C, cv3.THRESH_BINARY, 15, -10
         )
 
-        contours, _ = cv2.findContours(
-            thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+        contours, _ = cv3.findContours(
+            thresh, cv3.RETR_EXTERNAL, cv3.CHAIN_APPROX_SIMPLE
         )
         if contours:
-            c = max(contours, key=cv2.contourArea)
-            x, y, w, h = cv2.boundingRect(c)
+            c = max(contours, key=cv3.contourArea)
+            x, y, w, h = cv3.boundingRect(c)
             if w < img.shape[1] or h < img.shape[0]:
                 cropped = img[y : y + h, x : x + w]  # noqa: E203
-                cv2.imwrite(str(path), cropped)
+                cv3.imwrite(str(path), cropped)
                 cropped_count += 1
 
     return cropped_count
