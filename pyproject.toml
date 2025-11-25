@@ -1,6 +1,9 @@
 [build-system]
-requires = ["setuptools", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["uv_build>=0.9.11,<0.10.0"]
+build-backend = "uv_build"
+
+[tool.uv]
+link-mode = "copy"
 
 [project]
 name = "pdfwtf"
@@ -25,10 +28,10 @@ dependencies = [
 [project.scripts]
 pdfwtf = "pdfwtf.cli:main"
 
-[tool.setuptools.packages.find]
-where = ["src"]
+[tool.uv-build]
+include = ["src/pdfwtf/**"]
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = [
     "flake8",
     "black",
