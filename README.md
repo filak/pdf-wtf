@@ -12,7 +12,6 @@ PDF files parsing and data extraction
 
 ## Built on top of
 
-
 **pikepdf** 
 - PDF manipulation and content editing
 - https://pikepdf.readthedocs.io/en/latest/installation.html
