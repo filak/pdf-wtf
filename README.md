@@ -109,7 +109,7 @@ Check:
 
 Patch for ocrmypdf to use unpaper on Windows using Docker
 
-    \venv\Lib\site-packages\ocrmypdf\subprocess\_windows.py#180  
+    \.venv\Lib\site-packages\ocrmypdf\subprocess\_windows.py#180  
 
     def fix_windows_args():
     ...
