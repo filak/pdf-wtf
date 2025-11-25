@@ -50,13 +50,11 @@ Open terminal/command line
 - create the repo dir
 - go to the dir
 
-Clone the repo:
+1. Clone the repo:
 
-    ```
     git clone https://github.com/filak/pdf-wtf
-    ```
 
-1. Install uv package manager and create the virtual environment
+2. Install uv package manager and create the virtual environment:
 
     ```
     pip install uv
@@ -64,7 +62,7 @@ Clone the repo:
     uv venv
     ```    
     
-2. Activate the environment
+2. Activate the environment:
 
     ```
     .venv\Scripts\activate
