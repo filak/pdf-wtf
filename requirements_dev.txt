@@ -1,4 +1,0 @@
--r requirements.txt   # include all runtime dependencies
-pytest
-flake8
-black
