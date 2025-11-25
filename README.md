@@ -44,26 +44,37 @@ PDF files parsing and data extraction
 
 ## Local dev installation
 
-1. Create virtualenv &amp; activate it:
+Prerequisites: Python 3.12+, Git
+
+Open terminal/command line
+- create the repo dir
+- go to the dir
+
+Clone the repo:
 
     ```
-    py -m venv venv
-    py -m venv --upgrade venv
+    git clone https://github.com/filak/pdf-wtf
     ```
-    
-2. Upgrade the environment - run:
+
+1. Install uv package manager and create the virtual environment
 
     ```
-    venv\Scripts\activate
-    python -m pip install --upgrade pip
-    pip install setuptools wheel --upgrade
-    ```
+    pip install uv
+
+    uv venv
+    ```    
     
-3. Install - run:
+2. Activate the environment
+
+    ```
+    .venv\Scripts\activate
+    ```    
     
+3. Install dependecies:
+
     ```
-    pip install -e .[dev]
-    ```
+    uv sync
+    ```    
 
 4. Test - run:
 
