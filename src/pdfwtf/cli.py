@@ -2,7 +2,7 @@ import click
 import sys
 from pydantic import BaseModel
 from pdfwtf.pipeline import process_pdf
-from pdfwtf.utils import get_output_dir
+from pdfwtf.utils.common import get_output_dir
 
 
 class CliOptions(BaseModel):
@@ -18,6 +18,7 @@ class CliOptions(BaseModel):
     pre_rotate: int | None = None
     get_doi_flag: bool = False
     export_images_flag: bool = False
+    export_format: str = "png"
     export_texts_flag: bool = False
     export_thumbs_flag: bool = False
     debug_flag: bool = False
@@ -54,9 +55,12 @@ def show_info(input_pdf, output_dir, debug_flag: bool):
 )
 @click.option("--remove-bg", "remove_background_flag", is_flag=True)
 @click.option("--get-doi", "get_doi_flag", is_flag=True)
-@click.option("--get-png", "export_images_flag", is_flag=True)
+@click.option("--get-img", "export_images_flag", is_flag=True)
 @click.option("--get-text", "export_texts_flag", is_flag=True)
 @click.option("--get-thumb", "export_thumbs_flag", is_flag=True)
+@click.option(
+    "--get-format", "export_format", default="png", type=click.Choice(["png"])
+)
 @click.option("--debug", "debug_flag", is_flag=True)
 def main(input_pdf, output_dir, **kwargs):
     """Main entrypoint for pdf-wtf CLI -

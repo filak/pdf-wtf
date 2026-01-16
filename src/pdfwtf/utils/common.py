@@ -98,15 +98,6 @@ def get_output_dir_final(
     return output_dir
 
 
-def has_no_text(filepath):
-    """Check if a PDF has been likely scanned (no embedded text)."""
-    with fitz.open(filepath) as doc:
-        for page in doc:
-            if page.get_text().strip():
-                return False
-    return True
-
-
 def parse_page_ranges(pages_str, total_pages=None):
     """Parse page ranges like '1-3,5' into 1-based page indices."""
     if total_pages is None:

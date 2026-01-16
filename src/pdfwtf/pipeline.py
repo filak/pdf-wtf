@@ -7,7 +7,9 @@ import fitz  # PyMuPDF
 from PIL import Image
 from pdfwtf.unpaper_run import get_unpaper_args, get_unpaper_version, run_unpaper_simple
 
-from .utils import (
+from .utils.analyze import is_scanned_or_hybrid
+
+from .utils.common import (
     clear_dir,
     count_pdf_pages,
     extract_pages,
@@ -16,7 +18,6 @@ from .utils import (
     correct_images_orientation,
     crop_dark_background,
     images_to_pdf,
-    has_no_text,
     parse_page_ranges,
     export_thumbnails,
     get_doi,
@@ -104,7 +105,7 @@ def run_ocrmypdf(
 
     if unpaper_ok is False:
         clean_flag = False
-
+        unpaper_args = None
     else:
         # Skipping --output-pages and --pre-rotate with ocrmypdf
         unpaper_args = get_unpaper_args(
@@ -226,13 +227,14 @@ def _process_scanned(
     debug_flag,
     scan_dir_name,
     img_dir,
+    export_format="png",
 ):
     # Copy working PDF
     shutil.copy2(tmp_pdf, scan_pdf)
 
     temp_subdir = Path(tempfile.mkdtemp())
     scans_dir = temp_subdir / scan_dir_name
-    export_images(tmp_pdf, scans_dir, dpi=dpi, fext="png")
+    export_images(tmp_pdf, scans_dir, dpi=dpi, fext=export_format)
 
     pnm_subdir = temp_subdir / "_pnm"
     pnm_subdir.mkdir(parents=True, exist_ok=True)
@@ -317,7 +319,10 @@ def _process_scanned(
         images_to_pdf(images_dir, tmp_pdf, dpi=dpi, fext="png")
     else:
         images_dir = img_dir
-        shutil.copytree(scans_dir, images_dir, dirs_exist_ok=True)
+        try:
+            shutil.copytree(scans_dir, images_dir, dirs_exist_ok=True)
+        except Exception as err:
+            print(f"[ERROR] writing images to {images_dir} - {err}")
 
     return unpaper_ok, tmp_pdf, images_dir
 
@@ -336,6 +341,7 @@ def process_pdf(
     output_pages=None,
     pre_rotate=None,
     get_doi_flag=False,
+    export_format="png",
     export_images_flag=False,
     export_texts_flag=False,
     export_thumbs_flag=False,
@@ -370,7 +376,7 @@ def process_pdf(
     _extract_or_copy_pages(input_pdf, tmp_pdf, extract_pages_str, total_pages_in)
 
     # Detect if scanned
-    is_scan = has_no_text(input_pdf)
+    is_scan = is_scanned_or_hybrid(input_pdf)
     rotated = False
 
     if debug_flag:
@@ -390,10 +396,11 @@ def process_pdf(
             debug_flag,
             scan_dir,
             images_dir,
+            export_format=export_format,
         )
 
     # OCR or copy final
-    if is_scan:
+    if is_scan and export_format == "png":
         run_ocr(
             tmp_pdf,
             output_pdf,
@@ -421,7 +428,7 @@ def process_pdf(
     # Extract images and thumbnails
     if output_pdf.exists():
         if export_images_flag or export_thumbs_flag:
-            export_images(output_pdf, images_dir, dpi=dpi, fext="png")
+            export_images(output_pdf, images_dir, dpi=dpi, fext=export_format)
 
         if export_thumbs_flag:
             export_thumbnails(images_dir, thumbs_dir)
