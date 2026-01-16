@@ -80,11 +80,11 @@ Open terminal/command line
     pytest
     ```
 
-## Updating the deps:
+## Updating the deps
 
-    ```
-    uv add <package>==<version>
-    ``` 
+```
+uv add <package>==<version>
+``` 
 
 ## Using unpaper on Windows
 
