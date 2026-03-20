@@ -1,5 +1,5 @@
 import pytest
-from pdfwtf.utils import parse_page_ranges
+from pdfwtf.utils.common import parse_page_ranges
 
 def test_single_page():
     assert parse_page_ranges("5", 10) == [5]
