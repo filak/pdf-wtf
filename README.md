@@ -80,12 +80,16 @@ Open terminal/command line
     pytest
     ```
 
-## Updating the deps
+Updating the deps:
 
 ```
 uv add <package>==<version>
-``` 
+```
 
+```
+uv sync --upgrade 
+```
+    
 ## Using unpaper on Windows
 
 > OCRmyPDF requires unpaper installed to be able to use --clean and --clean_final params
