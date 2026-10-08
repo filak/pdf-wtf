@@ -5,6 +5,9 @@ build-backend = "uv_build"
 [tool.uv]
 link-mode = "copy"
 
+[tool.black]
+target-version = ["py312"]
+
 [project]
 name = "pdfwtf"
 version = "0.1.2"
@@ -36,7 +39,7 @@ include = ["src/pdfwtf/**"]
 [dependency-groups]
 dev = [
     "black>=25.11.0",
-    "flake8>=7.3.0",
+    "flake8>=7.4.0",
     "pip-audit>=2.9.0",
     "pytest>=9.0.0",
 ]

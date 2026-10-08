@@ -1,0 +1,70 @@
+# pdf-wtf configuration specification
+
+## Purpose
+
+This document defines shared application configuration, configuration-source
+precedence, validation, secret handling, and instance directories. Component
+specifications define component-specific settings.
+
+## Application root and configuration sources
+
+- `PDFWTF_HOME` is the mandatory application-root environment variable.
+- python-dotenv loads `PDFWTF_HOME/.env`.
+- `instance/conf/pdf-wtf.ini` contains shared non-secret INI
+  configuration.
+- `PDFWTF_*` environment variables contain secrets and machine-specific
+  overrides.
+
+The INI file must use UTF-8 encoding. Configuration parsing disables INI
+interpolation. Values can use Python-style scalars and collections. Parsing is
+case-insensitive for `true`, `false`, and `null`. Values that are not valid
+literals remain strings.
+
+Relative configured paths resolve from `PDFWTF_HOME`. Environment variables take
+precedence over values loaded from `.env`. Values loaded from `.env` take
+precedence over values in `instance/conf/pdf-wtf.ini`.
+
+All application, background-processing, administration, and packaged
+executable processes use the same `PDFWTF_HOME` value. The repository root is
+`PDFWTF_HOME` during development. The deployment root is `PDFWTF_HOME` in
+production. The shared instance directory is `PDFWTF_HOME/instance`.
+
+The operating system supplies `PDFWTF_HOME`. The application uses it to locate
+`PDFWTF_HOME/.env`, so `.env` cannot supply `PDFWTF_HOME`. Loading `.env` does not
+replace values already present in the process environment.
+
+Relative instance paths resolve from `PDFWTF_HOME`. Relative configuration-file
+paths resolve from the selected instance directory. Restart the affected
+process after a configuration change.
+
+## Validation
+
+`PDFWTF_HOME` must be an existing absolute path. It must contain a valid
+`instance/conf/pdf-wtf.ini` file. The `.env` file is optional.
+
+An empty environment value is treated as unset. After all configuration
+sources are loaded, each process validates only the settings it requires. A
+process stops with a clear error if a required value is missing or invalid.
+Errors must not expose secrets.
+
+## Secrets
+
+Secrets must come from environment variables, `PDFWTF_HOME/.env`, or another
+approved secret store. Do not put secrets in
+`instance/conf/pdf-wtf.ini`. Commit `.env.example` with safe placeholders.
+Do not commit `.env`.
+
+## Instance directories
+
+- `instance/conf` contains committed non-secret configuration.
+- `instance/resources` contains committed application resources.
+- `instance/_data/in` contains runtime input awaiting processing.
+- `instance/_data/out` contains runtime export output.
+- `instance/cache` contains disposable file cache data.
+- `instance/logs` contains native-host application logs.
+- `instance/temp` contains disposable temporary files.
+
+The application creates writable runtime directories when required. Runtime
+data is not committed. The `instance` directory is part of the repository, but
+credentials, tokens, private keys, and machine-specific secrets must not be
+stored in it.
