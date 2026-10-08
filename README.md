@@ -12,34 +12,34 @@ PDF files parsing and data extraction
 
 ## Built on top of
 
-**pikepdf** 
+**pikepdf**
 - PDF manipulation and content editing
 - https://pikepdf.readthedocs.io/en/latest/installation.html
 
-**PyMuPDF** 
+**PyMuPDF**
 - PDF processing, text/image extraction, rendering
 - https://pymupdf.readthedocs.io/en/latest/installation.html
 
-**ocrmypdf** 
+**ocrmypdf**
 - OCR wrapper (uses Tesseract + Ghostscript)
 - https://ocrmypdf.readthedocs.io/en/latest/installation.html
 
 ## External non-Python dependencies
 
-**Tesseract OCR** 
+**Tesseract OCR**
 - required by OCRmyPDF and PyMuPDF
 - https://github.com/UB-Mannheim/tesseract
 
-**Ghostscript** 
+**Ghostscript**
 - required by OCRmyPDF
 - https://www.ghostscript.com/releases/gsdnld.html
 
-**unpaper** 
-- required by OCRmyPDF with some params: --clean etc. 
+**unpaper**
+- required by OCRmyPDF with some params: --clean etc.
 - https://github.com/unpaper/unpaper
 
-**pngquant** 
-- required by OCRmyPDF with optimize > 0 
+**pngquant**
+- required by OCRmyPDF with optimize > 0
 - https://pngquant.org/
 
 ## Local dev installation
@@ -60,19 +60,19 @@ Open terminal/command line
     pip install uv
 
     uv venv
-    ```    
-    
+    ```
+
 2. Activate the environment:
 
     ```
     .venv\Scripts\activate
-    ```    
-    
+    ```
+
 3. Install dependecies:
 
     ```
     uv sync
-    ```    
+    ```
 
 4. Test - run:
 
@@ -87,9 +87,9 @@ uv add <package>==<version>
 ```
 
 ```
-uv sync --upgrade 
+uv sync --upgrade
 ```
-    
+
 ## Using unpaper on Windows
 
 > OCRmyPDF requires unpaper installed to be able to use --clean and --clean_final params
@@ -106,20 +106,20 @@ Test run:
 
 Create ENV vars:
 
-     setx PDFWTF_HOME_DIR d:\Decko\pdf-wtf
-     setx PDFWTF_TEMP_DIR %PDFWTF_HOME_DIR%\instance\temp
+     setx PDFWTF_HOME d:\Decko\pdf-wtf
+     setx PDFWTF_TEMP_DIR %PDFWTF_HOME%\instance\temp
 
-Add %PDFWTF_HOME_DIR% to PATH so OCRmyPDF can find the unpaper.cmd
+Add %PDFWTF_HOME% to PATH so OCRmyPDF can find the unpaper.cmd
 
 Check:
 
-     echo  %PDFWTF_HOME_DIR%  %PDFWTF_TEMP_DIR%
+     echo  %PDFWTF_HOME%  %PDFWTF_TEMP_DIR%
 
      unpaper.cmd --version
 
 Patch for ocrmypdf to use unpaper on Windows using Docker
 
-    \.venv\Lib\site-packages\ocrmypdf\subprocess\_windows.py#180  
+    \.venv\Lib\site-packages\ocrmypdf\subprocess\_windows.py#180
 
     def fix_windows_args():
     ...
@@ -129,4 +129,3 @@ Patch for ocrmypdf to use unpaper on Windows using Docker
             args[0] = args[0].lstrip(".\\")
 
 > **If you reinstall the package - you MUST insert the patch again !**
-
