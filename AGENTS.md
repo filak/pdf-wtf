@@ -137,7 +137,6 @@ correlation identifier fields when available.
 ## Security rules
 
 - Preserve the trust boundaries and data principles in `specs/PROJECT.md`.
-- Apply the authorization rules in `specs/WORKFLOW.md`.
 - Apply component-specific security requirements from the applicable
   specification.
 - Never commit or disclose a secret.

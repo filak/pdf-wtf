@@ -80,6 +80,20 @@ Open terminal/command line
     pytest
     ```
 
+5. Set PDFWTF_HOME env variable
+
+Windows
+
+    ```
+    setx PDFWTF_HOME "%CD%"
+    ```
+
+Linux
+
+    ```
+    TBD
+    ```
+
 Updating the deps:
 
 ```
