@@ -1,55 +1,50 @@
-import fitz
+"""PDF content classification."""
+
 import re
+
+import pymupdf as fitz
 
 PAGE_NUMBER_RE = re.compile(r"^\s*[\W_]*\d+[\W_]*\s*$")
 
 
-def has_no_text(filepath):
-    """Check if a PDF has been likely scanned (no embedded text)."""
+def has_no_text(filepath: str) -> bool:
+    """Return whether the document has no embedded text."""
     with fitz.open(filepath) as doc:
-        for page in doc:
-            if page.get_text().strip():
-                return False
-    return True
+        return not any(page.get_text().strip() for page in doc)
 
 
-def is_meaningful_text(text, min_chars=30, min_words=5):
+def is_meaningful_text(text: str, min_chars: int = 30, min_words: int = 5) -> bool:
     text = text.strip()
-    if len(text) < min_chars:
-        return False
-    if len(re.findall(r"\w+", text)) < min_words:
-        return False
-    return True
+    return len(text) >= min_chars and len(re.findall(r"\w+", text)) >= min_words
 
 
-def page_has_large_image(page, min_area_ratio=0.4):
+def page_has_large_image(page: fitz.Page, min_area_ratio: float = 0.4) -> bool:
+    """Inspect every displayed image rectangle, including reused images."""
     page_area = page.rect.width * page.rect.height
-    for img in page.get_images(full=True):
-        xref = img[0]
-        bbox = page.get_image_bbox(xref)
-        img_area = bbox.width * bbox.height
-        if img_area / page_area >= min_area_ratio:
-            return True
+    if page_area <= 0:
+        return False
+    for image in page.get_images(full=True):
+        for rectangle in page.get_image_rects(image[0]):
+            visible = rectangle & page.rect
+            if visible.width * visible.height / page_area >= min_area_ratio:
+                return True
     return False
 
 
-def is_scanned_or_hybrid(filepath):
-    """
-    Returns True for scanned OR hybrid PDFs.
-    Returns False only for truly born-digital PDFs.
-    """
+def is_scanned_or_hybrid(filepath: str) -> bool:
+    """Return whether any nonblank page requires OCR."""
     with fitz.open(filepath) as doc:
         for page in doc:
-            text = page.get_text("text")
-
-            # Remove trivial page-number-only lines
             lines = [
-                line for line in text.splitlines() if not PAGE_NUMBER_RE.match(line)
+                line
+                for line in page.get_text("text").splitlines()
+                if not PAGE_NUMBER_RE.match(line)
             ]
             cleaned = " ".join(lines)
-
-            if is_meaningful_text(cleaned):
-                if not page_has_large_image(page):
-                    return False  # born-digital
-
-    return True  # scanned or hybrid
+            has_images = bool(page.get_images(full=True))
+            # A blank page does not turn an otherwise digital PDF into a scan.
+            if not cleaned.strip() and not has_images and not page.get_drawings():
+                continue
+            if not is_meaningful_text(cleaned) or page_has_large_image(page):
+                return True
+    return False

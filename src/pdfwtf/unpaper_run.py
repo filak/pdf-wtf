@@ -1,84 +1,70 @@
-import sys
-import subprocess
+"""External unpaper invocation."""
+
+import logging
 from pathlib import Path
-from typing import List
+import subprocess
+import sys
+
+log = logging.getLogger(__name__)
+PROBE_TIMEOUT = 15.0
+PROCESS_TIMEOUT = 300.0
 
 
-def patch_windows_unpaper_args(args):
-    if sys.platform.startswith("win"):
-        if args[0] == "unpaper":
-            args[0] = "unpaper.cmd"
+def patch_windows_unpaper_args(args: list[str]) -> list[str]:
+    if sys.platform.startswith("win") and args and args[0] == "unpaper":
+        return ["unpaper.cmd", *args[1:]]
     return args
 
 
 def get_unpaper_args(
-    layout=None,
-    output_pages=None,
-    pre_rotate=None,
-    as_string=False,
-    get_default=False,
-    unpaper_ok=False,
-):
-    if unpaper_ok is False:
-        return
-
-    unpaper_args_list = []
+    layout: str | None = None,
+    output_pages: str | None = None,
+    pre_rotate: int | None = None,
+    as_string: bool = False,
+    get_default: bool = False,
+    unpaper_ok: bool = False,
+) -> list[str] | str | None:
+    if not unpaper_ok:
+        return None
+    args = []
     if get_default:
-        default_args = [
-            "--mask-scan-size",
-            "100",  # don't blank out narrow columns
-            "--no-border-align",  # don't align visible content to borders
-            "--no-mask-center",  # don't center visible content within page
-            "--no-grayfilter",  # don't remove light gray areas
-            "--no-blackfilter",  # don't remove solid black areas
-        ]
-        unpaper_args_list.extend(default_args)
-
-    todo = 0
-
-    if layout is not None:
-        unpaper_args_list.append("--layout")
-        unpaper_args_list.append(layout)
-        todo += 1
-
+        args.extend(
+            [
+                "--mask-scan-size",
+                "100",
+                "--no-border-align",
+                "--no-mask-center",
+                "--no-grayfilter",
+                "--no-blackfilter",
+            ]
+        )
+    if layout is not None and layout != "none":
+        args.extend(["--layout", layout])
     if pre_rotate is not None:
-        unpaper_args_list.append("--pre-rotate")
-        unpaper_args_list.append(str(pre_rotate))
-        todo += 1
-
-    if output_pages in ["1", "2"]:
-        unpaper_args_list.append("--output-pages")
-        unpaper_args_list.append(str(output_pages))
-        todo += 1
-
-    if todo == 0:
-        return
-
-    if as_string:
-        return " ".join(unpaper_args_list)
-
-    return unpaper_args_list
+        args.extend(["--pre-rotate", str(pre_rotate)])
+    if output_pages in ("1", "2"):
+        args.extend(["--output-pages", str(output_pages)])
+    if not args:
+        return None
+    return " ".join(args) if as_string else args
 
 
-def get_unpaper_version():
-    cmd = ["unpaper", "--version"]
-
-    cmd = patch_windows_unpaper_args(cmd)
-
-    # Run Unpaper
-    result = subprocess.run(
-        cmd,
-        stdout=subprocess.PIPE,  # capture output
-        stderr=subprocess.STDOUT,
-        text=True,
-        check=False,
-        timeout=2.0,
-    )
-
-    if "error" in result.stdout.strip():
-        return False, "Failed to get the version"
-    else:
-        return True, result.stdout.strip()
+def get_unpaper_version() -> tuple[bool, str]:
+    """Probe availability without treating a missing optional tool as fatal."""
+    try:
+        result = subprocess.run(
+            patch_windows_unpaper_args(["unpaper", "--version"]),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            check=False,
+            timeout=PROBE_TIMEOUT,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False, "unpaper is unavailable."
+    if result.returncode != 0:
+        return False, "unpaper version check failed."
+    return True, result.stdout.strip()
 
 
 def run_unpaper_simple(
@@ -86,51 +72,33 @@ def run_unpaper_simple(
     output_file: Path,
     tmpdir: Path,
     dpi: float = 300,
-    mode_args: List[str] = None,
+    mode_args: list[str] | None = None,
 ) -> None:
-    """
-    Run unpaper via the unpaper.CMD wrapper (Docker-based).
-
-    Args:
-        input_file (Path): PNG input file.
-        output_file (Path): Target PNM (or PNG).
-        dpi (float): Resolution in DPI (default: 300).
-        mode_args (List[str]): Extra unpaper options.
-    """
-    if mode_args is None:
-        mode_args = []
-
-    input_file = input_file.resolve()
-    output_file = output_file.resolve()
-
-    # Ensure output directory exists
+    output_file = Path(output_file).resolve()
     output_file.parent.mkdir(parents=True, exist_ok=True)
-
-    cmd = (
+    cmd = patch_windows_unpaper_args(
         [
             "unpaper",
             "-v",
             "--dpi",
             str(round(dpi, 6)),
+            *(mode_args or []),
+            str(Path(input_file).resolve()),
+            str(output_file),
         ]
-        + mode_args  # noqa: W503
-        + [str(input_file), str(output_file)]  # noqa: W503
     )
-
-    cmd = patch_windows_unpaper_args(cmd)
-
-    # Run the command
-    result = subprocess.run(
-        cmd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        cwd=tmpdir,
-    )
-
-    if result.returncode != 0:
-        raise RuntimeError(
-            f"Unpaper failed for {input_file}\n"
-            f"Command: {' '.join(cmd)}\n"
-            f"Output:\n{result.stdout}"
+    try:
+        result = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            cwd=tmpdir,
+            timeout=PROCESS_TIMEOUT,
+            check=False,
         )
+    except (OSError, subprocess.TimeoutExpired):
+        raise RuntimeError("unpaper could not complete page processing.") from None
+    if result.returncode != 0:
+        # Do not expose external-tool output, which may contain document data.
+        raise RuntimeError("unpaper page processing failed.")

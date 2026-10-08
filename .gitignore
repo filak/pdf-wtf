@@ -10,6 +10,8 @@ secrets/
 
 # Application runtime data
 instance/conf/creds/
+instance/temp/
+instance/logs/
 instance/cache/
 instance/cached/
 instance/_data/

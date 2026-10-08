@@ -1,18 +1,24 @@
-import hashlib
-import os
+"""Synchronous PDF processing and export coordination."""
+
+import logging
+from pathlib import Path
 import shutil
 import tempfile
-from pathlib import Path
-import fitz  # PyMuPDF
+from typing import Any
+
+import ocrmypdf
 from PIL import Image
-from pdfwtf.unpaper_run import get_unpaper_args, get_unpaper_version, run_unpaper_simple
+import pymupdf as fitz
 
+from .configuration import load_config
+from .page_metadata import build_page_metadata
+from .unpaper_run import get_unpaper_args, get_unpaper_version, run_unpaper_simple
 from .utils.analyze import is_scanned_or_hybrid
-
 from .utils.common import (
     clear_dir,
     count_pdf_pages,
     extract_pages,
+    get_output_dir,
     get_output_dir_final,
     get_temp_dir,
     correct_images_orientation,
@@ -22,33 +28,32 @@ from .utils.common import (
     export_thumbnails,
     get_doi,
     write_json,
+    page_sort_key,
 )
 
-if os.environ.get("PDFWTF_TEMP_DIR"):
-    os.environ["TMPDIR"] = os.environ.get("PDFWTF_TEMP_DIR")
-    os.environ["TEMP"] = os.environ.get("PDFWTF_TEMP_DIR")
+log = logging.getLogger(__name__)
 
-import ocrmypdf
-from ocrmypdf.api import configure_logging, Verbosity
 
-configure_logging(verbosity=Verbosity.quiet, progress_bar_friendly=False)
+class ProcessingError(RuntimeError):
+    """Document processing could not complete safely."""
 
 
 def run_ocr(
-    input_pdf,
-    output_pdf,
-    img_dir,
-    ocrlib=None,
-    lang="eng",
-    layout=None,
-    output_pages=None,
-    rotated=False,
-    unpaper_ok=False,
-    debug_flag=False,
-):
+    input_pdf: Path,
+    output_pdf: Path,
+    img_dir: Path,
+    ocrlib: str | None = None,
+    lang: str = "eng",
+    layout: str | None = None,
+    output_pages: str | None = None,
+    rotated: bool = False,
+    unpaper_ok: bool = False,
+    debug_flag: bool = False,
+    dpi: int = 300,
+    optimize: int = 0,
+) -> None:
     if ocrlib == "pymupdf":
-        run_pdfocr(img_dir, output_pdf, language=lang, debug_flag=debug_flag)
-
+        run_pdfocr(img_dir, output_pdf, language=lang, dpi=dpi, debug_flag=debug_flag)
     elif ocrlib == "ocrmypdf":
         run_ocrmypdf(
             input_pdf,
@@ -59,400 +64,417 @@ def run_ocr(
             rotated=rotated,
             unpaper_ok=unpaper_ok,
             debug_flag=debug_flag,
+            optimize=optimize,
         )
-    else:
+    elif ocrlib is None:
         shutil.copy2(input_pdf, output_pdf)
+    else:
+        raise ValueError("Unsupported OCR backend.")
 
 
-def run_pdfocr(img_dir, output_pdf, language="eng", dpi=300, debug_flag=False):
-    """Run OCR with Tesseract via PyMuPDF."""
-
-    img_dir = Path(img_dir)
-    final_doc = fitz.open()
-
-    for img_file in sorted(img_dir.glob("*.png")):
-        pix = fitz.Pixmap(str(img_file))
-        ocr_bytes = pix.pdfocr_tobytes(language=language)
-        tmp_doc = fitz.open(stream=ocr_bytes, filetype="pdf")
-        final_doc.insert_pdf(tmp_doc)
-        tmp_doc.close()
-        pix = None
-
-    final_doc.save(output_pdf, clean=True, deflate=True, use_objstms=True)
-    final_doc.close()
+def run_pdfocr(
+    img_dir: Path,
+    output_pdf: Path,
+    language: str = "eng",
+    dpi: int = 300,
+    debug_flag: bool = False,
+) -> None:
+    """Run Tesseract through PyMuPDF on the prepared images."""
+    images = sorted(Path(img_dir).glob("*.png"), key=page_sort_key)
+    if not images:
+        raise ProcessingError("No prepared pages are available for OCR.")
+    with fitz.open() as final_doc:
+        for image in images:
+            pix = fitz.Pixmap(str(image))
+            pix.set_dpi(dpi, dpi)
+            data = pix.pdfocr_tobytes(language=language)
+            with fitz.open(stream=data, filetype="pdf") as page_doc:
+                final_doc.insert_pdf(page_doc)
+        final_doc.save(output_pdf, clean=True, deflate=True, use_objstms=True)
 
 
 def run_ocrmypdf(
-    input_pdf,
-    output_pdf,
-    lang="eng",
-    layout=None,
-    output_pages=None,
-    rotated=False,
-    clean_flag=True,
-    unpaper_ok=False,
-    debug_flag=False,
-):
-    """Run OCR with Tesseract via OCRmyPDF."""
-
-    keep_temporary_files = bool(debug_flag)
-
-    if layout == "none":
-        layout = None
-
-    if output_pages:
-        layout = None
-
-    if unpaper_ok is False:
-        clean_flag = False
-        unpaper_args = None
-    else:
-        # Skipping --output-pages and --pre-rotate with ocrmypdf
-        unpaper_args = get_unpaper_args(
-            layout=layout, as_string=True, get_default=False, unpaper_ok=unpaper_ok
-        )
-
-    rotate_pages = not rotated
-
+    input_pdf: Path,
+    output_pdf: Path,
+    lang: str = "eng",
+    layout: str | None = None,
+    output_pages: str | None = None,
+    rotated: bool = False,
+    clean_flag: bool = True,
+    unpaper_ok: bool = False,
+    debug_flag: bool = False,
+    optimize: int = 0,
+) -> None:
+    """Run Tesseract through OCRmyPDF."""
+    unpaper_args = get_unpaper_args(
+        layout=None if output_pages or layout == "none" else layout,
+        as_string=True,
+        unpaper_ok=unpaper_ok,
+    )
     ocrmypdf.ocr(
         input_pdf,
         output_pdf,
         language=lang,
         force_ocr=True,
         unpaper_args=unpaper_args,
-        rotate_pages=rotate_pages,
-        optimize=3,
+        rotate_pages=not rotated,
+        optimize=optimize,
         progress_bar=False,
         deskew=True,
         fast_web_view=0.75,
-        clean=clean_flag,
-        clean_final=clean_flag,
-        continue_on_soft_render_error=True,
+        clean=clean_flag and unpaper_ok,
+        clean_final=clean_flag and unpaper_ok,
+        continue_on_soft_render_error=False,
         output_type="pdf",
-        keep_temporary_files=keep_temporary_files,
+        keep_temporary_files=False,
     )
 
 
-def export_images(pdf_path: Path, out_dir: Path, dpi=300, fext="png"):
-
-    if out_dir.is_dir():
-        clear_dir(out_dir)
-
+def export_images(
+    pdf_path: Path, out_dir: Path, dpi: int = 300, fext: str = "png"
+) -> None:
+    if not pdf_path.is_file():
+        raise FileNotFoundError("The PDF to export does not exist.")
     out_dir.mkdir(parents=True, exist_ok=True)
-
-    if not pdf_path.exists():
-        return
-
-    doc = fitz.open(pdf_path)
-    try:
-        for i, page in enumerate(doc, start=1):
+    clear_dir(out_dir)
+    with fitz.open(pdf_path) as doc:
+        for number, page in enumerate(doc, start=1):
             pix = page.get_pixmap(dpi=dpi)
-            out_path = out_dir / f"page_{str(i).zfill(3)}.{fext}"
-            pix.save(str(out_path))  # PyMuPDF expects a str path
-    finally:
-        doc.close()
+            pix.save(str(out_dir / f"page_{number:03d}.{fext}"))
 
 
-def export_text(pdf_path: Path, out_dir: Path, level="text") -> dict:
-
-    if out_dir.is_dir():
-        clear_dir(out_dir)
-
+def export_text(pdf_path: Path, out_dir: Path, level: str = "text") -> dict[int, str]:
+    if not pdf_path.is_file():
+        raise FileNotFoundError("The PDF to export does not exist.")
     out_dir.mkdir(parents=True, exist_ok=True)
-
-    if not pdf_path.exists():
-        return {}
-
-    doc = fitz.open(pdf_path)
-    text_pages = {}
-
-    try:
-        for page_num in range(len(doc)):
-            page = doc[page_num]
+    clear_dir(out_dir)
+    texts = {}
+    with fitz.open(pdf_path) as doc:
+        for number, page in enumerate(doc, start=1):
             text = page.get_text(level)
-            text_pages[page_num + 1] = text
-
-            cnt = page_num + 1
-
-            out_path = out_dir / f"page_{str(cnt).zfill(3)}.txt"
-            out_path.write_text(text, encoding="utf-8")
-
-    finally:
-        doc.close()
-
-    return text_pages
-
-
-def _prepare_temp_and_paths(input_pdf, debug_flag):
-    temp_dir = get_temp_dir(clean=False, debug=debug_flag)
-    input_pdf = Path(input_pdf).resolve(strict=True)
-
-    return temp_dir, input_pdf
-
-
-def _build_output_paths(
-    input_pdf: Path, output_dir, input_path_prefix, img_dir, thumb_dir
-):
-    output_dir = get_output_dir_final(output_dir, input_pdf, input_path_prefix)
-    output_pdf = output_dir / input_pdf.name
-
-    base_hash = hashlib.md5(str(input_pdf).encode("utf-8")).hexdigest()[:8]
-    tmp_pdf = Path(tempfile.gettempdir()) / f"{base_hash}_{input_pdf.stem}.tmp.pdf"
-    scan_pdf = Path(tempfile.gettempdir()) / f"{base_hash}_{input_pdf.stem}.scan.pdf"
-
-    images_dir = output_dir / f"{img_dir}_{input_pdf.stem}"
-    thumbs_dir = output_dir / f"{thumb_dir}_{input_pdf.stem}"
-
-    return output_dir, output_pdf, tmp_pdf, scan_pdf, images_dir, thumbs_dir
-
-
-def _extract_or_copy_pages(input_pdf, tmp_pdf, extract_pages_str, total_pages_in):
-    if extract_pages_str:
-        output_orig = tmp_pdf.parent / f"{input_pdf.stem}.orig.pdf"
-        shutil.copy2(input_pdf, output_orig)
-        pages_to_keep = parse_page_ranges(extract_pages_str, total_pages=total_pages_in)
-        extract_pages(input_pdf, tmp_pdf, pages_to_keep=pages_to_keep)
-    else:
-        shutil.copy2(input_pdf, tmp_pdf)
+            texts[number] = text
+            (out_dir / f"page_{number:03d}.txt").write_text(text, encoding="utf-8")
+    return texts
 
 
 def _process_scanned(
-    tmp_pdf,
-    scan_pdf,
-    dpi,
-    pre_rotate,
-    layout,
-    output_pages,
-    remove_background_flag,
-    debug_flag,
-    scan_dir_name,
-    img_dir,
-    export_format="png",
-):
-    # Copy working PDF
-    shutil.copy2(tmp_pdf, scan_pdf)
-
-    temp_subdir = Path(tempfile.mkdtemp())
-    scans_dir = temp_subdir / scan_dir_name
-    export_images(tmp_pdf, scans_dir, dpi=dpi, fext=export_format)
-
-    pnm_subdir = temp_subdir / "_pnm"
-    pnm_subdir.mkdir(parents=True, exist_ok=True)
-
-    files_to_process = sorted(scans_dir.glob("*.png"))
-
-    rotated = bool(pre_rotate) or correct_images_orientation(files_to_process)
-
-    background_removed = False
+    working_pdf: Path,
+    workspace: Path,
+    dpi: int,
+    pre_rotate: int | None,
+    layout: str | None,
+    output_pages: str | None,
+    remove_background_flag: bool,
+    scan_dir_name: str,
+) -> tuple[Path, bool]:
+    scans_dir = workspace / scan_dir_name
+    export_images(working_pdf, scans_dir, dpi=dpi)
+    files = sorted(scans_dir.glob("*.png"), key=page_sort_key)
+    if not files:
+        raise ProcessingError("The selected PDF contains no pages.")
+    rotated = False
+    if pre_rotate is None:
+        rotated = correct_images_orientation(files)
     if remove_background_flag:
-        background_removed = crop_dark_background(files_to_process, tool="pillow")
+        crop_dark_background(files, tool="pillow")
 
-    unpaper_ok, unpaper_msg = get_unpaper_version()
-    if not unpaper_ok:
-        print("[WARNING] unpaper not running")
-
-    if debug_flag:
-        print(f"[DEBUG] unpaper version: {unpaper_msg}")
-        print(f"[DEBUG] Rotated pages: {rotated}")
-        print(f"[DEBUG] Background removed from: {background_removed}")
-
-    unpaper_args = get_unpaper_args(
-        layout=layout,
-        output_pages=output_pages,
-        pre_rotate=pre_rotate,
-        get_default=True,
-        unpaper_ok=unpaper_ok,
+    available, _ = get_unpaper_version()
+    requested = (
+        layout not in (None, "none")
+        or output_pages is not None
+        or pre_rotate is not None
     )
-
-    # Run unpaper over each image
-    if unpaper_ok and unpaper_args:
-        for infile in files_to_process:
-            try:
-                if output_pages:
-                    temp_outfile = pnm_subdir / f"{infile.stem}_%03d.pnm"
-                else:
-                    temp_outfile = pnm_subdir / f"{infile.stem}.pnm"
-
-                run_unpaper_simple(
-                    input_file=infile,
-                    output_file=temp_outfile,
-                    dpi=dpi,
-                    mode_args=unpaper_args,
-                    tmpdir=temp_subdir,
-                )
-
-            except Exception as e:
-                print(f"Unpaper failed for {infile}: {e}")
-                if debug_flag:
-                    cmd_debug = [
-                        "unpaper",
-                        "-v",
-                        "--dpi",
-                        str(round(dpi, 6)),
-                    ] + unpaper_args
-                    cmd_debug.extend(
-                        [
-                            str(infile.resolve(strict=True)),
-                            str(temp_outfile.resolve(strict=True)),
-                        ]
-                    )
-                    print(" ".join(cmd_debug))
-
-    # Convert PNM -> PNG and collect
-    has_images = False
-
-    if unpaper_ok:
-        if pnm_subdir.exists() and any(pnm_subdir.iterdir()):
-            if Path(images_dir := Path(img_dir)).is_dir():
-                clear_dir(images_dir)
-            Path(images_dir).mkdir(parents=True, exist_ok=True)
-
-            for pnm_file in pnm_subdir.glob("*.pnm"):
-                final_path = Path(images_dir) / f"{pnm_file.stem}.png"
-                with Image.open(pnm_file) as im:
-                    im.save(final_path, dpi=(dpi, dpi))
-
-            if any(Path(images_dir).iterdir()):
-                has_images = True
-
-    if has_images:
-        images_to_pdf(images_dir, tmp_pdf, dpi=dpi, fext="png")
+    if requested and not available:
+        raise ProcessingError("The requested scan options require unpaper.")
+    images_dir = scans_dir
+    if available:
+        args = get_unpaper_args(
+            layout=layout,
+            output_pages=output_pages,
+            pre_rotate=pre_rotate,
+            get_default=True,
+            unpaper_ok=True,
+        )
+        pnm_dir = workspace / "_pnm"
+        pnm_dir.mkdir()
+        images_dir = workspace / "_prepared"
+        images_dir.mkdir()
+        expected = int(output_pages or "1")
+        for infile in files:
+            outfile = pnm_dir / (
+                f"{infile.stem}_%03d.pnm" if output_pages else f"{infile.stem}.pnm"
+            )
+            run_unpaper_simple(infile, outfile, workspace, dpi=dpi, mode_args=args)
+            generated = sorted(
+                (
+                    pnm_dir.glob(f"{infile.stem}_*.pnm")
+                    if output_pages
+                    else pnm_dir.glob(f"{infile.stem}.pnm")
+                ),
+                key=page_sort_key,
+            )
+            if len(generated) != expected:
+                raise ProcessingError("unpaper did not produce all expected pages.")
+            for image_path in generated:
+                with Image.open(image_path) as image:
+                    image.save(images_dir / f"{image_path.stem}.png", dpi=(dpi, dpi))
+        rotated = rotated or pre_rotate is not None
     else:
-        images_dir = img_dir
-        try:
-            shutil.copytree(scans_dir, images_dir, dirs_exist_ok=True)
-        except Exception as err:
-            print(f"[ERROR] writing images to {images_dir} - {err}")
+        log.warning("unpaper is unavailable. Optional scan cleaning is disabled.")
+    # Both backends receive exactly the same prepared pages.
+    images_to_pdf(images_dir, working_pdf, dpi=dpi)
+    return images_dir, rotated
 
-    return unpaper_ok, tmp_pdf, images_dir
+
+def _publish_pdf(source: Path, destination: Path) -> None:
+    # Stage on the destination filesystem before replacing existing output.
+    with tempfile.NamedTemporaryFile(
+        dir=destination.parent, prefix=".pdfwtf-", suffix=".pdf", delete=False
+    ) as stream:
+        staged = Path(stream.name)
+    try:
+        shutil.copy2(source, staged)
+        staged.replace(destination)
+    finally:
+        staged.unlink(missing_ok=True)
 
 
 def process_pdf(
-    input_pdf,
-    output_dir,
-    input_path_prefix=None,
-    extract_pages_str=None,
-    skip_pages_str=None,
-    ocrlib=None,
-    remove_background_flag=False,
-    languages="eng",
-    dpi=300,
-    layout=None,
-    output_pages=None,
-    pre_rotate=None,
-    get_doi_flag=False,
-    export_format="png",
-    export_images_flag=False,
-    export_texts_flag=False,
-    export_thumbs_flag=False,
-    scan_dir="_scans",
-    txt_dir="_texts",
-    img_dir="_images",
-    thumb_dir="_thumbs",
-    debug_flag=False,
-):
-    metadata = {}
-
-    # Prepare temp dir and input PDF
-    temp_dir, input_pdf = _prepare_temp_and_paths(input_pdf, debug_flag)
-
+    input_pdf: str | Path,
+    output_dir: str | Path | None,
+    input_path_prefix: str | Path | None = None,
+    extract_pages_str: str | None = None,
+    skip_pages_str: str | None = None,
+    ocrlib: str | None = None,
+    remove_background_flag: bool = False,
+    languages: str = "eng",
+    dpi: int = 300,
+    layout: str | None = None,
+    output_pages: str | None = None,
+    pre_rotate: int | None = None,
+    get_doi_flag: bool = False,
+    export_format: str = "png",
+    export_images_flag: bool = False,
+    export_texts_flag: bool = False,
+    export_thumbs_flag: bool = False,
+    scan_dir: str = "_scans",
+    txt_dir: str = "_texts",
+    img_dir: str = "_images",
+    thumb_dir: str = "_thumbs",
+    debug_flag: bool = False,
+    born_digital_flag: bool = False,
+    optimize: int = 0,
+    no_pdf_flag: bool = False,
+    export_json_flag: bool = False,
+) -> None:
+    """Process one PDF without replacing its source or publishing partial OCR."""
+    if no_pdf_flag and not any(
+        (
+            export_json_flag,
+            get_doi_flag,
+            export_images_flag,
+            export_texts_flag,
+            export_thumbs_flag,
+        )
+    ):
+        raise ValueError(
+            "No output selected. Select --get-json, --get-doi, --get-img, "
+            "--get-text, or --get-thumb."
+        )
+    config = load_config()
     if not input_pdf:
-        print("ERROR: No input !")
-        return
-
-    # Build output and working paths
-    output_dir, output_pdf, tmp_pdf, scan_pdf, images_dir, thumbs_dir = (
-        _build_output_paths(
-            input_pdf, output_dir, input_path_prefix, img_dir, thumb_dir
+        raise ValueError("An input PDF is required.")
+    input_pdf = Path(input_pdf).resolve(strict=True)
+    if not input_pdf.is_file():
+        raise ValueError("The input PDF must be a file.")
+    if ocrlib not in (None, "ocrmypdf", "pymupdf"):
+        raise ValueError("Unsupported OCR backend.")
+    if not isinstance(optimize, int) or not 0 <= optimize <= 3:
+        raise ValueError("Optimization must be an integer between 0 and 3.")
+    if export_format != "png":
+        raise ValueError("Unsupported page image format.")
+    if not 72 <= dpi <= 1200:
+        raise ValueError("DPI must be between 72 and 1200.")
+    if pre_rotate not in (None, 0, 90, 180, 270):
+        raise ValueError("Unsupported pre-rotation angle.")
+    if layout not in (None, "none", "single", "double"):
+        raise ValueError("Unsupported scan layout.")
+    if output_pages not in (None, "1", "2"):
+        raise ValueError("Unsupported output page count.")
+    if born_digital_flag and (
+        remove_background_flag
+        or layout not in (None, "none")
+        or output_pages is not None
+        or pre_rotate is not None
+    ):
+        raise ValueError(
+            "--born-digital cannot be combined with --remove-bg, --layout "
+            "(single or double), --output-pages, or --pre-rotate."
         )
+    for name in (scan_dir, txt_dir, img_dir, thumb_dir):
+        if not name or Path(name).name != name or name in (".", ".."):
+            raise ValueError("Export directory names must be single path components.")
+    output_dir = get_output_dir_final(
+        get_output_dir(output_dir, config=config), input_pdf, input_path_prefix
     )
+    output_pdf = output_dir / input_pdf.name
+    if not no_pdf_flag and (
+        output_pdf.resolve() == input_pdf
+        or (output_pdf.exists() and output_pdf.samefile(input_pdf))
+    ):
+        raise ValueError("The output PDF must differ from the input PDF.")
 
-    if debug_flag:
-        print(f"[DEBUG] Using temporary dir:  {temp_dir}")
+    export_dirs = []
+    if export_images_flag or export_thumbs_flag:
+        export_dirs.append(output_dir / f"{img_dir}_{input_pdf.stem}")
+    if export_thumbs_flag:
+        export_dirs.append(output_dir / f"{thumb_dir}_{input_pdf.stem}")
+    if export_texts_flag:
+        export_dirs.append(output_dir / f"{txt_dir}_{input_pdf.stem}")
+    if any(input_pdf.is_relative_to(path.resolve()) for path in export_dirs):
+        raise ValueError("Export directories must not contain the input PDF.")
 
-    total_pages_in = count_pdf_pages(input_pdf)
-
-    # Extract or copy pages -> tmp_pdf
-    _extract_or_copy_pages(input_pdf, tmp_pdf, extract_pages_str, total_pages_in)
-
-    # Detect if scanned
-    is_scan = is_scanned_or_hybrid(input_pdf)
-    rotated = False
-
-    if debug_flag:
-        print(f"[DEBUG] PDF was scanned:  {is_scan}")
-
-    # If scanned -> process scanned pipeline
-    unpaper_ok = False
-    if is_scan:
-        unpaper_ok, tmp_pdf, images_dir = _process_scanned(
-            tmp_pdf,
-            scan_pdf,
-            dpi,
-            pre_rotate,
-            layout,
-            output_pages,
-            remove_background_flag,
-            debug_flag,
-            scan_dir,
-            images_dir,
-            export_format=export_format,
+    with tempfile.TemporaryDirectory(
+        prefix="pdfwtf-", dir=get_temp_dir(config=config)
+    ) as temp:
+        workspace = Path(temp)
+        job_log = logging.LoggerAdapter(log, {"correlation_id": workspace.name})
+        total_pages = count_pdf_pages(input_pdf)
+        job_log.debug("Processing started. Input pages=%d.", total_pages)
+        if total_pages == 0:
+            raise ProcessingError("The input PDF contains no pages.")
+        pages_to_keep = (
+            parse_page_ranges(extract_pages_str, total_pages)
+            if extract_pages_str is not None
+            else []
         )
-
-    # OCR or copy final
-    if is_scan and export_format == "png":
-        run_ocr(
-            tmp_pdf,
-            output_pdf,
-            images_dir,
-            lang=languages,
-            ocrlib=ocrlib,
-            layout=layout,
-            output_pages=output_pages,
-            rotated=rotated,
-            unpaper_ok=unpaper_ok,
-            debug_flag=debug_flag,
+        pages_to_skip = (
+            parse_page_ranges(skip_pages_str, total_pages)
+            if skip_pages_str is not None
+            else []
         )
-    else:
-        if tmp_pdf != output_pdf:
-            shutil.copy2(tmp_pdf, output_pdf)
+        selected = (
+            pages_to_keep
+            if extract_pages_str is not None
+            else list(range(1, total_pages + 1))
+        )
+        if not no_pdf_flag and not (set(selected) - set(pages_to_skip)):
+            raise ValueError("Page removal must leave at least one page.")
 
-    if tmp_pdf.exists():
-        tmp_pdf.unlink()
+        def prepare(source: Path, directory: Path, split: str | None) -> Path:
+            directory.mkdir()
+            working_pdf = directory / "working.pdf"
+            result = directory / "result.pdf"
+            shutil.copy2(source, working_pdf)
+            if not born_digital_flag and is_scanned_or_hybrid(working_pdf):
+                images, rotated = _process_scanned(
+                    working_pdf,
+                    directory,
+                    dpi,
+                    pre_rotate,
+                    layout,
+                    split,
+                    remove_background_flag,
+                    scan_dir,
+                )
+                expected_pages = count_pdf_pages(working_pdf)
+                run_ocr(
+                    working_pdf,
+                    result,
+                    images,
+                    ocrlib=ocrlib,
+                    lang=languages,
+                    rotated=rotated,
+                    unpaper_ok=False,
+                    debug_flag=debug_flag,
+                    dpi=dpi,
+                    optimize=optimize,
+                )
+                if count_pdf_pages(result) != expected_pages:
+                    raise ProcessingError(
+                        "OCR did not preserve the prepared page count."
+                    )
+            else:
+                shutil.copy2(working_pdf, result)
+            return result
 
-    # Remove pages to skip
-    if skip_pages_str:
-        pages_to_skip = parse_page_ranges(skip_pages_str, total_pages=total_pages_in)
-        extract_pages(output_pdf, output_pdf, pages_to_skip=pages_to_skip)
+        derivatives = any(
+            (
+                export_json_flag,
+                get_doi_flag,
+                export_images_flag,
+                export_texts_flag,
+                export_thumbs_flag,
+            )
+        )
+        result_pdf = (
+            prepare(input_pdf, workspace / "derivatives", None) if derivatives else None
+        )
+        if result_pdf is not None and count_pdf_pages(result_pdf) != total_pages:
+            raise ProcessingError("Derivative processing must preserve input indices.")
+        pdf_result = None
+        if not no_pdf_flag:
+            if result_pdf is not None and output_pages in (None, "1"):
+                pdf_result = workspace / "pdf_result.pdf"
+                if extract_pages_str is not None:
+                    extract_pages(result_pdf, pdf_result, pages_to_keep=selected)
+                else:
+                    shutil.copy2(result_pdf, pdf_result)
+            else:
+                selected_pdf = workspace / "selected.pdf"
+                if extract_pages_str is not None:
+                    extract_pages(input_pdf, selected_pdf, pages_to_keep=selected)
+                else:
+                    shutil.copy2(input_pdf, selected_pdf)
+                pdf_result = prepare(selected_pdf, workspace / "pdf", output_pages)
+            # A split input page maps to all of its generated PDF pages.
+            count = count_pdf_pages(pdf_result)
+            factor, remainder = divmod(count, len(selected))
+            if remainder or factor < 1:
+                raise ProcessingError("PDF processing did not preserve page mapping.")
+            remove = [
+                position * factor + part + 1
+                for position, original in enumerate(selected)
+                if original in pages_to_skip
+                for part in range(factor)
+            ]
+            if remove:
+                extract_pages(pdf_result, pdf_result, pages_to_skip=remove)
 
-    # Extract images and thumbnails
-    if output_pdf.exists():
+        images_dir = output_dir / f"{img_dir}_{input_pdf.stem}"
+        thumbs_dir = output_dir / f"{thumb_dir}_{input_pdf.stem}"
         if export_images_flag or export_thumbs_flag:
-            export_images(output_pdf, images_dir, dpi=dpi, fext=export_format)
-
+            export_images(result_pdf, images_dir, dpi=dpi)
         if export_thumbs_flag:
             export_thumbnails(images_dir, thumbs_dir)
-
-    total_pages_out = count_pdf_pages(output_pdf)
-
-    # Export texts and detect DOI
-    if (export_texts_flag or get_doi_flag) and total_pages_out > 0:
-        texts_dir = output_dir / f"{txt_dir}_{input_pdf.stem}"
-        text_pages = export_text(output_pdf, texts_dir)
-
-        if text_pages:
-            summary_txt = output_dir / f"{input_pdf.stem}.txt"
-            with summary_txt.open("w", encoding="utf-8") as f:
-                for page_num, text in text_pages.items():
-                    f.write(f"--- Page {page_num} of {total_pages_out} ---\n")
-                    f.write(text)
-                    f.write("\n\n")
-
+        metadata: dict[str, Any] = {
+            "input": str(input_pdf),
+            "output": str(output_pdf.resolve()) if not no_pdf_flag else None,
+            "doi": [],
+        }
+        if export_json_flag or get_doi_flag:
+            metadata["pages"] = build_page_metadata(
+                result_pdf, pages_to_keep, pages_to_skip
+            )
+        if export_texts_flag or get_doi_flag:
+            texts_dir = (
+                output_dir / f"{txt_dir}_{input_pdf.stem}"
+                if export_texts_flag
+                else workspace / "doi_texts"
+            )
+            texts = export_text(result_pdf, texts_dir)
+            if export_texts_flag:
+                with (output_dir / f"{input_pdf.stem}.txt").open(
+                    "w", encoding="utf-8"
+                ) as stream:
+                    for number, text in texts.items():
+                        stream.write(
+                            f"--- Page {number} of {len(texts)} ---\n{text}\n\n"
+                        )
             if get_doi_flag:
-                doi_list = get_doi(texts_dir)
-                metadata["doi"] = doi_list
-                if doi_list:
-                    print("DOI: ", doi_list)
-
-    output_json = output_dir / f"{input_pdf.stem}.meta.json"
-    write_json(metadata, output_json)
+                metadata["doi"] = get_doi(texts_dir)
+        if export_json_flag or get_doi_flag:
+            write_json(metadata, output_dir / f"{input_pdf.stem}.meta.json")
+        if not no_pdf_flag:
+            _publish_pdf(pdf_result, output_pdf)
+        job_log.info("PDF processing completed.")

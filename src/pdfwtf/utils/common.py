@@ -1,147 +1,128 @@
 import json
-import os
+import logging
 import re
 import shutil
 from pathlib import Path
-import fitz  # PyMuPDF
 import img2pdf
 import pikepdf
 import cv3
 from PIL import Image, ImageOps
 from typing import Union, List, Dict, Any
+
+from pdfwtf.configuration import AppConfig, load_config
 import pytesseract
 
 PAT_DOI = re.compile(r"(?:https?://)?doi\.org/(10\.\d{4,9}/[^\s]+)", re.IGNORECASE)
 
-RELATIVE_OUTPUT_DIR = "_data/out-pdf"
+log = logging.getLogger(__name__)
 
 
-def find_project_root(marker="instance") -> Path:
-    """
-    Walk up the directory tree until a folder containing the marker exists.
-    Returns the parent directory containing the marker.
-
-    Raises RuntimeError if no project root is found.
-    """
-    current = Path(__file__).resolve()
-    for parent in [current.parent] + list(current.parents):
-        if (parent / marker).exists():
-            return parent
-    raise RuntimeError(f"Project root with marker '{marker}' not found.")
+def find_project_root(marker: str = "instance") -> Path:
+    """Return the configured root instead of discovering a source checkout."""
+    return load_config().home
 
 
-def get_temp_dir(clean: bool = False, debug=False) -> Path:
-
-    env_temp_dir = os.environ.get("PDFWTF_TEMP_DIR")
-    if env_temp_dir:
-        temp_dir = Path(env_temp_dir).resolve()
-    else:
-        base_dir = find_project_root()
-        temp_dir = base_dir / "instance" / "temp"
-
+def get_temp_dir(
+    clean: bool = False, debug: bool = False, *, config: AppConfig | None = None
+) -> Path:
+    temp_dir = (config or load_config()).temp_dir
     temp_dir.mkdir(parents=True, exist_ok=True)
-
     if clean:
         for item in temp_dir.iterdir():
-            try:
-                if item.is_file():
-                    item.unlink()
-                elif item.is_dir():
-                    shutil.rmtree(item)
-            except Exception as e:
-                if debug:
-                    print(f"Cannot clean the temp dir: {e}")
-
+            if item.is_dir() and not item.is_symlink():
+                shutil.rmtree(item)
+            else:
+                item.unlink()
     return temp_dir
 
 
-def get_output_dir(output_dir=None) -> Path:
-
-    if output_dir:
-        output_dir = Path(output_dir).resolve()
+def get_output_dir(
+    output_dir: str | Path | None = None, *, config: AppConfig | None = None
+) -> Path:
+    config = config or load_config()
+    if output_dir is None:
+        path = config.output_dir
     else:
-        env_outdir = os.environ.get("PDFWTF_OUTPUT_DIR")
-        if env_outdir:
-            output_dir = Path(env_outdir).resolve()
-        else:
-            base_dir = find_project_root()
-            output_dir = base_dir / "instance" / RELATIVE_OUTPUT_DIR
-            output_dir.mkdir(parents=True, exist_ok=True)
-
-    return output_dir
+        path = Path(output_dir)
+        if not path.is_absolute():
+            path = config.home / path
+        path = path.resolve()
+    path.mkdir(parents=True, exist_ok=True)
+    return path
 
 
 def get_output_dir_final(
-    output_dir: Path, input_pdf: Path, input_path_prefix: str = None
+    output_dir: Path, input_pdf: Path, input_path_prefix: str | Path | None = None
 ) -> Path:
-
-    if not input_path_prefix:
-        return output_dir
-
-    input_str = str(input_pdf)
-    prefix_str = str(Path(input_path_prefix))
-
-    if prefix_str not in input_str:
-        raise ValueError(
-            f"Input path prefix '{prefix_str}' not found in input file path '{input_str}'"
-        )
-
-    # Everything after the first occurrence of marker
-    relative_subpath = Path(
-        input_str.split(prefix_str, 1)[1].strip("/").strip("\\")
-    ).parent
-
-    output_dir = output_dir / relative_subpath
-
+    output_dir = Path(output_dir)
+    if input_path_prefix is not None:
+        try:
+            relative = (
+                Path(input_pdf).resolve().relative_to(Path(input_path_prefix).resolve())
+            )
+        except ValueError:
+            raise ValueError(
+                "The input PDF must be inside the relative path prefix."
+            ) from None
+        output_dir = output_dir / relative.parent
     output_dir.mkdir(parents=True, exist_ok=True)
-
     return output_dir
 
 
-def parse_page_ranges(pages_str, total_pages=None):
-    """Parse page ranges like '1-3,5' into 1-based page indices."""
-    if total_pages is None:
-        raise ValueError("total_pages must be specified for open-ended ranges")
-
+def parse_page_ranges(pages_str: str, total_pages: int | None = None) -> list[int]:
+    """Parse validated 1-based page ranges, including open-ended ranges."""
+    if not isinstance(total_pages, int) or total_pages < 1:
+        raise ValueError("total_pages must be a positive integer.")
+    if not isinstance(pages_str, str) or not pages_str.strip():
+        raise ValueError("Specify at least one page.")
     pages = set()
     for part in pages_str.split(","):
-        if "-" in part:
-            start, end = part.split("-")
-            start = int(start)
-            if end == "":
-                end = total_pages
-            else:
-                end = int(end)
-            pages.update(range(start, end + 1))
-        else:
-            page = int(part)
-            if total_pages is not None and page > total_pages:
-                raise ValueError(f"Page {page} is out of range (1-{total_pages})")
-            pages.add(page)
+        match = re.fullmatch(r"\s*(\d+)\s*(?:-\s*(\d*)\s*)?", part)
+        if not match:
+            raise ValueError("Invalid page range.")
+        start = int(match[1])
+        end = start if match[2] is None else int(match[2]) if match[2] else total_pages
+        if not 1 <= start <= end <= total_pages:
+            raise ValueError(
+                f"Page ranges must be ascending and within 1-{total_pages}."
+            )
+        pages.update(range(start, end + 1))
     return sorted(pages)
 
 
-def images_to_pdf(images_dir: Path, output_pdf: Path, dpi=300, fext="png"):
+def page_sort_key(path: Path) -> tuple[int, ...]:
+    """Order generated page and split-page filenames by page numbers."""
+    return tuple(int(number) for number in re.findall(r"\d+", path.stem))
+
+
+def images_to_pdf(
+    images_dir: Path, output_pdf: Path, dpi: int = 300, fext: str = "png"
+) -> None:
     # collect all images in natural sort order
-    image_files = sorted(images_dir.glob(f"*.{fext}"))
+    image_files = sorted(images_dir.glob(f"*.{fext}"), key=page_sort_key)
     if not image_files:
         raise ValueError(f"No PNG images found in {images_dir}")
 
     with output_pdf.open("wb") as f:
-        f.write(img2pdf.convert([str(p) for p in image_files]))
+        f.write(
+            img2pdf.convert(
+                [str(p) for p in image_files],
+                layout_fun=img2pdf.get_fixed_dpi_layout_fun((dpi, dpi)),
+            )
+        )
 
 
 def extract_pages(
     input_pdf: Path,
     output_pdf: Path,
-    pages_to_keep: List[int] = None,
-    pages_to_skip: List[int] = None,
+    pages_to_keep: list[int] | None = None,
+    pages_to_skip: list[int] | None = None,
     zero_based: bool = False,
-):
+) -> None:
     """
     Create a new PDF with specified pages.
     """
-    if not pages_to_keep and not pages_to_skip:
+    if pages_to_keep is None and pages_to_skip is None:
         return
 
     # Convert to 0-based if needed
@@ -151,31 +132,27 @@ def extract_pages(
         if pages_to_skip:
             pages_to_skip = [p - 1 for p in pages_to_skip]
 
-    try:
-        new_pdf = pikepdf.Pdf.new()
-
+    with pikepdf.Pdf.new() as new_pdf:
         with pikepdf.open(input_pdf) as pdf:
             for i, page in enumerate(pdf.pages):
-                if pages_to_keep:
-                    if i in pages_to_keep:
-                        new_pdf.pages.append(page)
-                elif pages_to_skip:
-                    if i not in pages_to_skip:
-                        new_pdf.pages.append(page)
-
+                if pages_to_keep is not None:
+                    keep = i in pages_to_keep
+                else:
+                    keep = i not in (pages_to_skip or [])
+                if keep:
+                    new_pdf.pages.append(page)
+        if not len(new_pdf.pages):
+            raise ValueError("Page selection must leave at least one page.")
         new_pdf.save(output_pdf)
-        new_pdf.close()
-    except Exception as e:
-        raise RuntimeError(f"Failed to extract pages: {e}")
 
 
 def export_thumbnails(
     images_dir: "Path",
     thumbs_dir: "Path",
-    thumb_size=(400, 400),
-    fext="jpg",
-    quality=75,
-):
+    thumb_size: tuple[int, int] = (400, 400),
+    fext: str = "jpg",
+    quality: int = 75,
+) -> None:
     """
     Create thumbnails from existing images.
 
@@ -197,7 +174,9 @@ def export_thumbnails(
     for img_path in sorted(images_dir.iterdir()):
         if img_path.is_file() and img_path.suffix.lower() in [".png", ".jpg"]:
             with Image.open(img_path) as img:
-                img.thumbnail(thumb_size, Image.LANCZOS)
+                img.thumbnail(thumb_size, Image.Resampling.LANCZOS)
+                if fext.lower() in ("jpg", "jpeg") and img.mode != "RGB":
+                    img = img.convert("RGB")
 
                 # Optional: slight sharpening for crisper results
                 # img = img.filter(ImageFilter.SHARPEN)
@@ -230,7 +209,7 @@ def find_files(
     return files
 
 
-def clear_dir(p: Path):
+def clear_dir(p: Path) -> bool:
     if not p.exists():
         return False
     if not p.is_dir():
@@ -268,7 +247,11 @@ def correct_images_orientation(image_paths: list[Path]) -> bool:
 
     for path in image_paths:
         with Image.open(path) as img:
-            osd = pytesseract.image_to_osd(img, output_type=pytesseract.Output.DICT)
+            try:
+                osd = pytesseract.image_to_osd(img, output_type=pytesseract.Output.DICT)
+            except pytesseract.TesseractError:
+                log.warning("Page orientation could not be determined.")
+                continue
             rotate_angle = osd.get("rotate", 0)
 
             if rotate_angle != 0:
@@ -276,10 +259,10 @@ def correct_images_orientation(image_paths: list[Path]) -> bool:
                 img.save(path)  # Overwrite original
                 rotated_count += 1
 
-    return rotated_count
+    return bool(rotated_count)
 
 
-def crop_dark_background(image_paths: List[Path], tool="pillow") -> int:
+def crop_dark_background(image_paths: List[Path], tool: str = "pillow") -> int:
     """
     Crop the main content of multiple images with dark backgrounds.
 

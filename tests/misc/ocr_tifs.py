@@ -3,7 +3,10 @@ import io
 import ocrmypdf
 import pikepdf
 
-def tiff_folder_to_pdf_pikepdf(tiff_dir: Path, output_pdf: Path, lang="eng"):
+
+def tiff_folder_to_pdf_pikepdf(
+    tiff_dir: Path, output_pdf: Path, lang: str = "eng"
+) -> None:
     """
     Convert all TIFF files in a folder to a single searchable PDF using OCR.
     Uses pikepdf to merge PDFs efficiently.
@@ -23,7 +26,7 @@ def tiff_folder_to_pdf_pikepdf(tiff_dir: Path, output_pdf: Path, lang="eng"):
             output_file=pdf_bytes,
             language=lang,
             force_ocr=True,
-            output_type='pdfa'  # ensures PDF/A
+            output_type="pdfa",  # ensures PDF/A
         )
         pdf_bytes.seek(0)
         temp_pdfs.append(pdf_bytes)
@@ -38,8 +41,9 @@ def tiff_folder_to_pdf_pikepdf(tiff_dir: Path, output_pdf: Path, lang="eng"):
     print(f"Searchable PDF created: {output_pdf}")
 
 
-tiff_folder_to_pdf_pikepdf(
-    tiff_dir=Path("output_tiff"),
-    output_pdf=Path("final_ocr.pdf"),
-    lang="eng+ces"
-)
+if __name__ == "__main__":
+    tiff_folder_to_pdf_pikepdf(
+        tiff_dir=Path("output_tiff"),
+        output_pdf=Path("final_ocr.pdf"),
+        lang="eng+ces",
+    )

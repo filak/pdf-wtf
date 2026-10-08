@@ -175,6 +175,7 @@ After an implementation change:
 
 ## Change control
 
+- Before implementing a new feature or a substantial codebase change, assess the need, scope, and tradeoffs. Challenge unnecessary complexity. Suggest a simpler solution when practical.
 - Make the smallest change that completes the task.
 - Preserve existing public interfaces unless the task requires a change.
 - Do not resolve an open architectural decision without user approval.

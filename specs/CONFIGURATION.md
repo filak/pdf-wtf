@@ -68,3 +68,19 @@ The application creates writable runtime directories when required. Runtime
 data is not committed. The `instance` directory is part of the repository, but
 credentials, tokens, private keys, and machine-specific secrets must not be
 stored in it.
+
+## Shared path settings
+
+The shared INI section is `[pdf-wtf]`. The following settings define runtime
+paths. Relative paths resolve from `PDFWTF_HOME`.
+
+| INI setting | Environment override | Default |
+| --- | --- | --- |
+| `output_dir` | `PDFWTF_OUTPUT_DIR` | `instance/_data/out` |
+| `temp_dir` | `PDFWTF_TEMP_DIR` | `instance/temp` |
+| `logs_dir` | `PDFWTF_LOGS_DIR` | `instance/logs` |
+
+Configuration loading does not change the inherited process environment.
+Empty environment values do not override dotenv or INI values. Console logging
+uses standard error. Debug mode enables debug severity. It does not retain
+temporary document files.
