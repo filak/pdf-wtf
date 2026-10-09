@@ -62,7 +62,7 @@ def _select_locale() -> str:
 
 def main() -> None:
     """Run the local development host on the loopback interface."""
-    create_app().run(host="127.0.0.1", port=5000)
+    create_app().run(host="127.0.0.1", port=5001)
 
 
 if __name__ == "__main__":

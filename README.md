@@ -120,7 +120,7 @@ Use Python 3.12, Git, and uv. Run the following commands from the repository roo
 
 ## Run PDF-WTF-GUI
 
-Run PDF-WTF-GUI only in Docker. Use Docker Desktop or Docker Engine with the
+Run PDF-WTF-GUI in Docker. Use Docker Desktop or Docker Engine with the
 Docker Compose plugin. Run these commands from the repository root.
 
 Compose reads `PDFWTF_HOME` from the host environment. It bind-mounts
@@ -134,7 +134,7 @@ Build and start the container:
 docker compose -f dockers/pdf-wtf-gui-compose.yaml up --build -d
 ```
 
-Open `http://127.0.0.1:5000` in a browser. Check the container state and
+Open `http://127.0.0.1:5001` in a browser. Check the container state and
 health:
 
 ```
@@ -367,21 +367,3 @@ uv run --locked pdfwtf article.pdf --born-digital --doctype unit --get-html --no
 See [the container analysis specification](specs/CONTAINER_ANALYSIS.md) for the
 analysis schema, reviewed plan schema, result contracts, and heuristic limits.
 
-# pdf-wtf deployment
-
-## Standalone PDF-WTF-GUI container
-
-Run the standalone PDF-WTF-GUI only in Docker. The approved Compose definition
-is `dockers/pdf-wtf-gui-compose.yaml`. It supports Docker Desktop with the WSL 2
-backend and Docker Engine on Docker-capable hosts.
-
-The Compose service builds `dockers/Dockerfile-pdf-wtf-gui`. It publishes the
-GUI on host loopback port 5000. It bind-mounts
-`PDFWTF_HOME/instance/_data` at `/app/instance/_data`. This mount shares runtime
-data with host processes that use the configured `PDFWTF_HOME`. The service runs
-as a non-root user with a read-only root filesystem. It includes an HTTP health
-check. The image receives no committed secret.
-
-The standalone host uses the bounded in-process demo adapter. This container is
-for local review and development. It is not an approved production processing
-service or durable job queue.

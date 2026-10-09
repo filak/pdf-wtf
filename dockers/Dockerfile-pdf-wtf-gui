@@ -20,6 +20,6 @@ RUN uv sync --locked --no-dev --extra gui \
     && chown -R pdfwtf:pdfwtf /app/instance/_data
 
 USER pdfwtf
-EXPOSE 5000
+EXPOSE 5001
 
-CMD ["flask", "--app", "pdfwtf.gui.app:create_app", "run", "--host=0.0.0.0", "--port=5000"]
+CMD ["flask", "--app", "pdfwtf.gui.app:create_app", "run", "--host=0.0.0.0", "--port=5001"]
