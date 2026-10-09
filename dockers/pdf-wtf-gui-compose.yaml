@@ -6,6 +6,8 @@ services:
     image: pdf-wtf-gui:local
     init: true
     restart: unless-stopped
+    environment:
+      PDFWTF_TEMP_DIR: /tmp
     ports:
       - "127.0.0.1:5001:5001"
     read_only: true

@@ -125,8 +125,9 @@ Docker Compose plugin. Run these commands from the repository root.
 
 Compose reads `PDFWTF_HOME` from the host environment. It bind-mounts
 `PDFWTF_HOME/instance/_data` at `/app/instance/_data` in the container. Host and
-container processes therefore use the same runtime data. The command stops with
-an error if `PDFWTF_HOME` is missing.
+container processes therefore use the same runtime data. The container uses
+its writable `/tmp` tmpfs for temporary processing files. The command stops
+with an error if `PDFWTF_HOME` is missing.
 
 Build and start the container - go to the PDFWTF_HOME dir and run:
 
