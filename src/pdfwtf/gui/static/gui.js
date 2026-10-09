@@ -8,6 +8,8 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
 const app = document.querySelector("#review-app");
 if (app) {
   const analysis = JSON.parse(document.querySelector("#analysis-data").textContent);
+  const plan = JSON.parse(document.querySelector("#plan-data").textContent);
+  const reviewData = plan || analysis;
   const messages = JSON.parse(document.querySelector("#gui-messages").textContent);
   const unitTypes = JSON.parse(document.querySelector("#unit-types").textContent);
   const unitTypeLabels = JSON.parse(
@@ -16,23 +18,32 @@ if (app) {
   const state = {
     document: null,
     currentPage: 1,
+    activeUnitId: null,
+    saving: false,
     scale: 1,
     previewTask: null,
+    textLayer: null,
+    textPromise: null,
+    previewGeneration: 0,
     thumbnailTasks: new Set(),
     thumbnailQueue: [],
     activeThumbnails: 0,
     maxThumbnailConcurrency: 3,
-    units: analysis.units.map((unit) => ({
+    units: reviewData.units.map((unit) => ({
       id: unit.id,
       title: unit.title,
       type: unit.type,
       input_pages: { ...unit.input_pages },
-      selected: true,
-      boundary_status: "confirmed",
+      selected: unit.selected ?? true,
+      boundary_status: unit.boundary_status || "confirmed",
     })),
   };
 
   const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+  const previewContainer = document.querySelector("#preview-container");
+  const previewPanel = document.querySelector(".preview-panel");
+  const previewPageView = document.querySelector("#preview-page-view");
+  const previewTextLayer = document.querySelector("#preview-text-layer");
   const previewCanvas = document.querySelector("#preview-canvas");
   const previewInput = document.querySelector("#preview-page");
   const pageCount = document.querySelector("#page-count");
@@ -55,35 +66,88 @@ if (app) {
 
   async function renderPreview() {
     if (!state.document) return;
-    state.previewTask?.cancel();
-    const page = await state.document.getPage(state.currentPage);
-    const viewport = page.getViewport({ scale: state.scale });
+    const generation = ++state.previewGeneration;
+    const pageNumber = state.currentPage;
+    const zoom = state.scale;
+    const previousTask = state.previewTask;
+    const previousText = state.textPromise;
+    previousTask?.cancel();
+    state.textLayer?.cancel();
+    previewTextLayer.replaceChildren();
+    await Promise.allSettled([previousTask?.promise, previousText]);
+    if (generation !== state.previewGeneration || !state.document) return;
+    const page = await state.document.getPage(pageNumber);
+    if (generation !== state.previewGeneration) return;
+    const padding = getComputedStyle(previewContainer);
+    const availableWidth = previewContainer.clientWidth
+      - parseFloat(padding.paddingLeft) - parseFloat(padding.paddingRight);
+    const naturalViewport = page.getViewport({ scale: 1 });
+    const scale = Math.max(1, availableWidth) / naturalViewport.width * zoom;
+    const viewport = page.getViewport({ scale });
     const ratio = window.devicePixelRatio || 1;
     previewCanvas.width = Math.floor(viewport.width * ratio);
     previewCanvas.height = Math.floor(viewport.height * ratio);
     previewCanvas.style.width = `${viewport.width}px`;
     previewCanvas.style.height = `${viewport.height}px`;
-    state.previewTask = page.render({
+    previewPageView.style.width = `${viewport.width}px`;
+    previewPageView.style.height = `${viewport.height}px`;
+    previewTextLayer.style.setProperty("--total-scale-factor", viewport.scale * viewport.userUnit);
+    const renderTask = page.render({
       canvasContext: previewCanvas.getContext("2d"),
       viewport,
       transform: ratio === 1 ? null : [ratio, 0, 0, ratio, 0, 0],
     });
+    state.previewTask = renderTask;
+    state.textLayer = new pdfjsLib.TextLayer({
+      textContentSource: page.streamTextContent(),
+      container: previewTextLayer,
+      viewport,
+    });
+    state.textPromise = state.textLayer.render();
     try {
-      await state.previewTask.promise;
+      await Promise.all([renderTask.promise, state.textPromise]);
     } catch (error) {
-      if (error?.name !== "RenderingCancelledException") throw error;
+      if (generation === state.previewGeneration) throw error;
+      return;
     } finally {
       page.cleanup();
     }
-    previewInput.value = state.currentPage;
-    document.querySelector("#zoom-level").value = `${Math.round(state.scale * 100)}%`;
+    if (generation !== state.previewGeneration) return;
+    previewInput.value = pageNumber;
+    document.querySelector("#zoom-level").value = `${Math.round(scale * 100)}%`;
     document.querySelectorAll(".thumbnail-button").forEach((button) => {
-      button.classList.toggle("active", Number(button.dataset.page) === state.currentPage);
+      button.classList.toggle("active", Number(button.dataset.page) === pageNumber);
     });
   }
 
-  function selectPage(pageNumber) {
+  function synchronizeUnit(scroll = false) {
+    const cards = [...document.querySelectorAll(".unit-card")];
+    const containsPage = (card) => Number(card.querySelector('[name="start"]').value) <= state.currentPage
+      && state.currentPage <= Number(card.querySelector('[name="end"]').value);
+    const preferred = cards.find((card) => state.units[Number(card.dataset.index)].id === state.activeUnitId);
+    const chosen = preferred && containsPage(preferred) ? preferred : cards.find(containsPage);
+    let activeCard = null;
+    cards.forEach((card) => {
+      const active = card === chosen;
+      card.classList.toggle("active", active);
+      if (active) activeCard = card;
+    });
+    state.activeUnitId = activeCard ? state.units[Number(activeCard.dataset.index)].id : null;
+    const start = activeCard ? Number(activeCard.querySelector('[name="start"]').value) : null;
+    const end = activeCard ? Number(activeCard.querySelector('[name="end"]').value) : null;
+    document.querySelectorAll(".thumbnail-button").forEach((button) => {
+      const page = Number(button.dataset.page);
+      button.classList.toggle("in-active-unit", Boolean(activeCard) && start <= page && page <= end);
+      button.classList.toggle("active", page === state.currentPage);
+    });
+    if (scroll && activeCard) {
+      activeCard.scrollIntoView({ block: "nearest", inline: "nearest" });
+    }
+  }
+
+  function selectPage(pageNumber, scrollUnit = false) {
     state.currentPage = Math.max(1, Math.min(state.document.numPages, pageNumber));
+    synchronizeUnit(scrollUnit);
     renderPreview().catch(() => showMessage(messages.loading_error));
   }
 
@@ -141,11 +205,11 @@ if (app) {
     for (let pageNumber = 1; pageNumber <= state.document.numPages; pageNumber += 1) {
       const button = document.createElement("button");
       button.type = "button";
-      button.className = "thumbnail-button mb-2";
+      button.className = "thumbnail-button mb-2 shadow-sm";
       button.dataset.page = pageNumber;
       button.setAttribute("aria-label", format(messages.view_page, { page: pageNumber }));
       button.innerHTML = `<div class="thumbnail-placeholder"></div><canvas></canvas><span>${pageNumber}</span>`;
-      button.addEventListener("click", () => selectPage(pageNumber));
+      button.addEventListener("click", () => selectPage(pageNumber, true));
       container.append(button);
       observer.observe(button);
     }
@@ -161,12 +225,12 @@ if (app) {
 
   function unitField(label, name, value, type = "text") {
     const column = document.createElement("div");
-    column.className = name === "title" ? "col-12" : "col-sm-6";
+    column.className = name === "title" ? "col-12" : "col-6";
     const labelElement = document.createElement("label");
-    labelElement.className = "form-label small mb-1";
+    labelElement.className = "form-label d-block small mb-1";
     labelElement.textContent = label;
     const input = document.createElement("input");
-    input.className = "form-control form-control-sm";
+    input.className = "form-control form-control-sm shadow-sm";
     input.type = type;
     input.name = name;
     input.value = value;
@@ -181,51 +245,48 @@ if (app) {
     container.replaceChildren();
     state.units.forEach((unit, index) => {
       const card = document.createElement("article");
-      card.className = `unit-card border rounded p-3 mb-3${unit.selected ? "" : " excluded"}`;
+      card.className = `unit-card border rounded p-3 mb-3${unit.newlyAdded ? " shadow" : ""}${unit.selected ? "" : " excluded"}`;
       card.dataset.index = index;
 
       const header = document.createElement("div");
       header.className = "d-flex align-items-center gap-2 mb-2";
       const merge = document.createElement("input");
       merge.type = "checkbox";
-      merge.className = "form-check-input merge-unit";
+      merge.className = "form-check-input merge-unit shadow-sm";
       merge.setAttribute("aria-label", messages.select_merge);
       const heading = document.createElement("strong");
       heading.textContent = unit.id;
-      const included = document.createElement("button");
-      included.type = "button";
-      included.className = `btn btn-sm ms-auto ${unit.selected ? "btn-outline-success" : "btn-outline-secondary"}`;
-      included.textContent = unit.selected ? messages.included : messages.excluded;
+      const inclusion = document.createElement("div");
+      inclusion.className = "form-check form-switch ms-auto mb-0";
+      const included = document.createElement("input");
+      included.type = "checkbox";
+      included.className = "form-check-input shadow-sm";
+      included.id = `include-unit-${index}`;
+      included.setAttribute("role", "switch");
       included.setAttribute("aria-label", messages.toggle_unit);
-      included.addEventListener("click", () => {
-        unit.selected = !unit.selected;
-        renderUnits();
+      included.checked = unit.selected;
+      const includedLabel = document.createElement("label");
+      includedLabel.className = "form-check-label small";
+      includedLabel.htmlFor = included.id;
+      includedLabel.textContent = unit.selected ? messages.included : messages.removed;
+      included.addEventListener("change", () => {
+        unit.selected = included.checked;
+        card.classList.toggle("excluded", !unit.selected);
+        includedLabel.textContent = unit.selected ? messages.included : messages.removed;
       });
-      const remove = document.createElement("button");
-      remove.type = "button";
-      remove.className = "btn btn-sm btn-outline-danger";
-      remove.textContent = messages.remove;
-      remove.addEventListener("click", () => {
-        if (window.confirm(messages.confirm_delete)) {
-          state.units.splice(index, 1);
-          renderUnits();
-        }
-      });
-      header.append(merge, heading, included, remove);
+      inclusion.append(included, includedLabel);
+      header.append(merge, heading, inclusion);
 
       const fields = document.createElement("div");
       fields.className = "row g-2";
-      fields.append(
-        unitField(messages.unit_id, "id", unit.id),
-        unitField(messages.title, "title", unit.title),
-      );
+      fields.append(unitField(messages.title, "title", unit.title));
       const typeColumn = document.createElement("div");
-      typeColumn.className = "col-sm-6";
+      typeColumn.className = "col-12";
       const typeLabel = document.createElement("label");
-      typeLabel.className = "form-label small mb-1";
+      typeLabel.className = "form-label d-block small mb-1";
       typeLabel.textContent = messages.type;
       const typeSelect = document.createElement("select");
-      typeSelect.className = "form-select form-select-sm";
+      typeSelect.className = "form-select form-select-sm shadow-sm";
       typeSelect.name = "type";
       unitTypes.forEach((value) => typeSelect.append(option(value, unit.type)));
       typeLabel.append(typeSelect);
@@ -236,14 +297,60 @@ if (app) {
         unitField(messages.end_page, "end", unit.input_pages.end, "number"),
       );
       card.append(header, fields);
+      fields.addEventListener("input", validateUnitRanges);
+      fields.addEventListener("change", () => {
+        synchronizeUnit();
+        validateUnitRanges();
+      });
+      card.addEventListener("click", () => {
+        state.activeUnitId = unit.id;
+        const startPage = Number(card.querySelector('[name="start"]').value);
+        if (!state.document || !Number.isInteger(startPage) || startPage < 1) return;
+        if (startPage !== state.currentPage) selectPage(startPage);
+        else synchronizeUnit();
+        const thumbnails = document.querySelector("#thumbnails");
+        const thumbnail = thumbnails.querySelector(`[data-page="${state.currentPage}"]`);
+        if (!thumbnail) return;
+        const panelBounds = thumbnails.getBoundingClientRect();
+        const thumbnailBounds = thumbnail.getBoundingClientRect();
+        thumbnails.scrollTo({
+          top: thumbnails.scrollTop + thumbnailBounds.top - panelBounds.top
+            - thumbnails.clientTop - (thumbnails.clientHeight - thumbnailBounds.height) / 2,
+          left: thumbnails.scrollLeft + thumbnailBounds.left - panelBounds.left
+            - thumbnails.clientLeft - (thumbnails.clientWidth - thumbnailBounds.width) / 2,
+        });
+      });
       container.append(card);
     });
+    synchronizeUnit();
+    validateUnitRanges();
+  }
+
+  function validateUnitRanges() {
+    const cards = [...document.querySelectorAll(".unit-card")];
+    const ranges = cards.map((card) => ({
+      start: Number(card.querySelector('[name="start"]').value),
+      end: Number(card.querySelector('[name="end"]').value),
+    }));
+    let valid = true;
+    cards.forEach((card, index) => {
+      const { start, end } = ranges[index];
+      const invalid = !Number.isInteger(start) || !Number.isInteger(end)
+        || start < 1 || start > end || end > reviewData.source.page_count;
+      card.classList.toggle("invalid", invalid);
+      card.querySelectorAll('[name="start"], [name="end"]').forEach((input) => {
+        input.classList.toggle("is-invalid", invalid);
+        input.setAttribute("aria-invalid", String(invalid));
+      });
+      if (invalid) valid = false;
+    });
+    document.querySelector("#save-plan").disabled = state.saving || !valid;
+    return valid;
   }
 
   function readUnitCards() {
     document.querySelectorAll(".unit-card").forEach((card) => {
       const unit = state.units[Number(card.dataset.index)];
-      unit.id = card.querySelector('[name="id"]').value.trim();
       unit.title = card.querySelector('[name="title"]').value.trim();
       unit.type = card.querySelector('[name="type"]').value;
       unit.input_pages.start = Number(card.querySelector('[name="start"]').value);
@@ -263,15 +370,25 @@ if (app) {
 
   function addUnit() {
     readUnitCards();
-    state.units.push({
+    const activeIndex = state.units.findIndex((unit) => unit.id === state.activeUnitId);
+    const insertionIndex = activeIndex < 0 ? state.units.length : activeIndex + 1;
+    const start = Math.min(reviewData.source.page_count,
+      activeIndex < 0 ? state.currentPage : state.units[activeIndex].input_pages.end + 1);
+    const unit = {
       id: newUnitId(),
       title: messages.add_title,
+      newlyAdded: true,
       type: "unknown",
-      input_pages: { start: 1, end: 1 },
+      input_pages: { start, end: start },
       selected: true,
       boundary_status: "confirmed",
-    });
+    };
+    state.units.splice(insertionIndex, 0, unit);
+    state.activeUnitId = unit.id;
+    state.currentPage = start;
     renderUnits();
+    synchronizeUnit(true);
+    renderPreview().catch(() => showMessage(messages.loading_error));
   }
 
   function mergeUnits() {
@@ -284,7 +401,9 @@ if (app) {
       (first, second) => first.input_pages.start - second.input_pages.start,
     );
     const adjacent = ordered.every(
-      (unit, index) => index === 0 || ordered[index - 1].input_pages.end + 1 === unit.input_pages.start,
+      (unit, index) => index === 0 || Math.max(
+        ...ordered.slice(0, index).map((previous) => previous.input_pages.end),
+      ) + 1 >= unit.input_pages.start,
     );
     if (units.length < 2 || !adjacent) {
       showMessage(messages.invalid_merge);
@@ -296,7 +415,7 @@ if (app) {
       type: ordered[0].type,
       input_pages: {
         start: ordered[0].input_pages.start,
-        end: ordered.at(-1).input_pages.end,
+        end: Math.max(...ordered.map((unit) => unit.input_pages.end)),
       },
       selected: ordered.some((unit) => unit.selected),
       boundary_status: "confirmed",
@@ -305,6 +424,11 @@ if (app) {
     state.units.push(merged);
     state.units.sort((first, second) => first.input_pages.start - second.input_pages.start);
     renderUnits();
+  }
+
+  function compareUnitPages(first, second) {
+    return first.input_pages.start - second.input_pages.start
+      || first.input_pages.end - second.input_pages.end;
   }
 
   function buildPlan() {
@@ -316,10 +440,10 @@ if (app) {
       selected: unit.selected,
       boundary_status: "confirmed",
       input_pages: { ...unit.input_pages },
-    }));
-    const pages = analysis.pages.map((page) => ({
+    })).sort(compareUnitPages);
+    const pages = reviewData.pages.map((page) => ({
       ...page,
-      selected: true,
+      selected: page.selected ?? true,
       unit_ids: units
         .filter(
           (unit) =>
@@ -329,16 +453,18 @@ if (app) {
         .map((unit) => unit.id),
     }));
     return {
-      schema_version: analysis.schema_version,
+      schema_version: reviewData.schema_version,
       kind: "plan",
-      source: analysis.source,
-      document_type: analysis.document_type,
+      source: reviewData.source,
+      document_type: reviewData.document_type,
       pages,
       units,
     };
   }
 
   async function savePlan() {
+    if (state.saving || !validateUnitRanges()) return;
+    state.saving = true;
     const button = document.querySelector("#save-plan");
     button.disabled = true;
     const oldText = button.textContent;
@@ -354,13 +480,16 @@ if (app) {
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.details || payload.error || messages.save_error);
+      readUnitCards();
+      state.units.sort(compareUnitPages);
+      renderUnits();
       const target = document.querySelector("#plan-message");
       target.replaceChildren();
       const alert = document.createElement("div");
       alert.className = "alert alert-success";
       alert.textContent = payload.message;
       const link = document.createElement("a");
-      link.className = "btn btn-sm btn-success ms-3";
+      link.className = "btn btn-sm btn-success ms-3 shadow-sm";
       link.href = payload.download_url;
       link.textContent = payload.download_url ? "JSON" : "";
       alert.append(link);
@@ -368,7 +497,8 @@ if (app) {
     } catch (error) {
       showMessage(error.message || messages.save_error);
     } finally {
-      button.disabled = false;
+      state.saving = false;
+      validateUnitRanges();
       button.textContent = oldText;
     }
   }
@@ -378,18 +508,45 @@ if (app) {
   previewInput.addEventListener("change", () => selectPage(Number(previewInput.value)));
   document.querySelector("#zoom-in").addEventListener("click", () => {
     state.scale = Math.min(3, state.scale + 0.25);
-    renderPreview();
+    renderPreview().catch(() => showMessage(messages.loading_error));
   });
   document.querySelector("#zoom-out").addEventListener("click", () => {
     state.scale = Math.max(0.5, state.scale - 0.25);
-    renderPreview();
+    renderPreview().catch(() => showMessage(messages.loading_error));
   });
   document.querySelector("#add-unit").addEventListener("click", addUnit);
   document.querySelector("#merge-units").addEventListener("click", mergeUnits);
   document.querySelector("#save-plan").addEventListener("click", savePlan);
 
+  const reviewToolbar = document.querySelector("#review-toolbar");
+  const toolbarResizeObserver = new ResizeObserver(() => {
+    app.style.setProperty(
+      "--review-toolbar-height",
+      `${reviewToolbar.getBoundingClientRect().height}px`,
+    );
+  });
+  toolbarResizeObserver.observe(reviewToolbar);
+
+  let resizeFrame = null;
+  let previewPanelWidth = null;
+  const previewResizeObserver = new ResizeObserver(([entry]) => {
+    const width = entry.contentRect.width;
+    if (width === previewPanelWidth) return;
+    previewPanelWidth = width;
+    cancelAnimationFrame(resizeFrame);
+    resizeFrame = requestAnimationFrame(() => {
+      renderPreview().catch(() => showMessage(messages.loading_error));
+    });
+  });
+  previewResizeObserver.observe(previewPanel);
+
   window.addEventListener("pagehide", () => {
+    previewResizeObserver.disconnect();
+    toolbarResizeObserver.disconnect();
+    cancelAnimationFrame(resizeFrame);
+    state.previewGeneration += 1;
     state.previewTask?.cancel();
+    state.textLayer?.cancel();
     state.thumbnailTasks.forEach((task) => task.cancel());
     state.thumbnailQueue.length = 0;
     state.document?.destroy();
@@ -397,12 +554,13 @@ if (app) {
   });
 
   renderUnits();
-  pdfjsLib.getDocument(app.dataset.documentUrl).promise
+  pdfjsLib.getDocument({ url: app.dataset.documentUrl }).promise
     .then((document) => {
       state.document = document;
       previewInput.max = document.numPages;
       pageCount.textContent = `/ ${document.numPages}`;
       buildThumbnails();
+      synchronizeUnit();
       return renderPreview();
     })
     .catch(() => showMessage(messages.loading_error));

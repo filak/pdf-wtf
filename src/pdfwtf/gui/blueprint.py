@@ -42,6 +42,15 @@ def create_gui_blueprint() -> Blueprint:
         static_url_path="/assets",
     )
 
+    @blueprint.after_request
+    def javascript_content_type(response: Response) -> Response:
+        """Serve GUI scripts independently of operating-system MIME mappings."""
+        if request.endpoint == "pdfwtf_gui.static" and request.path.endswith(
+            (".js", ".mjs")
+        ):
+            response.mimetype = "text/javascript"
+        return response
+
     @blueprint.url_defaults
     def preserve_language(endpoint: str, values: dict[str, Any]) -> None:
         """Keep an explicit language choice in blueprint-local links."""
@@ -55,21 +64,14 @@ def create_gui_blueprint() -> Blueprint:
         _authorize("view", None)
         return render_template(
             "pdfwtf_gui/input.html",
-            document_types=(
-                ("auto", _("Automatic")),
-                ("unit", _("Single unit")),
-                ("journal-issue", _("Journal issue")),
-                ("book", _("Book")),
-                ("proceedings", _("Proceedings")),
-            ),
+            uploads=_uploaded_files(),
         )
 
-    @blueprint.post("/jobs")
-    def start_job() -> tuple[str, int] | str:
-        _authorize("start", None)
+    @blueprint.post("/uploads")
+    def upload_document() -> tuple[str, int] | str | Response:
+        _authorize("upload", None)
         upload = request.files.get("document")
-        document_type = request.form.get("document_type", "")
-        error = _upload_error(upload, document_type)
+        error = _upload_error(upload)
         if error:
             return render_template("pdfwtf_gui/_job_error.html", message=error), 400
 
@@ -78,31 +80,116 @@ def create_gui_blueprint() -> Blueprint:
         job_dir.mkdir(parents=True, exist_ok=False)
         source = job_dir / "source.pdf"
         assert upload is not None
-        upload.save(source)
         try:
+            upload.save(source)
             with source.open("rb") as stream:
-                if stream.read(5) != b"%PDF-":
-                    source.unlink(missing_ok=True)
-                    job_dir.rmdir()
-                    return (
-                        render_template(
-                            "pdfwtf_gui/_job_error.html",
-                            message=_("Select a valid PDF document."),
-                        ),
-                        400,
-                    )
-            _adapter().start(job_id, source, document_type)
+                valid_pdf = stream.read(5) == b"%PDF-"
+            if not valid_pdf:
+                source.unlink(missing_ok=True)
+                job_dir.rmdir()
+                return (
+                    render_template(
+                        "pdfwtf_gui/_job_error.html",
+                        message=_("Select a valid PDF document."),
+                    ),
+                    400,
+                )
+            (job_dir / "upload.json").write_text(
+                json.dumps(
+                    {"filename": upload.filename, "document_type": "auto"},
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
         except Exception:
             source.unlink(missing_ok=True)
+            (job_dir / "upload.json").unlink(missing_ok=True)
             job_dir.rmdir()
-            current_app.logger.exception("Cannot start a GUI analysis job")
+            current_app.logger.exception("Cannot save a GUI upload")
             return (
                 render_template(
                     "pdfwtf_gui/_job_error.html",
-                    message=_("Analysis could not start. Try again."),
+                    message=_("Upload could not be saved. Try again."),
                 ),
                 500,
             )
+        if request.headers.get("HX-Request") != "true":
+            return redirect(url_for("pdfwtf_gui.index"))
+        return render_template("pdfwtf_gui/_uploads.html", uploads=_uploaded_files())
+
+    @blueprint.delete("/uploads/<job_id>")
+    def delete_upload(job_id: str) -> Response:
+        _valid_job_id(job_id)
+        _authorize("delete", job_id)
+        try:
+            status = _adapter().status(job_id)
+        except KeyError:
+            status = None
+        if status is not None and status.state in {"queued", "processing"}:
+            return _delete_error(
+                job_id, _("Wait for analysis to finish before deleting the file."), 409
+            )
+        source = _input_dir() / job_id / "source.pdf"
+        metadata = source.parent / "upload.json"
+        plan = _plan_path(job_id)
+        analysis = plan.parent / "source.analysis.json"
+        paths = (
+            (source, _input_dir()),
+            (metadata, _input_dir()),
+            (plan, _output_dir()),
+            (analysis, _output_dir()),
+        )
+        if any(not path.resolve().is_relative_to(root) for path, root in paths):
+            abort(404)
+        try:
+            # Remove only the files owned by this upload, never an entire tree.
+            analysis.unlink(missing_ok=True)
+            plan.unlink(missing_ok=True)
+            metadata.unlink(missing_ok=True)
+            source.unlink()
+            for directory in {source.parent, plan.parent}:
+                if directory.is_dir() and not any(directory.iterdir()):
+                    directory.rmdir()
+        except OSError:
+            current_app.logger.exception("Cannot delete a GUI upload")
+            return _delete_error(
+                job_id, _("The file could not be deleted. Try again."), 500
+            )
+        return Response("", status=200)
+
+    @blueprint.post("/jobs/<job_id>/analyze")
+    def start_job(job_id: str) -> tuple[str, int] | str:
+        _valid_job_id(job_id)
+        _authorize("start", job_id)
+        source = _input_dir() / job_id / "source.pdf"
+        if not source.is_file() or not source.resolve().is_relative_to(_input_dir()):
+            abort(404)
+        document_type = request.form.get("document_type", "")
+        if document_type not in _DOCUMENT_TYPES:
+            return (
+                render_template(
+                    "pdfwtf_gui/_job_error.html",
+                    message=_("Select a valid document type."),
+                ),
+                400,
+            )
+        try:
+            status = _adapter().status(job_id)
+        except KeyError:
+            status = None
+        if status is None or status.state not in {"queued", "processing"}:
+            try:
+                _save_document_type(source, document_type)
+                _adapter().start(job_id, source, document_type)
+            except Exception:
+                current_app.logger.exception("Cannot start a GUI analysis job")
+                return (
+                    render_template(
+                        "pdfwtf_gui/_job_error.html",
+                        message=_("Analysis could not start. Try again."),
+                    ),
+                    500,
+                )
         return render_template("pdfwtf_gui/_job_status.html", job_id=job_id)
 
     @blueprint.get("/jobs/<job_id>/status")
@@ -125,28 +212,57 @@ def create_gui_blueprint() -> Blueprint:
                 "pdfwtf_gui/_job_complete.html",
                 job_id=job_id,
                 demo=status.demo,
+                update_actions=request.headers.get("HX-Request") == "true",
+                document_type=_upload_metadata(
+                    _input_dir() / job_id / "source.pdf"
+                ).get("document_type", "auto"),
             )
         return render_template(
             "pdfwtf_gui/_job_status.html", job_id=job_id, state=status.state
         )
+
+    @blueprint.get("/jobs/<job_id>/analysis")
+    def download_analysis(job_id: str) -> Response:
+        _valid_job_id(job_id)
+        _authorize("download_analysis", job_id)
+        try:
+            analysis = _analysis_result(job_id)
+        except KeyError:
+            abort(404)
+        except LookupError:
+            abort(409)
+        response = jsonify(analysis)
+        disposition = "inline" if request.args.get("inline") == "1" else "attachment"
+        response.headers["Content-Disposition"] = (
+            f'{disposition}; filename="source.analysis.json"'
+        )
+        response.headers["Cache-Control"] = "private, no-store"
+        return response
 
     @blueprint.get("/jobs/<job_id>/review")
     def review(job_id: str) -> str:
         _valid_job_id(job_id)
         _authorize("review", job_id)
         try:
-            status = _adapter().status(job_id)
-            analysis = _adapter().result(job_id)
+            analysis = _analysis_result(job_id)
         except KeyError:
             abort(404)
         except LookupError:
             return redirect(url_for("pdfwtf_gui.index"))
+        plan = None
+        destination = _plan_path(job_id)
+        if destination.is_file():
+            try:
+                plan = json.loads(destination.read_text(encoding="utf-8"))
+                validate_plan(plan, _document_path(job_id))
+            except (OSError, ValueError, PlanValidationError):
+                abort(400, description="The saved plan is not valid.")
         return render_template(
             "pdfwtf_gui/review.html",
             job_id=job_id,
             analysis=analysis,
+            plan=plan,
             analysis_json=json.dumps(analysis, ensure_ascii=False),
-            demo=status.demo,
             unit_types=(
                 "preface",
                 "editorial",
@@ -154,8 +270,11 @@ def create_gui_blueprint() -> Blueprint:
                 "programme",
                 "article",
                 "chapter",
-                "abstract-or-poster",
+                "abstract",
+                "poster",
                 "book-review",
+                "full-page-advertisement",
+                "cover",
                 "unknown",
             ),
             unit_type_labels={
@@ -165,8 +284,11 @@ def create_gui_blueprint() -> Blueprint:
                 "programme": _("Programme"),
                 "article": _("Article"),
                 "chapter": _("Chapter"),
-                "abstract-or-poster": _("Abstract or poster"),
+                "abstract": _("Abstract"),
+                "poster": _("Poster"),
                 "book-review": _("Book review"),
+                "full-page-advertisement": _("Full-page advertisement"),
+                "cover": _("Cover"),
                 "unknown": _("Unknown"),
             },
         )
@@ -176,7 +298,7 @@ def create_gui_blueprint() -> Blueprint:
         _valid_job_id(job_id)
         _authorize("document", job_id)
         try:
-            source = _adapter().document_path(job_id)
+            source = _document_path(job_id)
         except KeyError:
             abort(404)
         response = send_file(
@@ -198,7 +320,7 @@ def create_gui_blueprint() -> Blueprint:
         if not isinstance(plan, dict):
             return jsonify(error=_("The plan must be a JSON object.")), 400
         try:
-            source = _adapter().document_path(job_id)
+            source = _document_path(job_id)
             validate_plan(plan, source)
         except KeyError:
             abort(404)
@@ -222,7 +344,7 @@ def create_gui_blueprint() -> Blueprint:
         _valid_job_id(job_id)
         _authorize("download_plan", job_id)
         try:
-            _adapter().document_path(job_id)
+            _document_path(job_id)
         except KeyError:
             abort(404)
         destination = _plan_path(job_id)
@@ -232,7 +354,7 @@ def create_gui_blueprint() -> Blueprint:
             destination,
             mimetype="application/json",
             as_attachment=True,
-            download_name="approved-plan.json",
+            download_name="approved.plan.json",
         )
 
     @blueprint.app_errorhandler(RequestEntityTooLarge)
@@ -271,7 +393,7 @@ def _output_dir() -> Path:
 
 
 def _plan_path(job_id: str) -> Path:
-    return _output_dir() / job_id / "approved-plan.json"
+    return _output_dir() / job_id / "approved.plan.json"
 
 
 def _authorize(action: str, job_id: str | None) -> None:
@@ -283,13 +405,115 @@ def _authorize(action: str, job_id: str | None) -> None:
 def _valid_job_id(job_id: str) -> None:
     if _JOB_ID.fullmatch(job_id) is None:
         abort(404)
+    source = _input_dir() / job_id / "source.pdf"
+    if not source.is_file() or not source.resolve().is_relative_to(_input_dir()):
+        abort(404)
 
 
-def _upload_error(upload: FileStorage | None, document_type: str) -> str | None:
+def _delete_error(job_id: str, message: str, status: int) -> Response:
+    return Response(
+        render_template("pdfwtf_gui/_job_error.html", message=message),
+        status=status,
+        headers={
+            "HX-Retarget": f"#job-state-{job_id}",
+            "HX-Reswap": "innerHTML",
+        },
+    )
+
+
+def _analysis_result(job_id: str) -> dict[str, Any]:
+    try:
+        return _adapter().result(job_id)
+    except (KeyError, LookupError) as error:
+        destination = _output_dir() / job_id / "source.analysis.json"
+        if not destination.resolve().is_relative_to(_output_dir()):
+            raise KeyError("Unknown analysis.") from None
+        try:
+            analysis = json.loads(destination.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            raise error from None
+        if (
+            not isinstance(analysis, dict)
+            or analysis.get("kind") != "analysis"
+            or not isinstance(analysis.get("pages"), list)
+            or not isinstance(analysis.get("units"), list)
+        ):
+            raise KeyError("Invalid saved analysis.") from None
+        return analysis
+
+
+def _document_path(job_id: str) -> Path:
+    try:
+        return _adapter().document_path(job_id)
+    except KeyError:
+        # Routes already validate the upload path and authorize the operation.
+        return _input_dir() / job_id / "source.pdf"
+
+
+def _save_document_type(source: Path, document_type: str) -> None:
+    metadata_path = source.parent / "upload.json"
+    metadata = _upload_metadata(source)
+    metadata["document_type"] = document_type
+    staged = metadata_path.with_suffix(".json.tmp")
+    try:
+        staged.write_text(json.dumps(metadata, ensure_ascii=False), encoding="utf-8")
+        staged.replace(metadata_path)
+    finally:
+        staged.unlink(missing_ok=True)
+
+
+def _upload_metadata(source: Path) -> dict[str, Any]:
+    metadata_path = source.parent / "upload.json"
+    if not metadata_path.resolve().is_relative_to(_input_dir()):
+        return {"filename": "source.pdf"}
+    try:
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+        if isinstance(metadata, dict):
+            return metadata
+    except (OSError, ValueError):
+        pass
+    return {"filename": "source.pdf"}
+
+
+def _uploaded_files() -> list[dict[str, Any]]:
+    uploads = []
+    callback: AccessCheck | None = current_app.config.get("PDFWTF_GUI_ACCESS_CHECK")
+    for source in _input_dir().glob("*/source.pdf"):
+        job_id = source.parent.name
+        if _JOB_ID.fullmatch(job_id) is None or not source.is_file():
+            continue
+        if not source.resolve().is_relative_to(_input_dir()):
+            continue
+        if callback is not None and not callback("view", job_id):
+            continue
+        metadata = _upload_metadata(source)
+        filename = metadata.get("filename", "source.pdf")
+        if not isinstance(filename, str):
+            filename = "source.pdf"
+        document_type = metadata.get("document_type", "auto")
+        if document_type not in _DOCUMENT_TYPES:
+            document_type = "auto"
+        try:
+            _analysis_result(job_id)
+            has_analysis = True
+        except (KeyError, LookupError):
+            has_analysis = False
+        uploads.append(
+            {
+                "job_id": job_id,
+                "filename": filename,
+                "has_analysis": has_analysis,
+                "document_type": document_type,
+                "uploaded_at": source.stat().st_mtime_ns,
+            }
+        )
+    uploads.sort(key=lambda upload: (upload["uploaded_at"], upload["job_id"]))
+    return uploads
+
+
+def _upload_error(upload: FileStorage | None) -> str | None:
     if upload is None or not upload.filename:
         return _("Select a PDF document.")
     if not upload.filename.lower().endswith(".pdf"):
         return _("The selected file must have a .pdf extension.")
-    if document_type not in _DOCUMENT_TYPES:
-        return _("Select a valid document type.")
     return None

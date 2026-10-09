@@ -1,0 +1,7 @@
+<select class="form-select form-select-sm w-auto shadow-sm" id="document-type-{{ job_id }}" name="document_type" required{% if update_actions %} hx-swap-oob="outerHTML"{% endif %}>
+        <option value="auto"{% if document_type == 'auto' %} selected{% endif %}>{{ _('Automatic') }}</option>
+        <option value="unit"{% if document_type == 'unit' %} selected{% endif %}>{{ _('Single unit') }}</option>
+        <option value="journal-issue"{% if document_type == 'journal-issue' %} selected{% endif %}>{{ _('Journal issue') }}</option>
+        <option value="book"{% if document_type == 'book' %} selected{% endif %}>{{ _('Book') }}</option>
+        <option value="proceedings"{% if document_type == 'proceedings' %} selected{% endif %}>{{ _('Proceedings') }}</option>
+      </select>

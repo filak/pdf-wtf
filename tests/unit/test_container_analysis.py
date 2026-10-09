@@ -11,6 +11,8 @@ from pdfwtf.container_analysis import (
     PlanValidationError,
     SCHEMA_VERSION,
     _normalize_text,
+    _unit_type,
+    _valid_bbox,
     analyze_container,
     export_units,
     source_identity,
@@ -287,7 +289,7 @@ def test_raster_figure_has_stable_placeholder_and_caption(tmp_path):
     assert metadata["figures"][0]["caption_bbox"] is not None
 
 
-def test_plan_reports_fingerprint_overlap_and_within_page_errors(tmp_path):
+def test_plan_reports_fingerprint_and_within_page_errors(tmp_path):
     source = make_structured_pdf(tmp_path / "source.pdf", 2)
     plan = reviewed_plan(source, [unit("one", 1, 2), unit("two", 2, 2)])
     plan["source"]["sha256"] = "0" * 64
@@ -296,7 +298,7 @@ def test_plan_reports_fingerprint_overlap_and_within_page_errors(tmp_path):
         validate_plan(plan, source)
     message = str(error.value)
     assert "source.sha256 does not match" in message
-    assert "overlap on input page 2" in message
+    assert "overlap on input page" not in message
     assert "unsupported within-page boundary fields" in message
 
 
@@ -421,3 +423,152 @@ def test_cli_end_to_end_analysis_plan_and_html(make_pdf, tmp_path):
     assert (unit_dir / "manifest.json").is_file()
     assert (unit_dir / "unit-001.html").is_file()
     assert (unit_dir / "unit-001.metadata.json").is_file()
+
+
+def test_plan_rejects_case_colliding_unit_ids(tmp_path):
+    source = make_structured_pdf(tmp_path / "source.pdf", 2)
+    plan = reviewed_plan(source, [unit("Article", 1, 1), unit("article", 2, 2)])
+    with pytest.raises(PlanValidationError, match="unique, ignoring case"):
+        validate_plan(plan, source)
+
+
+def test_reading_order_preserves_overlapping_and_outside_items():
+    from pdfwtf.container_analysis import _ordered_items
+
+    items = [
+        {"id": "wide", "bbox": [0, 100, 100, 200]},
+        {"id": "overlap", "bbox": [5, 140, 30, 160]},
+        {"id": "above", "bbox": [5, -20, 30, -10]},
+        {"id": "below", "bbox": [5, 310, 30, 330]},
+        {"id": "second-wide", "bbox": [0, 150, 100, 250]},
+    ]
+    ordered = _ordered_items(items, {"width": 100, "height": 300})
+    assert len(ordered) == len(items)
+    assert {item["id"] for item in ordered} == {item["id"] for item in items}
+
+
+def test_captionless_reviewed_figure_exports_html(tmp_path):
+    source = make_structured_pdf(tmp_path / "source.pdf", 1)
+    plan = reviewed_plan(source, [unit("article", 1, 1)], "unit")
+    plan["pages"][0]["figures"] = [
+        {"id": "figure-1", "bbox": [50, 100, 250, 250], "xref": 0}
+    ]
+    destination = tmp_path / "units"
+    export_units(
+        source, plan, validate_plan(plan, source), destination, include_html=True
+    )
+    html = (destination / "article.html").read_text(encoding="utf-8")
+    assert "Figure figure-1" in html
+    assert "<figcaption>" not in html
+
+
+def test_overlapping_figure_preserves_text_and_warns(tmp_path):
+    source = make_structured_pdf(tmp_path / "source.pdf", 1)
+    plan = reviewed_plan(source, [unit("article", 1, 1)], "unit")
+    plan["pages"][0]["figures"] = [
+        {"id": "figure-1", "bbox": [0, 30, 400, 45], "xref": 0}
+    ]
+    destination = tmp_path / "units"
+    export_units(
+        source, plan, validate_plan(plan, source), destination, include_html=True
+    )
+    html = (destination / "article.html").read_text(encoding="utf-8")
+    metadata = json.loads(
+        (destination / "article.metadata.json").read_text(encoding="utf-8")
+    )
+    assert "Unit 1 title" in html
+    assert "Figure figure-1" in html
+    assert any("overlapping blocks" in warning for warning in metadata["warnings"])
+
+
+@pytest.mark.parametrize(
+    ("title", "expected"),
+    [
+        ("Abstract", "abstract"),
+        ("Abstracts", "abstract"),
+        ("Poster", "poster"),
+        ("Posters", "poster"),
+        ("Poster abstract", "poster"),
+    ],
+)
+def test_separate_abstract_and_poster_types(title, expected):
+    assert _unit_type("proceedings", {"title": title}, {}) == expected
+
+
+@pytest.mark.parametrize(
+    "bbox",
+    [
+        [4, 0, 1, 10],
+        [0, 4, 10, 1],
+        [0, 0, float("inf"), 10],
+        [float("nan"), 0, 10, 10],
+        [False, 0, 10, 10],
+        [0, 0, 10],
+    ],
+)
+def test_invalid_rectangles_remain_rejected(bbox):
+    assert not _valid_bbox(bbox)
+
+
+def test_plan_accepts_figure_extending_beyond_page(tmp_path):
+    source = tmp_path / "bleed.pdf"
+    image = io.BytesIO()
+    Image.new("RGB", (80, 80), "blue").save(image, format="PNG")
+    with fitz.open() as document:
+        page = document.new_page(width=400, height=500)
+        page.insert_text((30, 300), "Figure bleed test", fontsize=18)
+        page.insert_image(fitz.Rect(-10, -10, 200, 200), stream=image.getvalue())
+        document.save(source)
+    plan = reviewed_plan(source, [unit("one", 1, 1)], document_type="unit")
+    bbox = plan["pages"][0]["figures"][0]["bbox"]
+    assert bbox[0] < 0 and bbox[1] < 0
+    assert validate_plan(plan, source) == plan["units"]
+    assert plan["pages"][0]["figures"][0]["bbox"] == bbox
+
+
+@pytest.mark.parametrize(
+    "ranges", [[(1, 2), (2, 3)], [(1, 3), (2, 2)], [(1, 3), (1, 3)]]
+)
+def test_overlapping_units_export_complete_shared_pages(tmp_path, ranges):
+    source = make_structured_pdf(tmp_path / "source.pdf", 3)
+    units = [unit("one", *ranges[0]), unit("two", *ranges[1])]
+    plan = reviewed_plan(source, units)
+    selected = validate_plan(plan, source)
+    assert selected == units
+    shared = set(range(ranges[0][0], ranges[0][1] + 1)).intersection(
+        range(ranges[1][0], ranges[1][1] + 1)
+    )
+    for page in shared:
+        assert plan["pages"][page - 1]["unit_ids"] == ["one", "two"]
+    destination = tmp_path / "units"
+    export_units(source, plan, selected, destination, include_html=True)
+    for item in units:
+        metadata = json.loads(
+            (destination / f"{item['id']}.metadata.json").read_text("utf-8")
+        )
+        assert metadata["unit"]["selected_input_pages"] == list(
+            range(item["input_pages"]["start"], item["input_pages"]["end"] + 1)
+        )
+        html = (destination / f"{item['id']}.html").read_text("utf-8")
+        for page in shared:
+            assert (
+                f"Body text for absolute input page {page} with enough words." in html
+            )
+
+
+def test_overlapping_plan_requires_all_page_unit_links(tmp_path):
+    source = make_structured_pdf(tmp_path / "source.pdf", 3)
+    plan = reviewed_plan(source, [unit("one", 1, 2), unit("two", 2, 3)])
+    plan["pages"][1]["unit_ids"] = ["one"]
+    with pytest.raises(PlanValidationError, match="must match the unit ranges"):
+        validate_plan(plan, source)
+
+
+@pytest.mark.parametrize(
+    "unit_type", ["cover", "abstract", "poster", "full-page-advertisement"]
+)
+def test_reviewed_unit_types_are_valid(tmp_path, unit_type):
+    source = make_structured_pdf(tmp_path / "source.pdf", 1)
+    plan = reviewed_plan(source, [unit("one", 1, 1)])
+    plan["units"][0]["type"] = unit_type
+    assert validate_plan(plan, source) == plan["units"]

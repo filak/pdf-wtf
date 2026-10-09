@@ -9,7 +9,7 @@ contracts.
 
 This iteration supports PDFs with extractable text. A unit starts and ends at an
 input page boundary. Scanned-document segmentation and within-page unit
-boundaries are not supported. A consuming application, such as BMF, owns plan
+boundaries are not supported. A consuming application owns plan
 review and editing.
 
 ## Workflow
@@ -71,15 +71,18 @@ A unit has these common fields:
 ```
 
 `type` is `preface`, `editorial`, `table-of-contents`, `programme`, `article`,
-`chapter`, `abstract-or-poster`, `book-review`, or `unknown`.
+`chapter`, `abstract`, `poster`, `book-review`, `full-page-advertisement`, `cover`, or `unknown`.
 
 Unit IDs contain only ASCII letters, digits, period, underscore, and hyphen.
 They start with a letter or digit. They are unique in one document. Windows
 reserved filenames are not valid unit IDs.
 
-Ranges can have gaps. A gap identifies excluded material. Ranges cannot
-overlap. A plan cannot assign one page to two units. A possible shared page must
-remain unresolved until a reviewer selects a supported whole-page boundary.
+Ranges can have gaps. A gap identifies excluded material. Whole-page ranges
+can overlap. A plan can assign one page to more than one unit.
+Each selected unit includes the entire shared page in its results, subject to
+page selection. This can duplicate content from another article.
+The plan does not split or crop content within a page.
+A shared page lists every containing unit in `pages[].unit_ids`, in unit order.
 
 ## Analysis contract
 
@@ -166,10 +169,14 @@ produce `unknown`. An uncertain result requires review.
 
 `pages` contains one entry for each input page in input order. `input_page` is
 the absolute 1-based input index. `printed_page_number` is a string or `null`.
-`page_type` is `normal`, `full-page-advertisement`, or `unknown`.
+`page_type` is `normal`, `full-page-advertisement`, `cover`, or `unknown`.
 `page_type_evidence` explains the machine proposal.
 
 `main_title`, section titles, figures, and captions use `coordinate_system`.
+Rectangles contain finite coordinates in the order `[x0, y0, x1, y1]`.
+The right and bottom coordinates must not precede the left and top coordinates.
+Coordinates can be negative when content extends beyond the page boundary.
+Preserve these positions. Do not clip them during plan validation.
 `main_title` is an object or `null`. Each
 section has a title, heading level from 1 through 6, and bounding box. Each
 raster figure has a page-stable ID, bounding box, image metadata, optional
@@ -252,7 +259,7 @@ A reviewed plan has this shape:
 The processor validates the complete plan before it writes result files. It
 checks the schema version, source fingerprint, page count, bibliographic source,
 document type, page records, unit IDs, titles, types, selection values,
-confirmation states, ranges, and overlaps.
+confirmation states, ranges, and page-to-unit links.
 It rejects `start_offset`, `end_offset`, `start_bbox`, `end_bbox`, and
 `shared_page`. These fields represent unsupported within-page boundaries.
 

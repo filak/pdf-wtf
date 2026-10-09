@@ -1,34 +1,44 @@
 {% extends config.PDFWTF_GUI_BASE_TEMPLATE %}
-{% block title %}{{ _('Review plan') }} · {{ _('PDF-WTF-GUI') }}{% endblock %}
+{% block title %}{{ _('Review') }} · {{ _('PDF-WTF-GUI') }}{% endblock %}
 {% block content %}
 <div id="review-app"
      data-document-url="{{ url_for('pdfwtf_gui.document', job_id=job_id) }}"
      data-save-url="{{ url_for('pdfwtf_gui.save_plan', job_id=job_id) }}">
-  <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
-    <div>
-      <h1 class="h3 mb-1">{{ _('Review plan') }}</h1>
-      <p class="text-body-secondary mb-0">{{ _('Page indices use the 1-based input PDF order.') }}</p>
-    </div>
-    <div class="d-flex gap-2">
-      <button id="add-unit" class="btn btn-outline-primary" type="button">{{ _('Add unit') }}</button>
-      <button id="merge-units" class="btn btn-outline-primary" type="button">{{ _('Merge selected') }}</button>
-      <button id="save-plan" class="btn btn-primary" type="button">{{ _('Save approved plan') }}</button>
+  <div id="review-toolbar" class="sticky-top bg-body-tertiary">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 pb-2">
+      <div>
+        <h1 class="h3 mb-1">{{ _('Review') }} <span class="badge theme-primary">{{ {
+          'auto': _('Automatic'),
+          'unit': _('Single unit'),
+          'journal-issue': _('Journal issue'),
+          'book': _('Book'),
+          'proceedings': _('Proceedings'),
+          'unknown': _('Unknown'),
+        }.get(analysis.document_type, analysis.document_type) }}</span>
+          <a class="btn btn-sm btn-outline-success shadow-sm align-middle" href="{{ url_for('pdfwtf_gui.download_analysis', job_id=job_id, inline=1) }}" target="_blank" rel="noopener">{{ _('Show analysis') }}</a>
+        </h1>
+      </div>
+      {% if analysis.source.bibliographic.journal_title %}
+      <div class="flex-grow-1 text-center text-break fw-semibold px-2">{{ analysis.source.bibliographic.journal_title }}</div>
+      {% endif %}
+      <div class="d-flex gap-2">
+        <button id="add-unit" class="btn btn-outline-primary shadow-sm" type="button">{{ _('Add unit') }}</button>
+        <button id="merge-units" class="btn btn-outline-primary shadow-sm" type="button">{{ _('Merge selected') }}</button>
+        <button id="save-plan" class="btn btn-primary shadow-sm" type="button">{{ _('Save plan') }}</button>
+      </div>
     </div>
   </div>
 
-  {% if demo %}
-  <div class="alert alert-warning">{{ _('Demo result: replace the demo adapter before production use.') }}</div>
-  {% endif %}
   {% if analysis.suspected_shared_page_boundaries %}
-  <div class="alert alert-danger">
-    <strong>{{ _('Unsupported shared-page boundaries were detected.') }}</strong>
-    {{ _('Choose supported whole-page boundaries before saving.') }}
-    <ul class="mb-0 mt-2">
-      {% for boundary in analysis.suspected_shared_page_boundaries %}
-      <li>{{ _('Input page %(page)s', page=boundary.input_page) }}</li>
-      {% endfor %}
-    </ul>
-  </div>
+    <div class="alert alert-warning">
+      <strong>{{ _('Possible unit boundaries within a page were detected.') }}</strong>
+      {{ _('Check the listed pages. This warning does not prevent saving the plan.') }}
+      <ul class="mb-0 mt-2">
+        {% for boundary in analysis.suspected_shared_page_boundaries %}
+        <li>{{ _('Input page %(page)s', page=boundary.input_page) }}</li>
+        {% endfor %}
+      </ul>
+    </div>
   {% endif %}
 
   <div id="plan-message" aria-live="polite"></div>
@@ -38,17 +48,20 @@
     </aside>
     <section class="preview-panel card">
       <div class="card-header d-flex flex-wrap align-items-center gap-2">
-        <button id="previous-page" class="btn btn-sm btn-outline-secondary" type="button">{{ _('Previous') }}</button>
+        <button id="previous-page" class="btn btn-sm btn-outline-secondary shadow-sm" type="button">{{ _('Previous') }}</button>
         <label for="preview-page" class="visually-hidden">{{ _('Preview page') }}</label>
-        <input id="preview-page" class="form-control form-control-sm page-number" type="number" min="1" value="1">
+        <input id="preview-page" class="form-control form-control-sm page-number shadow-sm" type="number" min="1" value="1">
         <span id="page-count"></span>
-        <button id="next-page" class="btn btn-sm btn-outline-secondary" type="button">{{ _('Next') }}</button>
-        <button id="zoom-out" class="btn btn-sm btn-outline-secondary ms-auto" type="button" aria-label="{{ _('Zoom out') }}">−</button>
+        <button id="next-page" class="btn btn-sm btn-outline-secondary shadow-sm" type="button">{{ _('Next') }}</button>
+        <button id="zoom-out" class="btn btn-sm btn-outline-secondary ms-auto shadow-sm" type="button" aria-label="{{ _('Zoom out') }}">−</button>
         <output id="zoom-level">100%</output>
-        <button id="zoom-in" class="btn btn-sm btn-outline-secondary" type="button" aria-label="{{ _('Zoom in') }}">+</button>
+        <button id="zoom-in" class="btn btn-sm btn-outline-secondary shadow-sm" type="button" aria-label="{{ _('Zoom in') }}">+</button>
       </div>
       <div id="preview-container" class="card-body text-center overflow-auto">
-        <canvas id="preview-canvas" aria-label="{{ _('PDF page preview') }}"></canvas>
+        <div id="preview-page-view">
+          <canvas id="preview-canvas" aria-label="{{ _('PDF page preview') }}"></canvas>
+          <div id="preview-text-layer" class="pdf-text-layer"></div>
+        </div>
       </div>
     </section>
     <section class="units-panel card">
@@ -59,21 +72,19 @@
 </div>
 
 <script id="analysis-data" type="application/json">{{ analysis|tojson }}</script>
+<script id="plan-data" type="application/json">{{ plan|tojson }}</script>
 <script id="gui-messages" type="application/json">{{ {
   'add_title': _('New unit'),
-  'confirm_delete': _('Remove this unit?'),
-  'excluded': _('Excluded'),
   'included': _('Included'),
   'invalid_merge': _('Select at least two adjacent units to merge.'),
   'loading_error': _('The PDF preview could not load.'),
   'merge_title': _('Merged unit'),
-  'remove': _('Remove'),
+  'removed': _('Removed'),
   'select_merge': _('Select for merge'),
   'title': _('Title'),
   'type': _('Type'),
   'start_page': _('Start page'),
   'end_page': _('End page'),
-  'unit_id': _('Unit ID'),
   'save_error': _('The plan could not be saved.'),
   'saving': _('Saving…'),
   'toggle_unit': _('Include or exclude unit'),

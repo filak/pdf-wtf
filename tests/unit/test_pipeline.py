@@ -416,3 +416,44 @@ def test_json_pdf_paths_include_preserved_subdirectories(
     assert Path(metadata["input"]).is_absolute()
     assert Path(metadata["output"]).is_absolute()
     assert output_pdf.is_file()
+
+
+@pytest.mark.parametrize("no_pdf", [False, True])
+def test_unit_exports_protect_source(make_pdf, tmp_path, no_pdf):
+    source = make_pdf(["digital"], "out/_units_input/input.pdf")
+    original = source.read_bytes()
+    with pytest.raises(ValueError, match="must not contain"):
+        pipeline.process_pdf(
+            source,
+            tmp_path / "out",
+            born_digital_flag=True,
+            export_html_flag=True,
+            no_pdf_flag=no_pdf,
+        )
+    assert source.read_bytes() == original
+
+
+@pytest.mark.parametrize("existing_output", [False, True])
+def test_unit_publication_failure_preserves_pdf(
+    make_pdf, tmp_path, configured_home, monkeypatch, existing_output
+):
+    source = make_pdf(["digital"])
+    output = tmp_path / "out"
+    output.mkdir()
+    pdf = output / source.name
+    if existing_output:
+        pdf.write_bytes(b"previous PDF")
+
+    def fail(*args):
+        raise OSError("Unit publication failed")
+
+    monkeypatch.setattr(pipeline, "publish_unit_directory", fail)
+    with pytest.raises(OSError, match="Unit publication failed"):
+        pipeline.process_pdf(
+            source, output, born_digital_flag=True, export_html_flag=True
+        )
+    if existing_output:
+        assert pdf.read_bytes() == b"previous PDF"
+    else:
+        assert not pdf.exists()
+    assert not list((configured_home / "instance/temp").iterdir())

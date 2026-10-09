@@ -2,38 +2,35 @@
 {% block title %}{{ _('Analyze a PDF') }} · {{ _('PDF-WTF-GUI') }}{% endblock %}
 {% block content %}
 <div class="row justify-content-center">
-  <div class="col-xl-6 col-lg-8">
+  <div class="col-xl-8 col-lg-10">
     <div class="card shadow-sm">
       <div class="card-body p-4">
         <h1 class="h3">{{ _('Analyze a PDF') }}</h1>
-        <p class="text-body-secondary">{{ _('Upload a born-digital PDF and review proposed whole-page units.') }}</p>
         <form
+          class="d-flex flex-wrap align-items-center gap-2 border rounded p-3"
+          action="{{ url_for('pdfwtf_gui.upload_document') }}"
           method="post"
           enctype="multipart/form-data"
-          hx-post="{{ url_for('pdfwtf_gui.start_job') }}"
-          hx-target="#job-state"
-          hx-swap="innerHTML"
+          hx-post="{{ url_for('pdfwtf_gui.upload_document') }}"
+          hx-target="#uploaded-files"
+          hx-swap="outerHTML"
           hx-indicator="#upload-indicator"
         >
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <div class="mb-3">
-            <label class="form-label" for="document">{{ _('PDF document') }}</label>
-            <input class="form-control" id="document" name="document" type="file" accept="application/pdf,.pdf" required>
+          <label class="visually-hidden" for="document">{{ _('PDF document') }}</label>
+          <div class="document-picker">
+            <span class="btn btn-outline-secondary shadow-sm" aria-hidden="true">{{ _('Choose file') }}</span>
+            <input id="document" name="document" type="file" accept="application/pdf,.pdf" aria-describedby="document-filename" required>
           </div>
-          <div class="mb-3">
-            <label class="form-label" for="document-type">{{ _('Document type') }}</label>
-            <select class="form-select" id="document-type" name="document_type" required>
-              {% for value, label in document_types %}
-              <option value="{{ value }}">{{ label }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <button class="btn btn-primary" type="submit">{{ _('Analyze') }}</button>
+          <span id="document-filename" class="text-break flex-grow-1" aria-live="polite" data-empty="{{ _('No file selected') }}">{{ _('No file selected') }}</span>
+          <button class="btn btn-primary shadow-sm" type="submit">{{ _('Upload') }}</button>
           <span id="upload-indicator" class="htmx-indicator ms-2" role="status">{{ _('Uploading…') }}</span>
         </form>
-        <div id="job-state" class="mt-4" aria-live="polite"></div>
+        <div id="upload-error" class="mt-2" aria-live="polite"></div>
+        {% include "pdfwtf_gui/_uploads.html" %}
       </div>
     </div>
   </div>
 </div>
+<script src="{{ url_for('pdfwtf_gui.static', filename='upload.js') }}" defer></script>
 {% endblock %}

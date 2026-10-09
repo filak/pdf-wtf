@@ -108,7 +108,9 @@ metadata, and unit links. Each proposed unit includes DOI candidates extracted
 from the pages in its proposed range. Extracted strings use Unicode compatibility
 normalization. The persisted analysis does not contain the full extracted page
 text or text-span structure. A separate reviewed plan owns corrections, page
-selection, confirmed ranges, and unit selection. The analysis file remains
+selection, confirmed ranges, and unit selection. Reviewed whole-page ranges
+can overlap. Each selected unit includes the entire shared page in its results.
+Within-page splitting is not supported. The analysis file remains
 unchanged. Per-unit metadata and optional HTML remain separate from existing
 whole-document derivatives. See
 `specs/CONTAINER_ANALYSIS.md` for the workflow and JSON contracts.
@@ -124,6 +126,30 @@ The standalone GUI stores uploaded source PDFs below the default input directory
 independent of the configured CLI input directory. It stores approved plans below
 the configured output directory. A job identifier keeps each upload and plan in
 a separate subdirectory.
+
+Upload and analysis use separate requests. Upload a PDF with the upload form.
+The uploaded-file list appears below the form. Select the document type in the
+file row. Select Analyze to start analysis for that file. Upload does not start
+analysis. Saved uploads remain listed after the host restarts. The standalone
+demo adapter writes completed analysis to
+`<output-dir>/<job-id>/source.analysis.json` before reporting completion.
+Select Download analysis to download the JSON result. Active job state remains
+local to the configured adapter. Restarting the host does not restore active
+jobs. Saved analysis remains available through Review in each file row. Select Analyze to run analysis again. An active job is not started twice.
+After analysis finishes, the completion widget appears below the file row.
+A successful rerun replaces the saved machine analysis.
+Select the filename to open the PDF in a new browser tab. Upload metadata
+stores the last document type submitted with Analyze. Each file row restores
+this value when the page loads. New uploads use `auto`.
+After successful automatic analysis, the detected document type replaces
+`auto` in upload metadata. An unknown result keeps `auto`. Saving an approved
+plan does not change upload metadata.
+
+Select Delete in a file row to remove the uploaded PDF, upload metadata, and
+saved plan, and saved analysis. Deletion is blocked while analysis is queued or running. Deleted
+uploads cannot be analyzed or reviewed. The delete endpoint is
+`DELETE /uploads/<job_id>`. It uses CSRF protection and the host access check
+with action `delete`.
 
 ## Component responsibilities
 
@@ -150,7 +176,7 @@ is not approved for production processing.
 
 Rendering, scan preparation, OCR, and export belong to the processing component.
 The GUI starts work through an adapter and polls status and result operations.
-Its request handlers do not execute analysis. A host such as BMF must provide
+Its request handlers do not execute analysis. A host such as the integrating apps must provide
 production access control and processing integration through explicit
 configuration or callbacks. Define durable worker execution and job
 coordination before production use.

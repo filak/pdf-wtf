@@ -160,7 +160,7 @@ docker compose -f dockers/pdf-wtf-gui-compose.yaml down
 
 The GUI stores an uploaded PDF at
 `PDFWTF_HOME/instance/_data/in/<job-id>/source.pdf`. It stores the approved plan
-at `<output-dir>/<job-id>/approved-plan.json`. The default output directory is
+at `<output-dir>/<job-id>/approved.plan.json`. The default output directory is
 `PDFWTF_HOME/instance/_data/out`. `PDFWTF_OUTPUT_DIR` can override it. The GUI
 does not use `PDFWTF_INPUT_DIR`.
 
@@ -178,6 +178,30 @@ this CLI processing command.
 
 Do not run `pdfwtf-gui` directly on the host. Rebuild the image after a source,
 dependency, or configuration change.
+
+Upload and analysis use separate requests. Upload a PDF with the upload form.
+The uploaded-file list appears below the form. Select the document type in the
+file row. Select Analyze to start analysis for that file. Upload does not start
+analysis. Saved uploads remain listed after the host restarts. The standalone
+demo adapter writes completed analysis to
+`<output-dir>/<job-id>/source.analysis.json` before reporting completion.
+Select Download analysis to download the JSON result. Active job state remains
+local to the configured adapter. Restarting the host does not restore active
+jobs. Saved analysis remains available through Review in each file row. Select Analyze to run analysis again. An active job is not started twice.
+After analysis finishes, the completion widget appears below the file row.
+A successful rerun replaces the saved machine analysis.
+Select the filename to open the PDF in a new browser tab. Upload metadata
+stores the last document type submitted with Analyze. Each file row restores
+this value when the page loads. New uploads use `auto`.
+After successful automatic analysis, the detected document type replaces
+`auto` in upload metadata. An unknown result keeps `auto`. Saving an approved
+plan does not change upload metadata.
+
+Select Delete in a file row to remove the uploaded PDF, upload metadata, and
+saved plan, and saved analysis. Deletion is blocked while analysis is queued or running. Deleted
+uploads cannot be analyzed or reviewed. The delete endpoint is
+`DELETE /uploads/<job_id>`. It uses CSRF protection and the host access check
+with action `delete`.
 
 The standalone host uses the demo analysis adapter. Do not use this in-process
 adapter as a production queue. The reusable blueprint is available as
@@ -371,8 +395,10 @@ uv run --locked pdfwtf issue.pdf --born-digital --plan issue.plan.json --get-htm
 The plan's page selections control the output PDF and the pages included in
 unit results. The command writes `manifest.json`, one metadata JSON file for
 each selected unit, and one HTML fragment for each selected unit below
-`_units_issue`. Plan ranges can exclude pages by leaving gaps. They cannot
-overlap.
+`_units_issue`. Plan ranges can exclude pages by leaving gaps. Whole-page
+ranges can overlap. For example, units spanning pages 1–16 and 16–31 both
+include the entire page 16 in their results. The plan does not split a page
+into separate article regions.
 
 Process a single unit without a reviewed plan:
 

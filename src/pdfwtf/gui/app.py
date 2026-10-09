@@ -41,7 +41,9 @@ def create_app(overrides: Mapping[str, Any] | None = None) -> Flask:
 
     adapter = app.config.get("PDFWTF_GUI_ANALYSIS_ADAPTER")
     if adapter is None:
-        adapter = DemoAnalysisAdapter()
+        adapter = DemoAnalysisAdapter(
+            output_dir=Path(app.config["PDFWTF_GUI_OUTPUT_DIR"])
+        )
         app.config["PDFWTF_GUI_ANALYSIS_ADAPTER"] = adapter
         atexit.register(adapter.close)
 

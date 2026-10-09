@@ -75,7 +75,11 @@ msgid "Chapter"
 msgstr ""
 
 #: src/pdfwtf/gui/blueprint.py:166
-msgid "Abstract or poster"
+msgid "Abstract"
+msgstr ""
+
+#: src/pdfwtf/gui/blueprint.py
+msgid "Poster"
 msgstr ""
 
 #: src/pdfwtf/gui/blueprint.py:167
@@ -184,7 +188,7 @@ msgid "Merge selected"
 msgstr ""
 
 #: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:15
-msgid "Save approved plan"
+msgid "Save plan"
 msgstr ""
 
 #: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:20
@@ -192,11 +196,11 @@ msgid "Demo result: replace the demo adapter before production use."
 msgstr ""
 
 #: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:24
-msgid "Unsupported shared-page boundaries were detected."
+msgid "Possible unit boundaries within a page were detected."
 msgstr ""
 
 #: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:25
-msgid "Choose supported whole-page boundaries before saving."
+msgid "Check the listed pages. This warning does not prevent saving the plan."
 msgstr ""
 
 #: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:28
@@ -313,3 +317,47 @@ msgstr ""
 msgid "Language"
 msgstr ""
 
+
+msgid "Choose file"
+msgstr "Choose file"
+
+msgid "No file selected"
+msgstr "No file selected"
+
+msgid "Upload"
+msgstr "Upload"
+
+msgid "Uploaded files"
+msgstr "Uploaded files"
+
+msgid "No uploaded files."
+msgstr "No uploaded files."
+
+msgid "Upload could not be saved. Try again."
+msgstr "Upload could not be saved. Try again."
+
+msgid "Delete"
+msgstr "Delete"
+
+msgid "Wait for analysis to finish before deleting the file."
+msgstr "Wait for analysis to finish before deleting the file."
+
+msgid "The file could not be deleted. Try again."
+msgstr "The file could not be deleted. Try again."
+
+msgid "Download analysis"
+msgstr "Download analysis"
+
+msgid "Download"
+msgstr "Download"
+
+msgid "Removed"
+msgstr "Removed"
+
+#: src/pdfwtf/gui/blueprint.py
+msgid "Full-page advertisement"
+msgstr ""
+
+#: src/pdfwtf/gui/blueprint.py
+msgid "Cover"
+msgstr ""

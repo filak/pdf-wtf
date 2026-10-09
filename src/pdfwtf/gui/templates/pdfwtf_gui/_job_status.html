@@ -1,5 +1,5 @@
 <div
-  id="job-state"
+  id="analysis-state-{{ job_id }}"
   class="alert alert-info"
   hx-get="{{ url_for('pdfwtf_gui.job_status', job_id=job_id) }}"
   hx-trigger="load delay:750ms"

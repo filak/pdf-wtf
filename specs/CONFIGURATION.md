@@ -91,8 +91,11 @@ temporary document files.
 The standalone GUI host stores each uploaded document under the default input
 directory in `instance/_data/in/<job-id>`. It does not use the configured
 `input_dir`. It stores the corresponding approved plan under the configured
-`output_dir` in `<job-id>/approved-plan.json`. The host creates these
+`output_dir` in `<job-id>/approved.plan.json`. The host creates these
 directories when required. Both directories are outside static assets.
+The standalone demo adapter stores the completed machine analysis at
+`<output_dir>/<job-id>/source.analysis.json`. It publishes this file before
+reporting the job as complete. A write failure causes the job to fail.
 
 The reusable blueprint reads only settings in the `PDFWTF_GUI_*` namespace.
 `PDFWTF_GUI_ANALYSIS_ADAPTER` supplies the start, status, result, and controlled
@@ -103,6 +106,6 @@ resolved input and output directories to the blueprint. They are Flask
 integration settings, not environment overrides.
 
 The standalone host owns the secret key, Flask-Babel, CSRF protection, upload
-limit, and the demo analysis adapter. BMF must use its existing host extensions
+limit, and the demo analysis adapter. The integrating apps must use its existing host extensions
 and must supply its production access-control and processing integration. The
 blueprint does not initialize global Flask extensions.

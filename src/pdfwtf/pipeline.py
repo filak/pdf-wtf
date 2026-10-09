@@ -371,6 +371,8 @@ def process_pdf(
         raise ValueError("The output PDF must differ from the input PDF.")
 
     export_dirs = []
+    if plan_path is not None or export_html_flag:
+        export_dirs.append(output_dir / f"_units_{input_pdf.stem}")
     if export_images_flag or export_thumbs_flag:
         export_dirs.append(output_dir / f"{img_dir}_{input_pdf.stem}")
     if export_thumbs_flag:
@@ -550,10 +552,10 @@ def process_pdf(
                 metadata["doi"] = get_doi(texts_dir)
         if export_json_flag or get_doi_flag:
             write_json(metadata, output_dir / f"{input_pdf.stem}.meta.json")
-        if not no_pdf_flag:
-            _publish_pdf(pdf_result, output_pdf)
         if staged_units is not None:
             publish_unit_directory(
                 staged_units, output_dir / f"_units_{input_pdf.stem}"
             )
+        if not no_pdf_flag:
+            _publish_pdf(pdf_result, output_pdf)
         job_log.info("PDF processing completed.")

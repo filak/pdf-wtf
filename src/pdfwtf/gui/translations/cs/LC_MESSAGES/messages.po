@@ -75,8 +75,12 @@ msgid "Chapter"
 msgstr "Kapitola"
 
 #: src/pdfwtf/gui/blueprint.py:166
-msgid "Abstract or poster"
-msgstr "Abstrakt nebo poster"
+msgid "Abstract"
+msgstr "Abstrakt"
+
+#: src/pdfwtf/gui/blueprint.py
+msgid "Poster"
+msgstr "Poster"
 
 #: src/pdfwtf/gui/blueprint.py:167
 msgid "Book review"
@@ -184,20 +188,20 @@ msgid "Merge selected"
 msgstr "Sloučit vybrané"
 
 #: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:15
-msgid "Save approved plan"
-msgstr "Uložit schválený plán"
+msgid "Save plan"
+msgstr "Uložit plán"
 
 #: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:20
 msgid "Demo result: replace the demo adapter before production use."
 msgstr "Ukázkový výsledek: před produkčním použitím nahraďte ukázkový adaptér."
 
 #: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:24
-msgid "Unsupported shared-page boundaries were detected."
-msgstr "Byly zjištěny nepodporované hranice jednotek na sdílené straně."
+msgid "Possible unit boundaries within a page were detected."
+msgstr "Byly zjištěny možné hranice jednotek uvnitř strany."
 
 #: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:25
-msgid "Choose supported whole-page boundaries before saving."
-msgstr "Před uložením vyberte podporované hranice na celých stranách."
+msgid "Check the listed pages. This warning does not prevent saving the plan."
+msgstr "Zkontrolujte uvedené strany. Toto upozornění nebrání uložení plánu."
 
 #: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:28
 #, python-format
@@ -313,3 +317,47 @@ msgstr "Zobrazit vstupní stranu %(page)s"
 msgid "Language"
 msgstr "Jazyk"
 
+
+msgid "Choose file"
+msgstr "Vybrat soubor"
+
+msgid "No file selected"
+msgstr "Není vybrán žádný soubor"
+
+msgid "Upload"
+msgstr "Nahrát"
+
+msgid "Uploaded files"
+msgstr "Nahrané soubory"
+
+msgid "No uploaded files."
+msgstr "Žádné nahrané soubory."
+
+msgid "Upload could not be saved. Try again."
+msgstr "Soubor se nepodařilo uložit. Zkuste to znovu."
+
+msgid "Delete"
+msgstr "Smazat"
+
+msgid "Wait for analysis to finish before deleting the file."
+msgstr "Před smazáním souboru počkejte na dokončení analýzy."
+
+msgid "The file could not be deleted. Try again."
+msgstr "Soubor se nepodařilo smazat. Zkuste to znovu."
+
+msgid "Download analysis"
+msgstr "Stáhnout analýzu"
+
+msgid "Download"
+msgstr "Stáhnout"
+
+msgid "Removed"
+msgstr "Vyřazeno"
+
+#: src/pdfwtf/gui/blueprint.py
+msgid "Full-page advertisement"
+msgstr "Celostránková inzerce"
+
+#: src/pdfwtf/gui/blueprint.py
+msgid "Cover"
+msgstr "Obálka"

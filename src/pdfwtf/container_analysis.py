@@ -6,6 +6,7 @@ from collections import Counter
 from hashlib import sha256
 from html import escape, unescape
 import json
+import math
 from pathlib import Path
 import re
 import shutil
@@ -28,8 +29,11 @@ UNIT_TYPES = {
     "programme",
     "article",
     "chapter",
-    "abstract-or-poster",
+    "abstract",
+    "poster",
     "book-review",
+    "full-page-advertisement",
+    "cover",
     "unknown",
 }
 _SAFE_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}\Z")
@@ -490,8 +494,10 @@ def _unit_type(
         return "programme"
     if re.search(r"\bbook reviews?\b", title):
         return "book-review"
-    if re.search(r"\b(poster|abstract)\b", title):
-        return "abstract-or-poster"
+    if re.search(r"\bposters?\b", title):
+        return "poster"
+    if re.search(r"\babstracts?\b", title):
+        return "abstract"
     if document_type == "book" or _CHAPTER.search(title):
         return "chapter"
     if document_type in {"journal-issue", "proceedings"} or (
@@ -743,9 +749,9 @@ def _valid_bbox(value: Any) -> bool:
     return (
         isinstance(value, list)
         and len(value) == 4
-        and all(_is_number(item) for item in value)
-        and 0 <= value[0] <= value[2]
-        and 0 <= value[1] <= value[3]
+        and all(_is_number(item) and math.isfinite(item) for item in value)
+        and value[0] <= value[2]
+        and value[1] <= value[3]
     )
 
 
@@ -820,6 +826,7 @@ def validate_plan(
     units = plan.get("units")
     selected: list[dict[str, Any]] = []
     seen_ids: set[str] = set()
+    seen_filename_ids: set[str] = set()
     ranges: list[tuple[int, int, str]] = []
     if not isinstance(units, list) or not units:
         errors.append("units must be a non-empty array.")
@@ -834,10 +841,11 @@ def validate_plan(
             errors.append(f"{prefix}.id must be a filesystem-safe identifier.")
         elif unit_id.lower().split(".")[0] in _WINDOWS_RESERVED:
             errors.append(f"{prefix}.id is reserved on Windows.")
-        elif unit_id in seen_ids:
-            errors.append(f"{prefix}.id must be unique.")
+        elif unit_id.casefold() in seen_filename_ids:
+            errors.append(f"{prefix}.id must be unique, ignoring case.")
         else:
             seen_ids.add(unit_id)
+            seen_filename_ids.add(unit_id.casefold())
         if not isinstance(unit.get("title"), str) or not unit["title"].strip():
             errors.append(f"{prefix}.title must be a non-empty string.")
         unit_type = unit.get("type")
@@ -880,15 +888,6 @@ def validate_plan(
         ranges.append((start, end, unit_id if isinstance(unit_id, str) else prefix))
         if unit.get("selected") is True:
             selected.append(unit)
-    for position, (start, end, unit_id) in enumerate(sorted(ranges)):
-        if position == 0:
-            continue
-        previous_start, previous_end, previous_id = sorted(ranges)[position - 1]
-        if start <= previous_end:
-            errors.append(
-                f"Units {previous_id!r} and {unit_id!r} overlap on input page "
-                f"{start}. Whole-page processing requires disjoint ranges."
-            )
     pages = plan.get("pages")
     selected_pages: set[int] = set()
     seen_figure_ids: set[str] = set()
@@ -1054,9 +1053,9 @@ def _ordered_items(
     columns = [item for item in items if item not in full]
     full.sort(key=lambda item: (item["bbox"][1], item["bbox"][0]))
     ordered = []
-    band_top = 0.0
+    band_top = float("-inf")
     for separator in [*full, None]:
-        band_bottom = separator["bbox"][1] if separator else page["height"] + 1
+        band_bottom = separator["bbox"][1] if separator else float("inf")
         band = [
             item
             for item in columns
@@ -1078,7 +1077,8 @@ def _ordered_items(
         ordered.extend(right)
         if separator is not None:
             ordered.append(separator)
-            band_top = separator["bbox"][3]
+            # Preserve overlapping items in the next band.
+            band_top = separator["bbox"][1]
     return ordered
 
 
@@ -1223,7 +1223,18 @@ def _page_blocks_for_export(
             }
             for section in reviewed_page.get("sections", [])
         )
-    for item in _ordered_items([*blocks, *figures], page):
+    items = [*blocks, *figures]
+    if any(
+        (fitz.Rect(first["bbox"]) & fitz.Rect(second["bbox"])).get_area() > 0
+        for index, first in enumerate(items)
+        for second in items[index + 1 :]
+    ):
+        warnings.append(
+            "Input page {} has overlapping blocks; review the reading order.".format(
+                page["input_page"]
+            )
+        )
+    for item in _ordered_items(items, page):
         if item.get("kind") == "figure":
             semantic.append(item)
             continue
@@ -1328,7 +1339,7 @@ def render_html(blocks: list[dict[str, Any]]) -> str:
             output.append(
                 f'<div class="figure-placeholder">Figure {escape(block["id"])}</div>'
             )
-            if block["caption"]:
+            if block.get("caption"):
                 output.append(f"<figcaption>{escape(block['caption'])}</figcaption>")
             output.append("</figure>")
     return "\n".join(output) + "\n"

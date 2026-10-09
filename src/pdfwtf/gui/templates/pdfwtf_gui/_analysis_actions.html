@@ -1,0 +1,5 @@
+<span id="analysis-actions-{{ job_id }}" class="d-inline-flex gap-1"{% if update_actions %} hx-swap-oob="outerHTML"{% endif %}>
+  {% if has_analysis %}
+  <a class="btn btn-sm btn-outline-success shadow-sm" href="{{ url_for('pdfwtf_gui.review', job_id=job_id) }}">{{ _('Review') }}</a>
+  {% endif %}
+</span>
