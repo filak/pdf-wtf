@@ -40,6 +40,7 @@ htmlcov/
 *.log
 *.pid
 *.lock
+!uv.lock
 *.tmp
 instance/_data/
 instance/cache/
