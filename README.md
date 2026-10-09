@@ -49,7 +49,7 @@ Use Python 3.12, Git, and uv. Run the following commands from the repository roo
 1. Synchronize the locked dependencies:
 
     ```
-    uv sync --locked
+    uv sync --locked --extra gui
     ```
 
 2. Supply `PDFWTF_HOME` in the operating-system environment.

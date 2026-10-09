@@ -1,4 +1,17 @@
 {
-    "python.pythonPath": "venv\\Scripts\\python.exe",
-    "python.terminal.activateEnvironment": true
+    "python.pythonPath": ".venv\\Scripts\\python.exe",
+    "python.terminal.activateEnvironment": true,
+    "python.terminal.useEnvFile": true,
+    "chat.tools.terminal.autoApprove": {
+        "uv run black": true,
+        "uv run flake8": true,
+        "uv run pytest": true,
+        "git status": true,
+        "git diff --check": true,
+        "git diff --stat": true,
+        "git diff --name-only": true,
+        "git log --oneline": true,
+        "git rev-parse --show-toplevel": true,
+        "git ls-files": true
+    }
 }
