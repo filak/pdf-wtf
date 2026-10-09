@@ -28,15 +28,19 @@ def test_safe_literal_parsing(raw, expected):
 
 def test_configuration_precedence(configured_home, monkeypatch):
     (configured_home / "instance/conf/pdf-wtf.ini").write_text(
-        "[pdf-wtf]\noutput_dir = 'ini-out'\ntemp_dir = 'ini-temp'\n",
+        "[pdf-wtf]\ninput_dir = 'ini-in'\n"
+        "output_dir = 'ini-out'\ntemp_dir = 'ini-temp'\n",
         encoding="utf-8",
     )
     (configured_home / ".env").write_text(
+        "PDFWTF_INPUT_DIR=dotenv-in\n"
         "PDFWTF_OUTPUT_DIR=dotenv-out\nPDFWTF_TEMP_DIR=dotenv-temp\n",
         encoding="utf-8",
     )
+    monkeypatch.setenv("PDFWTF_INPUT_DIR", "env-in")
     monkeypatch.setenv("PDFWTF_OUTPUT_DIR", "env-out")
     config = load_config()
+    assert config.input_dir == configured_home / "env-in"
     assert config.output_dir == configured_home / "env-out"
     assert config.temp_dir == configured_home / "dotenv-temp"
     assert "PDFWTF_TEMP_DIR" not in os.environ
@@ -92,6 +96,7 @@ def test_no_interpolation_and_utf8(configured_home):
 def test_only_required_settings_are_validated(configured_home, monkeypatch):
     monkeypatch.setenv("PDFWTF_TEMP_DIR", "false")
     config = load_config()
+    assert config.input_dir == configured_home / "instance/_data/in"
     assert config.output_dir == configured_home / "instance/_data/out"
     with pytest.raises(ConfigurationError, match="PDFWTF_TEMP_DIR"):
         config.temp_dir
@@ -111,3 +116,11 @@ def test_runtime_path_cannot_be_a_file(configured_home, monkeypatch):
     monkeypatch.setenv("PDFWTF_OUTPUT_DIR", str(file))
     with pytest.raises(ConfigurationError):
         get_output_dir()
+
+
+def test_input_directory_cannot_be_a_file(configured_home, monkeypatch):
+    file = configured_home / "file"
+    file.write_text("content")
+    monkeypatch.setenv("PDFWTF_INPUT_DIR", str(file))
+    with pytest.raises(ConfigurationError, match="PDFWTF_INPUT_DIR"):
+        load_config().input_dir

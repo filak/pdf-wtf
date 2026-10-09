@@ -1,0 +1,5 @@
+<div id="job-state" class="alert alert-success">
+  <p class="mb-2">{{ _('Analysis is complete.') }}</p>
+  {% if demo %}<p class="small mb-2">{{ _('This result was created by the local demo adapter.') }}</p>{% endif %}
+  <a class="btn btn-success" href="{{ url_for('pdfwtf_gui.review', job_id=job_id) }}">{{ _('Review') }}</a>
+</div>

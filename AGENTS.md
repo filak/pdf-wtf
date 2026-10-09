@@ -12,7 +12,7 @@ Use this top-down authority structure:
 2. `specs/PROJECT.md` defines product scope, domain concepts, and component
    boundaries.
 3. `specs/CONFIGURATION.md` defines application configuration.
-4. `specs/DEPLOYMENT.md` defines approved production deployment modes.
+4. `README.md` defines user facing documentation.
 
 A specialized specification can add detail within its ownership boundary. It
 must not override a higher-level document or a sibling specification. Report a
@@ -26,8 +26,7 @@ Before you plan, review, or modify this project, read these files in order:
    component responsibilities, development model, and repository policy.
 2. Read `specs/CONFIGURATION.md` when the task concerns `PDFWTF_HOME`, configuration
    sources, secrets, validation.
-3. Read `specs/DEPLOYMENT.md` when the task concerns production installation,
-   Windows services, NSSM, WSL deployment, or Linux deployment.
+3. `README.md` defines user facing documentation.
 
 ## General rules
 
@@ -91,9 +90,6 @@ Use the versions defined in `pyproject.toml` and `uv.lock`.
 - Use a reverse proxy for public routing and TLS.
 - Do not require Docker Desktop in production.
 
-The approved production modes and their current status are defined in
-`specs/DEPLOYMENT.md`. Backup, retention, recovery, and logging and monitoring
-technologies are not selected.
 ## Logging context
 
 - Use the Python standard `logging` package.

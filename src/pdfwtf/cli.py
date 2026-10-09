@@ -21,7 +21,11 @@ class PdfCommand(click.Command):
             except ConfigurationError as error:
                 formatter.write_text(f"Unavailable. {error}")
                 return
-            formatter.write_text(f"\b\nInput: {config.home / 'instance/_data/in'}")
+            try:
+                input_dir = str(config.input_dir)
+            except ConfigurationError as error:
+                input_dir = f"Unavailable. {error}"
+            formatter.write_text(f"\b\nInput: {input_dir}")
             try:
                 output = str(config.output_dir)
             except ConfigurationError as error:
@@ -53,6 +57,10 @@ class CliOptions(BaseModel):
     export_format: str = "png"
     export_texts_flag: bool = False
     export_thumbs_flag: bool = False
+    analysis_flag: bool = False
+    document_type: str | None = None
+    plan_path: str | None = None
+    export_html_flag: bool = False
     debug_flag: bool = False
 
 
@@ -71,7 +79,7 @@ def _resolve_input_pdf(
     path = Path(value)
     if not path.is_absolute():
         try:
-            path = load_config().home / "instance/_data/in" / path
+            path = load_config().input_dir / path
         except ConfigurationError as error:
             raise click.ClickException(str(error)) from error
     return click.Path(exists=True, dir_okay=False, resolve_path=True).convert(
@@ -103,6 +111,30 @@ def _resolve_input_pdf(
     "born_digital_flag",
     is_flag=True,
     help="Skip scan preparation and OCR. Image exports still render pages.",
+)
+@click.option(
+    "--analysis",
+    "analysis_flag",
+    is_flag=True,
+    help="Write page descriptions, unit proposals, and evidence without processing units.",
+)
+@click.option(
+    "--doctype",
+    "document_type",
+    type=click.Choice(["unit", "journal-issue", "book", "proceedings", "auto"]),
+    help="Describe the document structure. The reviewed plan is authoritative.",
+)
+@click.option(
+    "--plan",
+    "plan_path",
+    type=click.Path(exists=True, dir_okay=False, resolve_path=True),
+    help="Process units from a reviewed JSON plan.",
+)
+@click.option(
+    "--get-html",
+    "export_html_flag",
+    is_flag=True,
+    help="Write a UTF-8 HTML fragment for each selected unit.",
 )
 @click.option(
     "--extract",
@@ -175,7 +207,7 @@ def _resolve_input_pdf(
     help="Do not write the output PDF.",
 )
 @click.option(
-    "--get-json",
+    "--get-meta",
     "export_json_flag",
     is_flag=True,
     help="Write JSON metadata.",

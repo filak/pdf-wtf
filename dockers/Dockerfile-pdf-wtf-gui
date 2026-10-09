@@ -1,0 +1,25 @@
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    PATH="/app/.venv/bin:$PATH" \
+    PDFWTF_HOME=/app
+
+WORKDIR /app
+
+COPY pyproject.toml uv.lock README.md ./
+RUN uv sync --locked --no-dev --extra gui --no-install-project
+
+COPY src ./src
+COPY instance/conf ./instance/conf
+RUN uv sync --locked --no-dev --extra gui \
+    && useradd --create-home --uid 10001 pdfwtf \
+    && mkdir -p /app/instance/_data/in /app/instance/_data/out \
+    && chown -R pdfwtf:pdfwtf /app/instance/_data
+
+USER pdfwtf
+EXPOSE 5000
+
+CMD ["flask", "--app", "pdfwtf.gui.app:create_app", "run", "--host=0.0.0.0", "--port=5000"]

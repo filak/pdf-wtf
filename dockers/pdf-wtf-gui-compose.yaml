@@ -1,0 +1,29 @@
+services:
+  pdf-wtf-gui:
+    build:
+      context: ..
+      dockerfile: dockers/Dockerfile-pdf-wtf-gui
+    image: pdf-wtf-gui:local
+    init: true
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5001:5001"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp
+    volumes:
+      - type: bind
+        source: "${PDFWTF_HOME:?PDFWTF_HOME is required}/instance/_data"
+        target: /app/instance/_data
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5001/', timeout=2)"
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s

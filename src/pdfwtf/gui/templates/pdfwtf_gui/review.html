@@ -1,0 +1,87 @@
+{% extends config.PDFWTF_GUI_BASE_TEMPLATE %}
+{% block title %}{{ _('Review plan') }} · {{ _('PDF-WTF-GUI') }}{% endblock %}
+{% block content %}
+<div id="review-app"
+     data-document-url="{{ url_for('pdfwtf_gui.document', job_id=job_id) }}"
+     data-save-url="{{ url_for('pdfwtf_gui.save_plan', job_id=job_id) }}">
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <div>
+      <h1 class="h3 mb-1">{{ _('Review plan') }}</h1>
+      <p class="text-body-secondary mb-0">{{ _('Page indices use the 1-based input PDF order.') }}</p>
+    </div>
+    <div class="d-flex gap-2">
+      <button id="add-unit" class="btn btn-outline-primary" type="button">{{ _('Add unit') }}</button>
+      <button id="merge-units" class="btn btn-outline-primary" type="button">{{ _('Merge selected') }}</button>
+      <button id="save-plan" class="btn btn-primary" type="button">{{ _('Save approved plan') }}</button>
+    </div>
+  </div>
+
+  {% if demo %}
+  <div class="alert alert-warning">{{ _('Demo result: replace the demo adapter before production use.') }}</div>
+  {% endif %}
+  {% if analysis.suspected_shared_page_boundaries %}
+  <div class="alert alert-danger">
+    <strong>{{ _('Unsupported shared-page boundaries were detected.') }}</strong>
+    {{ _('Choose supported whole-page boundaries before saving.') }}
+    <ul class="mb-0 mt-2">
+      {% for boundary in analysis.suspected_shared_page_boundaries %}
+      <li>{{ _('Input page %(page)s', page=boundary.input_page) }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  <div id="plan-message" aria-live="polite"></div>
+  <div class="review-layout">
+    <aside class="thumbnail-panel card" aria-label="{{ _('Page thumbnails') }}">
+      <div id="thumbnails" class="card-body p-2"></div>
+    </aside>
+    <section class="preview-panel card">
+      <div class="card-header d-flex flex-wrap align-items-center gap-2">
+        <button id="previous-page" class="btn btn-sm btn-outline-secondary" type="button">{{ _('Previous') }}</button>
+        <label for="preview-page" class="visually-hidden">{{ _('Preview page') }}</label>
+        <input id="preview-page" class="form-control form-control-sm page-number" type="number" min="1" value="1">
+        <span id="page-count"></span>
+        <button id="next-page" class="btn btn-sm btn-outline-secondary" type="button">{{ _('Next') }}</button>
+        <button id="zoom-out" class="btn btn-sm btn-outline-secondary ms-auto" type="button" aria-label="{{ _('Zoom out') }}">−</button>
+        <output id="zoom-level">100%</output>
+        <button id="zoom-in" class="btn btn-sm btn-outline-secondary" type="button" aria-label="{{ _('Zoom in') }}">+</button>
+      </div>
+      <div id="preview-container" class="card-body text-center overflow-auto">
+        <canvas id="preview-canvas" aria-label="{{ _('PDF page preview') }}"></canvas>
+      </div>
+    </section>
+    <section class="units-panel card">
+      <div class="card-header"><h2 class="h5 mb-0">{{ _('Units') }}</h2></div>
+      <div id="units" class="card-body"></div>
+    </section>
+  </div>
+</div>
+
+<script id="analysis-data" type="application/json">{{ analysis|tojson }}</script>
+<script id="gui-messages" type="application/json">{{ {
+  'add_title': _('New unit'),
+  'confirm_delete': _('Remove this unit?'),
+  'excluded': _('Excluded'),
+  'included': _('Included'),
+  'invalid_merge': _('Select at least two adjacent units to merge.'),
+  'loading_error': _('The PDF preview could not load.'),
+  'merge_title': _('Merged unit'),
+  'remove': _('Remove'),
+  'select_merge': _('Select for merge'),
+  'title': _('Title'),
+  'type': _('Type'),
+  'start_page': _('Start page'),
+  'end_page': _('End page'),
+  'unit_id': _('Unit ID'),
+  'save_error': _('The plan could not be saved.'),
+  'saving': _('Saving…'),
+  'toggle_unit': _('Include or exclude unit'),
+  'view_page': _('View input page %(page)s', page='%(page)s'),
+}|tojson }}</script>
+<script id="unit-types" type="application/json">{{ unit_types|tojson }}</script>
+<script id="unit-type-labels" type="application/json">{{ unit_type_labels|tojson }}</script>
+{% endblock %}
+{% block scripts %}
+<script type="module" src="{{ url_for('pdfwtf_gui.static', filename='gui.js') }}"></script>
+{% endblock %}

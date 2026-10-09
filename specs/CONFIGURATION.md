@@ -76,6 +76,7 @@ paths. Relative paths resolve from `PDFWTF_HOME`.
 
 | INI setting | Environment override | Default |
 | --- | --- | --- |
+| `input_dir` | `PDFWTF_INPUT_DIR` | `instance/_data/in` |
 | `output_dir` | `PDFWTF_OUTPUT_DIR` | `instance/_data/out` |
 | `temp_dir` | `PDFWTF_TEMP_DIR` | `instance/temp` |
 | `logs_dir` | `PDFWTF_LOGS_DIR` | `instance/logs` |
@@ -84,3 +85,24 @@ Configuration loading does not change the inherited process environment.
 Empty environment values do not override dotenv or INI values. Console logging
 uses standard error. Debug mode enables debug severity. It does not retain
 temporary document files.
+
+## GUI host configuration
+
+The standalone GUI host stores each uploaded document under the default input
+directory in `instance/_data/in/<job-id>`. It does not use the configured
+`input_dir`. It stores the corresponding approved plan under the configured
+`output_dir` in `<job-id>/approved-plan.json`. The host creates these
+directories when required. Both directories are outside static assets.
+
+The reusable blueprint reads only settings in the `PDFWTF_GUI_*` namespace.
+`PDFWTF_GUI_ANALYSIS_ADAPTER` supplies the start, status, result, and controlled
+document operations. `PDFWTF_GUI_ACCESS_CHECK` is an optional callable for host
+access control. `PDFWTF_GUI_BASE_TEMPLATE` selects the host layout integration
+point. `PDFWTF_GUI_INPUT_DIR` and `PDFWTF_GUI_OUTPUT_DIR` supply the host's
+resolved input and output directories to the blueprint. They are Flask
+integration settings, not environment overrides.
+
+The standalone host owns the secret key, Flask-Babel, CSRF protection, upload
+limit, and the demo analysis adapter. BMF must use its existing host extensions
+and must supply its production access-control and processing integration. The
+blueprint does not initialize global Flask extensions.

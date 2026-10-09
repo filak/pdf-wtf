@@ -11,6 +11,15 @@ from PIL import Image
 import pymupdf as fitz
 
 from .configuration import load_config
+from .container_analysis import (
+    analyze_container,
+    direct_unit_plan,
+    export_units,
+    load_plan,
+    publish_unit_directory,
+    validate_plan,
+    write_json_document,
+)
 from .page_metadata import build_page_metadata
 from .unpaper_run import get_unpaper_args, get_unpaper_version, run_unpaper_simple
 from .utils.analyze import is_scanned_or_hybrid
@@ -266,8 +275,39 @@ def process_pdf(
     optimize: int = 0,
     no_pdf_flag: bool = False,
     export_json_flag: bool = False,
+    analysis_flag: bool = False,
+    document_type: str | None = None,
+    plan_path: str | Path | None = None,
+    export_html_flag: bool = False,
 ) -> None:
     """Process one PDF without replacing its source or publishing partial OCR."""
+    if analysis_flag and plan_path is not None:
+        raise ValueError("--analysis and --plan are mutually exclusive.")
+    unit_workflow = analysis_flag or plan_path is not None or export_html_flag
+    if unit_workflow and not born_digital_flag:
+        raise ValueError(
+            "Container analysis and unit export currently require --born-digital."
+        )
+    if analysis_flag and any(
+        (
+            extract_pages_str,
+            skip_pages_str,
+            no_pdf_flag,
+            export_json_flag,
+            get_doi_flag,
+            export_images_flag,
+            export_texts_flag,
+            export_thumbs_flag,
+            export_html_flag,
+        )
+    ):
+        raise ValueError(
+            "--analysis cannot be combined with page selection or export options."
+        )
+    if plan_path is not None and (extract_pages_str or skip_pages_str):
+        raise ValueError("--plan cannot be combined with --extract or --remove.")
+    if export_html_flag and plan_path is None and document_type not in (None, "unit"):
+        raise ValueError("Direct --get-html processing requires --doctype unit.")
     if no_pdf_flag and not any(
         (
             export_json_flag,
@@ -275,11 +315,13 @@ def process_pdf(
             export_images_flag,
             export_texts_flag,
             export_thumbs_flag,
+            plan_path is not None,
+            export_html_flag,
         )
     ):
         raise ValueError(
-            "No output selected. Select --get-json, --get-doi, --get-img, "
-            "--get-text, or --get-thumb."
+            "No output selected. Select --get-meta, --get-doi, --get-img, "
+            "--get-text, --get-thumb, --plan, or --get-html."
         )
     config = load_config()
     if not input_pdf:
@@ -318,9 +360,13 @@ def process_pdf(
         get_output_dir(output_dir, config=config), input_pdf, input_path_prefix
     )
     output_pdf = output_dir / input_pdf.name
-    if not no_pdf_flag and (
-        output_pdf.resolve() == input_pdf
-        or (output_pdf.exists() and output_pdf.samefile(input_pdf))
+    if (
+        not no_pdf_flag
+        and not analysis_flag
+        and (
+            output_pdf.resolve() == input_pdf
+            or (output_pdf.exists() and output_pdf.samefile(input_pdf))
+        )
     ):
         raise ValueError("The output PDF must differ from the input PDF.")
 
@@ -343,20 +389,49 @@ def process_pdf(
         job_log.debug("Processing started. Input pages=%d.", total_pages)
         if total_pages == 0:
             raise ProcessingError("The input PDF contains no pages.")
+        if analysis_flag:
+            analysis = analyze_container(input_pdf, document_type or "auto")
+            write_json_document(
+                analysis, output_dir / f"{input_pdf.stem}.analysis.json"
+            )
+            job_log.info("Container analysis completed.")
+            return
+
+        unit_plan = None
+        selected_units = None
+        if plan_path is not None:
+            unit_plan = load_plan(Path(plan_path))
+            selected_units = validate_plan(unit_plan, input_pdf, document_type)
+        elif export_html_flag:
+            unit_plan = direct_unit_plan(input_pdf)
+            selected_units = validate_plan(unit_plan, input_pdf, "unit")
+        staged_units = None
+        if unit_plan is not None and selected_units is not None:
+            staged_units = workspace / "unit_exports"
+            export_units(
+                input_pdf,
+                unit_plan,
+                selected_units,
+                staged_units,
+                include_html=export_html_flag,
+            )
         pages_to_keep = (
-            parse_page_ranges(extract_pages_str, total_pages)
-            if extract_pages_str is not None
-            else []
+            [page["input_page"] for page in unit_plan["pages"] if page["selected"]]
+            if unit_plan is not None
+            else (
+                parse_page_ranges(extract_pages_str, total_pages)
+                if extract_pages_str is not None
+                else []
+            )
         )
         pages_to_skip = (
             parse_page_ranges(skip_pages_str, total_pages)
             if skip_pages_str is not None
             else []
         )
+        selection_requested = unit_plan is not None or extract_pages_str is not None
         selected = (
-            pages_to_keep
-            if extract_pages_str is not None
-            else list(range(1, total_pages + 1))
+            pages_to_keep if selection_requested else list(range(1, total_pages + 1))
         )
         if not no_pdf_flag and not (set(selected) - set(pages_to_skip)):
             raise ValueError("Page removal must leave at least one page.")
@@ -416,13 +491,13 @@ def process_pdf(
         if not no_pdf_flag:
             if result_pdf is not None and output_pages in (None, "1"):
                 pdf_result = workspace / "pdf_result.pdf"
-                if extract_pages_str is not None:
+                if selection_requested:
                     extract_pages(result_pdf, pdf_result, pages_to_keep=selected)
                 else:
                     shutil.copy2(result_pdf, pdf_result)
             else:
                 selected_pdf = workspace / "selected.pdf"
-                if extract_pages_str is not None:
+                if selection_requested:
                     extract_pages(input_pdf, selected_pdf, pages_to_keep=selected)
                 else:
                     shutil.copy2(input_pdf, selected_pdf)
@@ -477,4 +552,8 @@ def process_pdf(
             write_json(metadata, output_dir / f"{input_pdf.stem}.meta.json")
         if not no_pdf_flag:
             _publish_pdf(pdf_result, output_pdf)
+        if staged_units is not None:
+            publish_unit_directory(
+                staged_units, output_dir / f"_units_{input_pdf.stem}"
+            )
         job_log.info("PDF processing completed.")

@@ -63,6 +63,10 @@ class AppConfig:
         return self.directory("output_dir", "instance/_data/out")
 
     @property
+    def input_dir(self) -> Path:
+        return self.directory("input_dir", "instance/_data/in")
+
+    @property
     def temp_dir(self) -> Path:
         return self.directory("temp_dir", "instance/temp")
 

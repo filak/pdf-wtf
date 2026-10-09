@@ -23,8 +23,9 @@ CLI page numbers start at 1.
 
 Pass the input PDF as the first positional argument: `pdfwtf input.pdf`.
 The input argument is required. The input file must exist. Filenames and
-relative file paths resolve from `PDFWTF_HOME/instance/_data/in`. Absolute
-file paths select files directly. The CLI does not search the working directory.
+relative file paths resolve from the configured input directory. Its default is
+`PDFWTF_HOME/instance/_data/in`. Absolute file paths select files directly.
+The CLI does not search the working directory.
 
 `--extract` selects input pages for the output PDF. `--remove` removes input
 pages from that PDF. Both options use absolute input page indices starting at 1.
@@ -59,10 +60,25 @@ The default output is a processed PDF. `--no-pdf-out` disables final PDF output.
 With this option, select at least one derivative output. The pipeline can still
 create a temporary processed PDF for exports.
 
-`--get-json` writes JSON metadata with `input`, `output`, `doi`, and `pages`. `doi` is empty
-unless DOI extraction is requested. `--get-doi` searches the first derivative
-page for DOI links and writes JSON metadata. It does not write text exports unless `--get-text` is selected.
-Extracted DOI candidates are not externally verified.
+`--get-meta` writes JSON metadata with `input`, `output`, `doi`, and `pages`.
+`doi` is empty unless DOI extraction is requested. `--get-doi` searches the
+first derivative page for DOI candidates and writes JSON metadata. It accepts
+`doi.org` and `dx.doi.org` resolver URLs, resolver names without a scheme,
+`doi:` labels, and bare DOI names. Resolver URL paths are percent-decoded once.
+Plain DOI names are not URL-decoded. The option does not write text exports
+unless `--get-text` is selected.
+
+DOI extraction removes soft hyphens and zero-width spaces inside candidates.
+It joins a line continuation only when the next physical line contains one
+isolated token. At a physical line break, it rejects a candidate fragment that
+ends with a slash or hyphen when that continuation is not available. It does
+not join general text lines. Clear surrounding brackets and quotation marks are
+removed. Ambiguous trailing punctuation remains part of the candidate.
+
+Extracted DOI candidates are not externally verified. Extraction can produce
+false positives or omit DOI names with ambiguous multi-token line wrapping or
+complex page layouts. A candidate does not establish that its DOI is registered
+or that it identifies the processed document.
 
 `input` is the absolute input PDF path. `output` is the absolute final output
 PDF path, including preserved subdirectories. With `--no-pdf-out`, `output` is
@@ -84,9 +100,30 @@ only to the output PDF. Removing a split input page removes all of its PDF pages
 Optional exports include PNG page images, JPEG thumbnails, per-page text,
 and combined text. `--get-thumb` also writes page images.
 
-A web interface, HTTP API, database, job queue, and LLM integration are not
-established components. Adding these components requires an approved scope
-and architecture change.
+Born-digital container analysis describes each input page and proposes
+whole-page unit partitions from text structure, bookmarks, links, and raster
+image occurrences. Page descriptions include printed page numbers, page types,
+titles, sections, substantive figure positions, captions, bibliographic source
+metadata, and unit links. Each proposed unit includes DOI candidates extracted
+from the pages in its proposed range. Extracted strings use Unicode compatibility
+normalization. The persisted analysis does not contain the full extracted page
+text or text-span structure. A separate reviewed plan owns corrections, page
+selection, confirmed ranges, and unit selection. The analysis file remains
+unchanged. Per-unit metadata and optional HTML remain separate from existing
+whole-document derivatives. See
+`specs/CONTAINER_ANALYSIS.md` for the workflow and JSON contracts.
+
+A reusable Flask blueprint provides the PDF-WTF-GUI review interface. A small
+standalone Flask host supports local use. The blueprint does not own host
+authentication, sessions, logging, secrets, global extensions, URL prefixes,
+or processing infrastructure. A database, durable job queue, HTTP API, and LLM
+integration are not established components. Adding these components requires
+an approved scope and architecture change.
+
+The standalone GUI stores uploaded source PDFs below the default input directory,
+independent of the configured CLI input directory. It stores approved plans below
+the configured output directory. A job identifier keeps each upload and plan in
+a separate subdirectory.
 
 ## Component responsibilities
 
@@ -96,6 +133,8 @@ and architecture change.
 | `src/pdfwtf/pipeline.py` | Coordinate page selection, scan preparation, OCR, and exports. |
 | `src/pdfwtf/utils/analyze.py` | Identify scanned or hybrid PDF content. |
 | `src/pdfwtf/utils/common.py` | Provide page operations, paths, image preparation, text extraction, thumbnails, and metadata helpers. |
+| `src/pdfwtf/container_analysis.py` | Extract born-digital page structure, propose container partitions, validate reviewed plans, reconstruct units, and export unit results. |
+| `src/pdfwtf/gui/` | Provide the optional PDF-WTF-GUI blueprint, local host, browser PDF review, and analysis adapter boundary. |
 | `src/pdfwtf/unpaper_run.py` | Build arguments and execute unpaper. Select the Windows wrapper when required. |
 | `src/tools/unpaper_wrap.py` and `unpaper.cmd` | Support Docker-based unpaper execution on Windows. |
 
@@ -105,11 +144,16 @@ pipeline. Keep document operations and tool invocation reusable outside the CLI.
 ### Background-processing boundary
 
 The current CLI processes documents synchronously. A background-worker runtime
-and queue technology are not selected.
+and queue technology are not selected. The local GUI demo adapter uses a
+bounded in-process executor only for scaffolding. It is not a durable queue and
+is not approved for production processing.
 
 Rendering, scan preparation, OCR, and export belong to the processing component.
-If a request-serving component is approved later, preserve this boundary.
-Define worker execution and job coordination before adding them.
+The GUI starts work through an adapter and polls status and result operations.
+Its request handlers do not execute analysis. A host such as BMF must provide
+production access control and processing integration through explicit
+configuration or callbacks. Define durable worker execution and job
+coordination before production use.
 
 ## Technology
 
@@ -121,6 +165,11 @@ code also uses pytesseract, Pillow, img2pdf, and cv3. Click provides the CLI.
 Pydantic defines CLI settings. An existing import does not approve a new
 production dependency. Follow the dependency rules in `AGENTS.md`.
 
+Flask, Flask-Babel, and Flask-WTF are optional `gui` dependencies. Bootstrap 5,
+HTMX, and PDF.js are browser assets in the GUI package. The PDF.js library and
+its matching worker are served locally. The browser renders page thumbnails
+and previews. The server does not generate thumbnails for the review interface.
+
 Tesseract supplies OCR for both supported OCR paths. Selected operations can
 also require Ghostscript, unpaper, pngquant, and installed OCR language data.
 The Windows unpaper wrapper runs unpaper in Docker. It does not containerize
@@ -128,10 +177,12 @@ the application.
 
 ## Development and runtime model
 
-Support Microsoft Windows for development. Run application and any future
-approved background-worker processes on the Windows host during initial
-development. Use Docker Desktop with the WSL 2 backend for local infrastructure.
-Keep each development computer's Docker data independent.
+Support Microsoft Windows for development. Run the CLI and any future approved
+background-worker processes on the Windows host during initial development.
+Run the standalone PDF-WTF-GUI only in its approved Compose container. Use
+Docker Desktop with the WSL 2 backend for local Docker execution. The same
+Compose file supports Docker Engine on Docker-capable hosts. Keep each
+development computer's Docker data independent.
 
 Use direct `uv run --locked <tool> ...` commands. Run verification commands
 separately. Use Black, Flake8, pytest, and pip-audit as specified in `AGENTS.md`.
@@ -140,13 +191,8 @@ Place tests without external services in `tests/unit`. Put shared fixtures in
 
 `specs/CONFIGURATION.md` defines configuration sources, validation, secrets,
 `PDFWTF_HOME`, and instance directories. Runtime paths resolve from the validated
-application root. Environment overrides include `PDFWTF_OUTPUT_DIR` and
-`PDFWTF_TEMP_DIR`.
-
-Support native Windows Server production deployment and container deployment
-on Docker-capable hosts, including Linux. Do not require Docker Desktop in
-production. Use a reverse proxy for public routing and TLS when public access
-is introduced. `specs/DEPLOYMENT.md` owns production deployment details.
+application root. Environment overrides include `PDFWTF_INPUT_DIR`,
+`PDFWTF_OUTPUT_DIR`, and `PDFWTF_TEMP_DIR`.
 
 ## Trust boundaries and data principles
 
@@ -178,8 +224,6 @@ in project specifications.
 
 ## Open decisions
 
-- Production installation, supervision, and container layouts remain undefined
-  in `specs/DEPLOYMENT.md`.
 - Background-worker execution and job coordination are not selected.
 - Backup, retention, recovery, and logging and monitoring technologies are not
   selected.

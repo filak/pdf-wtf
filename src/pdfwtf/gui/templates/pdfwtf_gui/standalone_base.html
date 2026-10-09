@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="{{ get_locale() }}">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>{% block title %}{{ _('PDF-WTF-GUI') }}{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('pdfwtf_gui.static', filename='vendor/bootstrap/bootstrap.min.css') }}">
+    <link rel="stylesheet" href="{{ url_for('pdfwtf_gui.static', filename='gui.css') }}">
+    <script src="{{ url_for('pdfwtf_gui.static', filename='vendor/htmx/htmx.min.js') }}" defer></script>
+  </head>
+  <body class="bg-body-tertiary">
+    <nav class="navbar bg-dark" data-bs-theme="dark">
+      <div class="container-fluid">
+        <a class="navbar-brand" href="{{ url_for('pdfwtf_gui.index') }}">{{ _('PDF-WTF-GUI') }}</a>
+        <form action="{{ request.path }}" method="get" class="d-flex align-items-center gap-2">
+          <label class="text-light" for="language">{{ _('Language') }}</label>
+          <select id="language" name="lang" class="form-select form-select-sm" onchange="this.form.submit()">
+            <option value="en"{% if get_locale()|string == 'en' %} selected{% endif %}>English</option>
+            <option value="cs"{% if get_locale()|string == 'cs' %} selected{% endif %}>Čeština</option>
+          </select>
+        </form>
+      </div>
+    </nav>
+    <main class="container-fluid py-4">
+      {% block content %}{% endblock %}
+    </main>
+    <script>
+      document.addEventListener("htmx:configRequest", (event) => {
+        const token = document.querySelector('meta[name="csrf-token"]')?.content;
+        if (token) event.detail.headers["X-CSRFToken"] = token;
+      });
+    </script>
+    {% block scripts %}{% endblock %}
+  </body>
+</html>

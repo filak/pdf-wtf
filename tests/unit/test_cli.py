@@ -93,6 +93,13 @@ def test_help_resolves_output_overrides(configured_home, monkeypatch, source):
     assert str(configured_home / expected) in result.output
 
 
+def test_help_resolves_input_override(configured_home, monkeypatch):
+    monkeypatch.setenv("PDFWTF_INPUT_DIR", "imports")
+    result = CliRunner().invoke(cli.main, ["--help"])
+    assert result.exit_code == 0, result.output
+    assert f"Input: {configured_home / 'imports'}" in result.output
+
+
 def test_help_remains_available_without_home(monkeypatch):
     monkeypatch.delenv("PDFWTF_HOME")
     result = CliRunner().invoke(cli.main, ["--help"])
@@ -107,6 +114,14 @@ def test_help_handles_invalid_output_directory(configured_home, monkeypatch):
     assert result.exit_code == 0, result.output
     assert str(configured_home / "instance/_data/in") in result.output
     assert "PDFWTF_OUTPUT_DIR must be a directory path." in result.output
+
+
+def test_help_handles_invalid_input_directory(configured_home, monkeypatch):
+    monkeypatch.setenv("PDFWTF_INPUT_DIR", "false")
+    result = CliRunner().invoke(cli.main, ["--help"])
+    assert result.exit_code == 0, result.output
+    assert "PDFWTF_INPUT_DIR must be a directory path." in result.output
+    assert str(configured_home / "instance/_data/out") in result.output
 
 
 def test_help_does_not_cache_paths_between_invocations(configured_home, monkeypatch):
@@ -185,6 +200,19 @@ def test_relative_input_uses_default_directory(
     inputs = []
     monkeypatch.setattr(cli, "process_pdf", lambda path, *a, **kw: inputs.append(path))
     result = CliRunner().invoke(cli.main, [relative])
+    assert result.exit_code == 0, result.output
+    assert inputs == [str(source.resolve())]
+
+
+def test_relative_input_uses_configured_directory(
+    make_pdf, configured_home, monkeypatch
+):
+    input_dir = configured_home / "imports"
+    source = make_pdf(["digital"], name=str(input_dir / "input.pdf"))
+    monkeypatch.setenv("PDFWTF_INPUT_DIR", str(input_dir))
+    inputs = []
+    monkeypatch.setattr(cli, "process_pdf", lambda path, *a, **kw: inputs.append(path))
+    result = CliRunner().invoke(cli.main, ["input.pdf"])
     assert result.exit_code == 0, result.output
     assert inputs == [str(source.resolve())]
 
@@ -286,16 +314,22 @@ def test_cli_rejects_invalid_optimization(make_pdf, monkeypatch, level):
     assert calls == []
 
 
+def test_cli_rejects_old_get_json_flag(make_pdf):
+    result = CliRunner().invoke(cli.main, [str(make_pdf(["digital"])), "--get-json"])
+    assert result.exit_code == 2, result.output
+    assert "No such option '--get-json'" in result.output
+
+
 @pytest.mark.parametrize("no_pdf", [False, True])
 @pytest.mark.parametrize(
     "flags",
     [
-        ["--get-json"],
+        ["--get-meta"],
         ["--get-doi"],
         ["--get-img"],
         ["--get-text"],
         ["--get-thumb"],
-        ["--get-json", "--get-doi", "--get-img", "--get-text", "--get-thumb"],
+        ["--get-meta", "--get-doi", "--get-img", "--get-text", "--get-thumb"],
     ],
 )
 def test_cli_output_flows(make_pdf, tmp_path, configured_home, no_pdf, flags):
@@ -315,7 +349,7 @@ def test_cli_output_flows(make_pdf, tmp_path, configured_home, no_pdf, flags):
     expected = set()
     if not no_pdf:
         expected.add("input.pdf")
-    if "--get-json" in flags or "--get-doi" in flags:
+    if "--get-meta" in flags or "--get-doi" in flags:
         expected.add("input.meta.json")
         metadata = json.loads((output / "input.meta.json").read_text())
         assert metadata == {

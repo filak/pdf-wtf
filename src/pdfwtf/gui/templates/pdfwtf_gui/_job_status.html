@@ -1,0 +1,14 @@
+<div
+  id="job-state"
+  class="alert alert-info"
+  hx-get="{{ url_for('pdfwtf_gui.job_status', job_id=job_id) }}"
+  hx-trigger="load delay:750ms"
+  hx-swap="outerHTML"
+>
+  <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+  {% if state == 'processing' %}
+    {{ _('Analyzing the document…') }}
+  {% else %}
+    {{ _('Waiting for analysis…') }}
+  {% endif %}
+</div>

@@ -4,9 +4,11 @@ import pytest
 import pytesseract
 
 from pdfwtf.utils.common import (
+    _extract_doi_candidates,
     correct_images_orientation,
     export_thumbnails,
     extract_pages,
+    get_doi,
     get_output_dir_final,
     images_to_pdf,
     parse_page_ranges,
@@ -39,6 +41,129 @@ def test_invalid_page_ranges(raw):
 def test_invalid_total_page_count(count):
     with pytest.raises(ValueError):
         parse_page_ranges("1", count)
+
+
+@pytest.mark.parametrize(
+    "text, expected",
+    [
+        ("https://doi.org/10.1234/example", ["10.1234/example"]),
+        ("http://dx.doi.org/10.1234/example", ["10.1234/example"]),
+        ("doi.org/10.1234/example", ["10.1234/example"]),
+        ("doi:10.1234/example", ["10.1234/example"]),
+        ("DOI: 10.1234/example", ["10.1234/example"]),
+        ("The identifier is 10.1234/example", ["10.1234/example"]),
+    ],
+)
+def test_doi_representations(text, expected):
+    assert _extract_doi_candidates(text) == expected
+
+
+def test_doi_case_deduplication_preserves_first_occurrence():
+    text = "10.1234/First DOI: 10.1234/first doi.org/10.1234/FIRST"
+    assert _extract_doi_candidates(text) == ["10.1234/First"]
+
+
+def test_doi_prefixes_are_distinct_identifiers():
+    text = "10.1234/abc 10.1234/abc123"
+    assert _extract_doi_candidates(text) == ["10.1234/abc", "10.1234/abc123"]
+
+
+@pytest.mark.parametrize(
+    "text, expected",
+    [
+        ("10.1234/example(test)", ["10.1234/example(test)"]),
+        ("(10.1234/example)", ["10.1234/example"]),
+        ("(10.1234/example(test))", ["10.1234/example(test)"]),
+        ('"10.1234/example"', ["10.1234/example"]),
+        ("[DOI: 10.1234/example]", ["10.1234/example"]),
+        ("<https://doi.org/10.1234/example>", ["10.1234/example"]),
+    ],
+)
+def test_doi_parentheses_and_wrappers(text, expected):
+    assert _extract_doi_candidates(text) == expected
+
+
+@pytest.mark.parametrize(
+    "text, expected",
+    [
+        ("DOI: 10.1234/example,", ["10.1234/example,"]),
+        ("(10.1234/example).", ["10.1234/example."]),
+        ("10.1234/example-", ["10.1234/example-"]),
+        ("10.1234/a<b>;c&d", ["10.1234/a<b>;c&d"]),
+    ],
+)
+def test_doi_trailing_punctuation_and_complex_suffixes(text, expected):
+    assert _extract_doi_candidates(text) == expected
+
+
+@pytest.mark.parametrize(
+    "text, expected",
+    [
+        ("https://doi.org/10.1234/a%2Fb", ["10.1234/a/b"]),
+        ("https://doi.org/10.1234/a%252Fb", ["10.1234/a%2Fb"]),
+        ("https://doi.org/10.1234/a+b", ["10.1234/a+b"]),
+        ("DOI: 10.1234/a%2Fb", ["10.1234/a%2Fb"]),
+    ],
+)
+def test_doi_url_decoding(text, expected):
+    assert _extract_doi_candidates(text) == expected
+
+
+@pytest.mark.parametrize(
+    "text, expected",
+    [
+        ("10.1234/exam\u00adple", ["10.1234/example"]),
+        ("10.1234/exam\u200bple", ["10.1234/example"]),
+        ("10.1234/example-\npart", ["10.1234/example-part"]),
+        ("10.1234/\nexample", ["10.1234/example"]),
+        ("10.1234/exam\nple", ["10.1234/example"]),
+        ("10.1234/example-\r\npart", ["10.1234/example-part"]),
+    ],
+)
+def test_doi_ocr_artifacts_and_line_continuations(text, expected):
+    assert _extract_doi_candidates(text) == expected
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "DOI: 10.1234/\nThis line is ordinary prose.",
+        "DOI: 10.1234/example-\nThis line is ordinary prose.",
+    ],
+)
+def test_doi_rejects_ambiguous_broken_lines(text):
+    assert _extract_doi_candidates(text) == []
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "https://notdoi.org/10.1234/example",
+        "https://doi.org.evil/10.1234/example",
+        "notdoi.org/10.1234/example",
+        "11.1234/example",
+        "10.123/example",
+        "DOI: 10.1234/",
+    ],
+)
+def test_doi_invalid_candidates(text):
+    assert _extract_doi_candidates(text) == []
+
+
+def test_get_doi_missing_directory_and_empty_file(tmp_path):
+    assert get_doi(tmp_path / "missing") == []
+    texts = tmp_path / "texts"
+    texts.mkdir()
+    (texts / "page_001.txt").write_text("", encoding="utf-8")
+    assert get_doi(texts) == []
+
+
+def test_get_doi_reads_only_first_exported_page(tmp_path):
+    texts = tmp_path / "texts"
+    texts.mkdir()
+    (texts / "page_001.txt").write_text("No identifier", encoding="utf-8")
+    (texts / "page_002.txt").write_text("10.1234/second", encoding="utf-8")
+    assert get_doi(texts) == []
 
 
 def test_extract_pages_in_place(make_pdf):

@@ -3,6 +3,8 @@ import logging
 import re
 import shutil
 from pathlib import Path
+from urllib.parse import unquote, urlsplit
+
 import img2pdf
 import pikepdf
 import cv3
@@ -12,7 +14,31 @@ from typing import Union, List, Dict, Any
 from pdfwtf.configuration import AppConfig, load_config
 import pytesseract
 
-PAT_DOI = re.compile(r"(?:https?://)?doi\.org/(10\.\d{4,9}/[^\s]+)", re.IGNORECASE)
+PAT_DOI = re.compile(
+    r"""
+    (?P<url>(?<![A-Za-z0-9])https?://[^\s]+)
+    |(?P<resolver>(?<![A-Za-z0-9.-])(?:dx\.)?doi\.org/10\.\d{4,9}/[^\s]+)
+    |(?P<label>(?<![A-Za-z0-9_])doi\s*:\s*[([{<\"']?\s*10\.\d{4,9}/[^\s]+)
+    |(?P<bare>(?<![A-Za-z0-9_./])10\.\d{4,9}/[^\s]+)
+    """,
+    re.IGNORECASE | re.VERBOSE,
+)
+
+_DOI_PREFIX_AT_LINE_END = re.compile(
+    r"""
+    (?:
+        https?://[^\s]*/
+        |(?<![A-Za-z0-9.-])(?:dx\.)?doi\.org/
+        |(?<![A-Za-z0-9_])doi\s*:\s*[([{<\"']?\s*
+        |(?<![A-Za-z0-9_./])
+    )
+    10\.\d{4,9}/[^\s]*$
+    """,
+    re.IGNORECASE | re.VERBOSE,
+)
+_WRAPPERS = {"(": ")", "[": "]", "{": "}", "<": ">", '"': '"', "'": "'"}
+_TRAILING_PUNCTUATION = frozenset(".,;:!?")
+_ASCII_LOWER = str.maketrans("ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")
 
 log = logging.getLogger(__name__)
 
@@ -324,6 +350,91 @@ def crop_dark_background_pillow(image_paths: list[Path]) -> int:
     return cropped_count
 
 
+def _join_doi_continuations(text: str) -> str:
+    """Join a DOI line break only when the next line is one isolated token."""
+    lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    result = []
+    index = 0
+    while index < len(lines):
+        line = lines[index]
+        stripped = line.rstrip()
+        if index + 1 < len(lines) and _DOI_PREFIX_AT_LINE_END.search(stripped):
+            continuation = lines[index + 1].strip()
+            if (
+                continuation
+                and re.fullmatch(r"[^\s]+", continuation)
+                and stripped[-1] not in ")]}>\"'.,;:!?"
+            ):
+                line = stripped + continuation
+                index += 1
+        result.append(line)
+        index += 1
+    return "\n".join(result)
+
+
+def _opening_wrapper(text: str, match: re.Match, doi_start: int) -> str | None:
+    prefix = text[match.start() : doi_start].rstrip()
+    if prefix and prefix[-1] in _WRAPPERS:
+        return prefix[-1]
+    if match.start() and text[match.start() - 1] in _WRAPPERS:
+        return text[match.start() - 1]
+    return None
+
+
+def _remove_clear_wrapper(value: str, opening: str | None) -> str:
+    if opening is None:
+        return value
+    closing = _WRAPPERS[opening]
+    position = value.rfind(closing)
+    if position < 0:
+        return value
+    trailing = value[position + 1 :]
+    if trailing and any(char not in _TRAILING_PUNCTUATION for char in trailing):
+        return value
+    return value[:position] + trailing
+
+
+def _extract_doi_candidates(text: str) -> List[str]:
+    """Extract unverified DOI candidates in order of first occurrence."""
+    text = text.replace("\u00ad", "").replace("\u200b", "")
+    text = text.replace("\u2013", "-").replace("\u2014", "-")
+    text = _join_doi_continuations(text)
+
+    candidates = []
+    seen = set()
+    for match in PAT_DOI.finditer(text):
+        representation = match.group()
+        relative_doi = re.search(r"10\.", representation, re.IGNORECASE)
+        if relative_doi is None:
+            continue
+        doi_start = match.start() + relative_doi.start()
+        opening = _opening_wrapper(text, match, doi_start)
+        representation = _remove_clear_wrapper(representation, opening)
+
+        if match.lastgroup == "url":
+            parsed = urlsplit(representation)
+            if (parsed.hostname or "").lower() not in {"doi.org", "dx.doi.org"}:
+                continue
+            candidate = unquote(parsed.path.lstrip("/"))
+        elif match.lastgroup == "resolver":
+            parsed = urlsplit(f"//{representation}")
+            candidate = unquote(parsed.path.lstrip("/"))
+        else:
+            candidate = representation[relative_doi.start() :]
+
+        if not re.fullmatch(r"10\.\d{4,9}/[^\s]+", candidate, re.IGNORECASE):
+            continue
+        at_line_break = match.end() < len(text) and text[match.end()] == "\n"
+        if at_line_break and candidate.endswith("-"):
+            continue
+
+        key = candidate.translate(_ASCII_LOWER)
+        if key not in seen:
+            seen.add(key)
+            candidates.append(candidate)
+    return candidates
+
+
 def get_doi(texts_dir: Path) -> List[str]:
     if not texts_dir or not texts_dir.exists() or not texts_dir.is_dir():
         return []
@@ -337,34 +448,7 @@ def get_doi(texts_dir: Path) -> List[str]:
     except Exception:
         return []
 
-    # Normalize dashes → hyphen
-    content = content.replace("\u2013", "-").replace("\u2014", "-")
-
-    # Fix hyphenation at line breaks
-    content = re.sub(r"-\s*\n\s*", "-", content)
-
-    # Replace remaining newlines with space
-    content = content.replace("\n", " ")
-
-    matches = PAT_DOI.findall(content)
-
-    # strip trailing punctuation & lowercase
-    matches = [m.rstrip(".,;:)\"'").lower() for m in matches]
-
-    seen = set()
-    deduped = []
-    for m in matches:
-        if m not in seen:
-            seen.add(m)
-            deduped.append(m)
-
-    final = []
-    for m in deduped:
-        if any(other != m and other.startswith(m) for other in deduped):
-            continue
-        final.append(m)
-
-    return final
+    return _extract_doi_candidates(content)
 
 
 def write_json(data: Dict[str, Any], filepath: Path) -> None:

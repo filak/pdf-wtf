@@ -41,11 +41,16 @@ htmlcov/
 *.pid
 *.lock
 *.tmp
+instance/_data/
+instance/cache/
+instance/logs/
+instance/temp/
 
 # Environment / Secrets
 .env
 .env.*
 secrets.yaml
+secrets/
 *.pem
 *.key
 

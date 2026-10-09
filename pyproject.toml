@@ -35,6 +35,14 @@ dependencies = [
 
 [project.scripts]
 pdfwtf = "pdfwtf.cli:main"
+pdfwtf-gui = "pdfwtf.gui.app:main"
+
+[project.optional-dependencies]
+gui = [
+    "Flask>=3.1.2,<4.0.0",
+    "Flask-Babel>=4.0.0,<5.0.0",
+    "Flask-WTF>=1.2.2,<2.0.0",
+]
 
 [tool.uv-build]
 include = ["src/pdfwtf/**"]
