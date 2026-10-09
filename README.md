@@ -128,10 +128,13 @@ Compose reads `PDFWTF_HOME` from the host environment. It bind-mounts
 container processes therefore use the same runtime data. The command stops with
 an error if `PDFWTF_HOME` is missing.
 
-Build and start the container:
+Build and start the container - go to the PDFWTF_HOME dir and run:
 
 ```
-docker compose -f dockers/pdf-wtf-gui-compose.yaml up --build -d
+cd dockers
+docker buildx bake -f pdf-wtf-gui-compose.yaml --allow=fs.read=..
+cd ..
+docker compose -f dockers/pdf-wtf-gui-compose.yaml up -d
 ```
 
 Open `http://127.0.0.1:5001` in a browser. Check the container state and
@@ -159,6 +162,18 @@ The GUI stores an uploaded PDF at
 at `<output-dir>/<job-id>/approved-plan.json`. The default output directory is
 `PDFWTF_HOME/instance/_data/out`. `PDFWTF_OUTPUT_DIR` can override it. The GUI
 does not use `PDFWTF_INPUT_DIR`.
+
+The GUI image includes unpaper. To process a PDF with the CLI inside the
+container, place it in `PDFWTF_HOME/instance/_data/in`, then run:
+
+```
+docker compose -f dockers/pdf-wtf-gui-compose.yaml exec pdf-wtf-gui pdfwtf input.pdf --layout single --outdir /app/instance/_data/out
+```
+
+The command writes the processed PDF under `PDFWTF_HOME/instance/_data/out`.
+Use `--output-pages` or `--pre-rotate` for other unpaper operations. Rebuild the
+GUI image after changing the Dockerfile. The web review interface does not run
+this CLI processing command.
 
 Do not run `pdfwtf-gui` directly on the host. Rebuild the image after a source,
 dependency, or configuration change.
@@ -366,4 +381,3 @@ uv run --locked pdfwtf article.pdf --born-digital --doctype unit --get-html --no
 
 See [the container analysis specification](specs/CONTAINER_ANALYSIS.md) for the
 analysis schema, reviewed plan schema, result contracts, and heuristic limits.
-
