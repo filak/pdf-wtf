@@ -1,10 +1,8 @@
 # pdf-wtf
 
-PDF - what the file format ...
-
-PDF files parsing and data extraction
-
-> Work in progress ...
+PDF-WTF processes PDF files and extracts document data. It supports existing
+PDF text, scanned pages, and mixed text and image content.
+The project is in development.
 
 [![CodeQL](https://github.com/filak/pdf-wtf/actions/workflows/codeql.yml/badge.svg)](https://github.com/filak/pdf-wtf/security/code-scanning)
 
@@ -13,420 +11,249 @@ PDF files parsing and data extraction
 ## Built on top of
 
 **pikepdf**
+
 - PDF manipulation and content editing
 - https://pikepdf.readthedocs.io/en/latest/installation.html
 
 **PyMuPDF**
+
 - PDF processing, text/image extraction, rendering
 - https://pymupdf.readthedocs.io/en/latest/installation.html
 
 **ocrmypdf**
+
 - OCR wrapper (uses Tesseract + Ghostscript)
 - https://ocrmypdf.readthedocs.io/en/latest/installation.html
 
 ## External non-Python dependencies
 
 **Tesseract OCR**
+
 - required by OCRmyPDF and PyMuPDF
 - https://github.com/UB-Mannheim/tesseract
 
 **Ghostscript**
+
 - required by OCRmyPDF
 - https://www.ghostscript.com/releases/gsdnld.html
 
 **unpaper**
+
 - used by the pipeline for scan cleanup, layout, splitting, and pre-rotation
 - https://github.com/unpaper/unpaper
 
 **pngquant**
+
 - required by OCRmyPDF with optimize > 0
 - https://pngquant.org/
 
-## Local development installation
+## Installation
 
-Use Python 3.12, Git, and uv. Run the following commands from the repository root.
+Use Python 3.12, Git, and uv.
 
-1. Synchronize the locked dependencies:
+Clone the repository:
 
-    ```
-    uv sync --locked --extra gui
-    ```
-
-2. Supply `PDFWTF_HOME` in the operating-system environment.
-
-    Use the repository root during development. Restart the terminal or VS Code
-    after changing the environment. The application reports an error if this
-    value is missing. Do not put `PDFWTF_HOME` in `.env`.
-
-    Windows - go to the repo root folder open CMD and run:
-    ```
-    setx PDFWTF_HOME %CD%
-    ```
-
-    Linux (Bash) - open a terminal in the repository root.
-    Set the value for the current terminal and processes launched from it:
-
-    ```bash
-    export PDFWTF_HOME="$(pwd -P)"
-    ```
-
-    For future interactive Bash terminals, add the following line to
-    `~/.bashrc`. Replace the example with the absolute repository path:
-
-    ```bash
-    export PDFWTF_HOME="/home/your-user/pdf-wtf"
-    ```
-
-    Open a new terminal after saving `~/.bashrc`. Verify the value and
-    configuration file:
-
-    ```bash
-    printf '%s\n' "$PDFWTF_HOME"
-    test -f "$PDFWTF_HOME/instance/conf/pdf-wtf.ini" && echo "Configuration file found."
-    ```
-
-    To give VS Code the same environment, close all VS Code windows.
-    Launch VS Code from the configured terminal:
-
-    ```bash
-    code .
-    ```
-
-3. Review `instance/conf/pdf-wtf.ini`.
-
-    Relative configured paths resolve from `PDFWTF_HOME`. Environment values
-    override `.env` values. Both override INI values. See
-    [the configuration specification](specs/CONFIGURATION.md).
-
-4. Run the tests:
-
-    ```
-    uv run --locked pytest
-    ```
-
-5. Run each quality check separately:
-
-    ```
-    uv run --locked black --check src tests
-    ```
-
-    ```
-    uv run --locked flake8 src tests
-    ```
-
-    ```
-    uv run --locked pip-audit
-    ```
-
-## Run PDF-WTF-GUI
-
-Run PDF-WTF-GUI in Docker. Use Docker Desktop or Docker Engine with the
-Docker Compose plugin. Run these commands from the repository root.
-
-Compose reads `PDFWTF_HOME` from the host environment. It bind-mounts
-`PDFWTF_HOME/instance/_data` at `/app/instance/_data` in the container. Host and
-container processes therefore use the same runtime data. The container uses
-its writable `/tmp` tmpfs for temporary processing files. The command stops
-with an error if `PDFWTF_HOME` is missing.
-
-Build and start the container - go to the PDFWTF_HOME dir and run:
-
+```text
+git clone https://github.com/filak/pdf-wtf.git
+cd pdf-wtf
 ```
+
+Run the following commands from the repository root.
+Install the locked Python dependencies:
+
+```text
+uv sync --locked
+```
+
+Set `PDFWTF_HOME` to the absolute repository path in the operating-system
+environment. The application requires this value.
+Do not put `PDFWTF_HOME` in `.env`.
+
+On Windows, run this command in CMD from the repository root:
+
+```cmd
+setx PDFWTF_HOME "%CD%"
+```
+
+Restart the terminal or VS Code after setting this value.
+
+On Linux, run this command in Bash from the repository root:
+
+```bash
+export PDFWTF_HOME="$(pwd -P)"
+```
+
+Review `instance/conf/pdf-wtf.ini`.
+For persistent environment setup and path overrides, see the
+[configuration specification](specs/CONFIGURATION.md).
+
+For the Windows unpaper wrapper, see the
+[development commands](specs/PROJECT.md#development-commands).
+
+## Command-line interface
+
+Select an action before the input PDF: `pdfwtf ACTION INPUT_PDF`.
+Both arguments are required.
+
+| Action | Result |
+| --- | --- |
+| `enhance` | Process a PDF with optional scan cleanup, OCR, and exports. |
+| `analyse` | Write analysis proposals from existing PDF text without OCR. |
+| `export` | Write selected exports without OCR or a processed PDF. |
+
+List the actions and their options:
+
+```text
+uv run --locked pdfwtf --help
+uv run --locked pdfwtf enhance --help
+uv run --locked pdfwtf analyse --help
+uv run --locked pdfwtf export --help
+```
+
+Use a filename or relative path below the configured input directory.
+The default input directory is `PDFWTF_HOME/instance/_data/in`.
+Use an absolute path to select a PDF outside this directory.
+The CLI does not search the working directory.
+
+The default output directory is `PDFWTF_HOME/instance/_data/out`.
+Use `--outdir` to select another output directory.
+The output PDF must differ from the input PDF.
+
+### Process a PDF
+
+Process a PDF and export its text:
+
+```text
+uv run --locked pdfwtf enhance input.pdf --outdir output --get-text
+```
+
+Use `--pdf_type auto` for automatic scan detection. This is the default.
+Use `--pdf_type scanned` to force scan preparation and OCR.
+
+If the PDF has existing text, use `--pdf_type born-digital` to bypass scan
+preparation and OCR:
+
+```text
+uv run --locked pdfwtf enhance input.pdf --pdf_type born-digital --get-text
+```
+
+With `born-digital`, text exports contain only existing extractable text.
+Do not combine this PDF type with `--remove-bg`, `--layout single`,
+`--layout double`, `--output-pages`, or `--pre-rotate`.
+
+### Select pages and exports
+
+Use `--extract` to keep input pages in the processed PDF.
+Use `--remove` to remove input pages from that PDF.
+Both options use absolute input page indices starting at 1.
+If a page occurs in both lists, removal takes precedence.
+These options do not filter page exports.
+
+```text
+uv run --locked pdfwtf enhance input.pdf --extract 1-5 --remove 2
+```
+
+Select the required exports:
+
+| Option | Output |
+| --- | --- |
+| `--get-text` | Per-page text and combined text |
+| `--get-img` | PNG page images |
+| `--get-thumb` | Page images and JPEG thumbnails |
+| `--get-meta` | JSON metadata |
+| `--get-doi` | DOI candidates from the first derivative page and JSON metadata |
+
+DOI candidates are not externally verified.
+If you also need text files, use `--get-text`.
+
+To export existing PDF content without OCR, use `export`:
+
+```text
+uv run --locked pdfwtf export input.pdf --get-text
+uv run --locked pdfwtf export input.pdf --get-meta --get-img --get-thumb
+```
+
+For OCR before export without a final PDF, use `enhance --no-pdf-out`:
+
+```text
+uv run --locked pdfwtf enhance input.pdf --no-pdf-out --get-text
+```
+
+### Analyze and export units
+
+The container workflow uses existing PDF text and whole-page unit boundaries.
+Write analysis proposals:
+
+```text
+uv run --locked pdfwtf analyse issue.pdf --doc_type journal-issue
+```
+
+Review the proposals in a consuming application, such as the demo GUI.
+Save the confirmed page ranges, unit types, and selections in a separate plan.
+Export the reviewed units as metadata and HTML:
+
+```text
+uv run --locked pdfwtf export issue.pdf --plan issue.plan.json --get-html
+```
+
+To select specific reviewed unit types, add `--unit_type`:
+
+```text
+uv run --locked pdfwtf export issue.pdf --plan issue.plan.json --get-html --unit_type article
+```
+
+Repeat `--unit_type` to select several types.
+For schemas, output filenames, and analysis limits, see the
+[container analysis specification](specs/CONTAINER_ANALYSIS.md).
+
+## Demo GUI
+
+PDF-WTF-GUI demonstrates PDF review and unit export.
+Run the demo in Docker with Docker Desktop or Docker Engine and Docker Compose.
+Use the repository root as `PDFWTF_HOME`.
+
+Build and start the demo from the repository root:
+
+```text
 cd dockers
 docker buildx bake -f pdf-wtf-gui-compose.yaml --allow=fs.read=..
 cd ..
 docker compose -f dockers/pdf-wtf-gui-compose.yaml up -d
 ```
 
-Open `http://127.0.0.1:5001` in a browser. Check the container state and
-health:
+Open [PDF-WTF-GUI](http://127.0.0.1:5001) in a browser.
 
-```
-docker compose -f dockers/pdf-wtf-gui-compose.yaml ps
-```
+1. Upload a PDF.
+2. Select the document type in the file row.
+3. Select Analyze.
+4. Select Review to confirm unit titles, types, ranges, and inclusion.
+5. Save the plan.
+6. Select Export.
+7. Download the results.
 
-View the application logs:
+Upload does not start analysis.
+Analysis and export use existing PDF text without OCR.
 
-```
-docker compose -f dockers/pdf-wtf-gui-compose.yaml logs -f pdf-wtf-gui
-```
+The standalone host uses the GUI demo adapter for analysis and export.
+This adapter is not a production queue.
+For host integration, see the
+[GUI host configuration](specs/CONFIGURATION.md#gui-host-configuration).
 
-Stop and remove the container. Uploaded documents and approved plans remain in
-`PDFWTF_HOME/instance/_data`:
+After source, dependency, or configuration changes, rebuild the image.
+Do not run `pdfwtf-gui` directly on the host.
 
-```
+Stop the demo from the repository root:
+
+```text
 docker compose -f dockers/pdf-wtf-gui-compose.yaml down
 ```
 
-The GUI stores an uploaded PDF at
-`PDFWTF_HOME/instance/_data/in/<job-id>/source.pdf`. It stores the approved plan
-at `<output-dir>/<job-id>/approved.plan.json`. The default output directory is
-`PDFWTF_HOME/instance/_data/out`. `PDFWTF_OUTPUT_DIR` can override it. The GUI
-does not use `PDFWTF_INPUT_DIR`.
+Uploaded documents and saved plans remain in `PDFWTF_HOME/instance/_data`.
+For status checks, logs, and development commands, see the
+[project specification](specs/PROJECT.md#development-commands).
 
-The GUI image includes unpaper. To process a PDF with the CLI inside the
-container, place it in `PDFWTF_HOME/instance/_data/in`, then run:
+## Specifications
 
-```
-docker compose -f dockers/pdf-wtf-gui-compose.yaml exec pdf-wtf-gui pdfwtf enhance input.pdf --layout single --outdir /app/instance/_data/out
-```
-
-The command writes the processed PDF under `PDFWTF_HOME/instance/_data/out`.
-Use `--output-pages` or `--pre-rotate` for other unpaper operations. Rebuild the
-GUI image after changing the Dockerfile. The web review interface does not run
-this CLI processing command.
-
-Do not run `pdfwtf-gui` directly on the host. Rebuild the image after a source,
-dependency, or configuration change.
-
-Upload and analysis use separate requests. Upload a PDF with the upload form.
-The uploaded-file list appears below the form. Select the document type in the
-file row. Select Analyze to start analysis for that file. Upload does not start
-analysis. Saved uploads remain listed after the host restarts. The standalone
-demo adapter writes completed analysis to
-`<output-dir>/<job-id>/source.analysis.json` before reporting completion.
-Select Download analysis to download the JSON result. Active job state remains
-local to the configured adapter. Restarting the host does not restore active
-jobs. Saved analysis remains available through Review in each file row. Select Analyze to run analysis again. An active job is not started twice.
-After analysis finishes, the completion widget appears below the file row.
-A successful rerun replaces the saved machine analysis.
-Select the filename to open the PDF in a new browser tab. Upload metadata
-stores the last document type submitted with Analyze. Each file row restores
-this value when the page loads. New uploads use `auto`.
-After successful automatic analysis, the detected document type replaces
-`auto` in upload metadata. An unknown result keeps `auto`. Saving an approved
-plan does not change upload metadata.
-
-Select Delete in a file row to remove the uploaded PDF, upload metadata, and
-saved plan, and saved analysis. Deletion is blocked while analysis is queued or running. Deleted
-uploads cannot be analyzed or reviewed. The delete endpoint is
-`DELETE /uploads/<job_id>`. It uses CSRF protection and the host access check
-with action `delete`.
-
-The standalone host uses the demo analysis adapter. Do not use this in-process
-adapter as a production queue. The reusable blueprint is available as
-`pdfwtf.gui.create_gui_blueprint`. A host must initialize Flask-Babel and CSRF
-protection before it registers the blueprint. See `specs/CONFIGURATION.md` for
-the namespaced integration settings and callbacks.
-
-Extract, update, and compile English and Czech messages with these commands:
-
-```
-uv run --locked --extra gui pybabel extract -F babel.cfg -o messages.pot .
-```
-
-```
-uv run --locked --extra gui pybabel update -i messages.pot -d src/pdfwtf/gui/translations
-```
-
-```
-uv run --locked --extra gui pybabel compile -d src/pdfwtf/gui/translations
-```
-
-Select an action before the input PDF:
-
-- `analyse` writes analysis JSON from existing PDF text.
-- `enhance` runs PDF processing and can also export derivatives.
-- `export` writes selected derivatives without OCR or a processed PDF.
-
-Use `uv run --locked pdfwtf --help` to list actions.
-Use `uv run --locked pdfwtf export --help` to list export options.
-The input PDF and action are required. The former `--analysis` flag is removed.
-
-Process a PDF with the command-line interface:
-
-```
-uv run --locked pdfwtf enhance input.pdf --outdir output --get-text
-```
-
-Use a filename or a relative path below the configured input directory. The
-default is `PDFWTF_HOME/instance/_data/in`. Set `PDFWTF_INPUT_DIR` to override
-it. Use an absolute path to select a file outside this directory.
-
-
-The input PDF is required. The output PDF must differ from the input PDF.
-Processing errors return a nonzero exit code. Each invocation removes its work
-directory after success or failure. Debug mode enables debug logging and does
-not retain document intermediates.
-
-The pipeline stops if a requested unpaper operation fails or produces fewer
-pages than expected. It also checks the OCR page count. Post-processing page
-removal uses the processed PDF's page numbers.
-
-## Born-digital input
-
-If the input is born digital, use `--born-digital` to bypass automatic scan
-detection, scan preparation, and OCR:
-
-```
-uv run --locked pdfwtf enhance input.pdf --outdir output --born-digital --get-text
-```
-
-Page selection and removal still work. The output PDF retains the selected
-pages without converting them to images. Requested image and thumbnail exports
-still render separate files.
-
-A born-digital PDF does not need to contain extractable text. Text can consist
-of vector outlines, or the document can contain only graphics. In this case,
-processing succeeds without OCR. Per-page text exports are empty. The combined
-text file contains page headings. DOI extraction returns no candidates when
-the first exported page has no extractable text.
-
-Do not combine `--born-digital` with `--remove-bg`, `--layout single`,
-`--layout double`, `--output-pages`, or `--pre-rotate`. The application reports
-an error for these combinations.
-
-## Using unpaper on Windows
-
-The existing command wrapper runs unpaper in Docker. Install Docker Desktop
-with the WSL 2 backend for local development. Start Docker Desktop before using
-the wrapper.
-
-Build the existing image:
-
-```
-docker build -t unpaper-alpine -f dockers/Dockerfile-unpaper .
-```
-
-Check the image:
-
-```
-docker run --rm unpaper-alpine --version
-```
-
-Add the repository root to `PATH` so the pipeline can find `unpaper.cmd`.
-Run processing through `uv run --locked` so the wrapper uses the project
-environment.
-
-The pipeline invokes unpaper directly during scan preparation. It does not
-require edits to installed OCRmyPDF files. Layout, page splitting, and
-pre-rotation options require unpaper. If unpaper is unavailable, processing
-without these options continues without optional unpaper cleaning.
-
-### OCR optimization
-
-Use `--optimize` to set OCRmyPDF optimization. The default is `0`.
-
-- `0`: Disable optional optimization.
-- `1`: Use lossless optimization.
-- `2`: Permit lossy optimization.
-- `3`: Use more aggressive lossy optimization.
-
-```powershell
-uv run --locked pdfwtf enhance scan_with_text.pdf --optimize 1 --get-text
-```
-
-Levels `2` and `3` can show a warning if the optional `jbig2` executable is
-unavailable. The option applies only when OCRmyPDF runs. It has no effect with
-`--ocrlib pymupdf` or `--born-digital`.
-
-### Output selection
-
-The `enhance` action writes a processed PDF by default. Add export options to
-write derivatives. Use `export` to read the input PDF without OCR and write
-only derivatives. Select at least one export option or a reviewed plan.
-For OCR before derivative output, use `enhance --no-pdf-out` with export options.
-
-```powershell
-uv run --locked pdfwtf enhance input.pdf
-uv run --locked pdfwtf enhance input.pdf --get-text
-uv run --locked pdfwtf export input.pdf --get-text
-uv run --locked pdfwtf export input.pdf --get-meta --get-img --get-thumb
-```
-
-Use `--get-meta` to write JSON metadata. JSON includes `doi` and `pages`. The
-`doi` list is empty unless DOI extraction is requested. Use `--get-doi` to find
-DOI candidates on the first output page and write JSON metadata. The extractor
-accepts resolver URLs, `doi.org` names, `doi:` labels, and bare DOI names. It
-decodes resolver URL paths once. It preserves ambiguous trailing punctuation.
-
-The extractor joins a broken DOI only when the next physical line contains one
-isolated token. At a line break, it rejects dangling slash or hyphen fragments.
-It does not join general text lines. Complex layouts and ambiguous multi-token
-wrapping can still cause missed or extra candidates. Candidates are not
-externally verified. A candidate does not prove that a DOI is registered or
-identifies the processed document. `--get-doi` writes text files only if
-`--get-text` is also set.
-
-`--no-pdf-out` disables final PDF output. Processing and OCR can still create
-temporary PDFs. Use `--born-digital` to bypass scan preparation and OCR.
-
-### Page metadata and selection
-
-JSON includes all input pages. Page handles match derivative filenames.
-The `index` starts at 1. The `pgn` is a detected printed number or `null`.
-
-```json
-{
-  "input": "F:/Decko/pdf-wtf/instance/_data/in/input.pdf",
-  "output": "F:/Decko/pdf-wtf/instance/_data/out/input.pdf",
-  "doi": [],
-  "pages": {
-    "page_001": {"index": 1, "pgn": "105"},
-    "page_002": {"index": 2, "pgn": "106", "skip": true},
-    "page_003": {"index": 3, "pgn": null},
-    "page_004": {"index": 4, "pgn": "108", "keep": true}
-  }
-}
-```
-
-Use `--extract` and `--remove` with absolute input indices. These options filter
-only the output PDF. All derivative pages remain available. The selection lists
-also set `keep` and `skip` in JSON. Omit flags for indices absent from each list.
-If an index occurs in both lists, removal takes precedence for the PDF.
-
-Printed number detection checks header and footer text. Ambiguous numbers return
-`null`. No text means no detected number. Derivative processing preserves input
-indices. Page splitting applies only to the output PDF.
-
-JSON `input` and `output` contain absolute PDF paths. With `--no-pdf-out`,
-`output` is `null`.
-
-## Container analysis and unit HTML
-
-The container workflow supports born-digital PDFs and whole-page unit
-boundaries. First, write a machine analysis:
-
-```powershell
-uv run --locked pdfwtf analyse issue.pdf --doc_type journal-issue
-```
-
-The command writes `issue.analysis.json` in the output directory. The analysis
-contains one review record for each input page. It proposes printed page
-numbers, page types, titles, sections, substantive figures, captions,
-bibliographic source metadata, and unit links. Each proposed unit has a `doi`
-list with candidates from its proposed page range. Extracted strings are
-normalized. The compact file does not contain full page text or text spans. A
-consuming application keeps this file unchanged and writes corrections and
-selections to `issue.plan.json`. Process the reviewed plan:
-
-```powershell
-uv run --locked pdfwtf export issue.pdf --plan issue.plan.json --get-html
-```
-
-The plan's page selections control the output PDF and the pages included in
-unit results. The command writes `manifest.json`, one metadata JSON file for
-each selected unit, and one HTML fragment for each selected unit below
-`_units_issue`. Plan ranges can exclude pages by leaving gaps. Whole-page
-ranges can overlap. For example, units spanning pages 1–16 and 16–31 both
-include the entire page 16 in their results. The plan does not split a page
-into separate article regions.
-
-Process a single unit without a reviewed plan:
-
-```powershell
-uv run --locked pdfwtf export article.pdf --doc_type unit --get-html
-```
-
-See [the container analysis specification](specs/CONTAINER_ANALYSIS.md) for the
-analysis schema, reviewed plan schema, result contracts, and heuristic limits.
-
-After review, select one or more unit types for export:
-
-```
-pdfwtf export issue.pdf --plan approved.plan.json --get-html --unit_type article
-```
-
-Analysis proposes unit types. Operators correct these types in the reviewed plan.
-Export respects plan selection and exports only matching units. Repeat
-`--unit_type` to select several types. Page derivatives are not filtered.
+- [Project](specs/PROJECT.md): scope, components, processing rules, and development commands.
+- [Configuration](specs/CONFIGURATION.md): environment setup, paths, and host integration.
+- [Container analysis](specs/CONTAINER_ANALYSIS.md): reviewed plans, schemas, and unit results.

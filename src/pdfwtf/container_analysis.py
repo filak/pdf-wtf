@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import Counter
+from datetime import datetime, UTC
 from hashlib import sha256
 from html import escape, unescape
 import json
@@ -141,9 +142,23 @@ def _extract_page(page: fitz.Page, printed_number: str | None) -> dict[str, Any]
                     }
                 )
         if lines:
-            blocks.append(
-                {"kind": "text", "bbox": _rect(block["bbox"]), "lines": lines}
-            )
+            # Native blocks can contain separate lines from several columns.
+            for group in _projection_groups(
+                lines, axis=0, min_gap=max(3.0, page.rect.width * 0.01)
+            ):
+                group.sort(key=lambda line: (line["bbox"][1], line["bbox"][0]))
+                blocks.append(
+                    {
+                        "kind": "text",
+                        "bbox": [
+                            min(line["bbox"][0] for line in group),
+                            min(line["bbox"][1] for line in group),
+                            max(line["bbox"][2] for line in group),
+                            max(line["bbox"][3] for line in group),
+                        ],
+                        "lines": group,
+                    }
+                )
     images = []
     for occurrence, image in enumerate(page.get_image_info(xrefs=True), start=1):
         images.append(
@@ -161,7 +176,9 @@ def _extract_page(page: fitz.Page, printed_number: str | None) -> dict[str, Any]
         "printed_page_number": printed_number,
         "width": round(page.rect.width, 3),
         "height": round(page.rect.height, 3),
-        "text_blocks": blocks,
+        "text_blocks": _ordered_items(
+            blocks, {"width": page.rect.width, "height": page.rect.height}
+        ),
         "raster_images": images,
     }
 
@@ -1345,41 +1362,64 @@ def _running_margin_texts(pages: list[dict[str, Any]]) -> set[str]:
     return {text for text, count in counts.items() if count >= 2}
 
 
+def _projection_groups(
+    items: list[dict[str, Any]], axis: int, min_gap: float
+) -> list[list[dict[str, Any]]]:
+    """Partition items only at clear whitespace gaps in one axis."""
+    groups: list[list[dict[str, Any]]] = []
+    edge = float("-inf")
+    for item in sorted(items, key=lambda item: item["bbox"][axis]):
+        start = item["bbox"][axis]
+        end = item["bbox"][axis + 2]
+        if not groups or start - edge >= min_gap:
+            groups.append([])
+        groups[-1].append(item)
+        edge = max(edge, end)
+    return groups
+
+
 def _ordered_items(
     items: list[dict[str, Any]], page: dict[str, Any]
 ) -> list[dict[str, Any]]:
-    width = page["width"]
-    full = [item for item in items if item["bbox"][2] - item["bbox"][0] >= width * 0.62]
-    columns = [item for item in items if item not in full]
-    full.sort(key=lambda item: (item["bbox"][1], item["bbox"][0]))
-    ordered = []
-    band_top = float("-inf")
-    for separator in [*full, None]:
-        band_bottom = separator["bbox"][1] if separator else float("inf")
-        band = [
-            item
-            for item in columns
-            if band_top <= (item["bbox"][1] + item["bbox"][3]) / 2 < band_bottom
-        ]
-        left = sorted(
-            (
+    """Read whitespace-separated columns and horizontal regions recursively."""
+    if len(items) < 2:
+        return list(items)
+    groups = _projection_groups(items, 0, max(3.0, page["width"] * 0.01))
+    if len(groups) > 1:
+        return [item for group in groups for item in _ordered_items(group, page)]
+
+    # Spanning headings and figures divide the page into column regions.
+    # Keep each region together before looking for its column gutters.
+    full = [
+        item
+        for item in items
+        if item["bbox"][2] - item["bbox"][0] >= page["width"] * 0.62
+    ]
+    if full:
+        full.sort(key=lambda item: (item["bbox"][1], item["bbox"][0]))
+        columns = [item for item in items if item not in full]
+        ordered = []
+        band_top = float("-inf")
+        for separator in [*full, None]:
+            band_bottom = separator["bbox"][1] if separator else float("inf")
+            band = [
                 item
-                for item in band
-                if (item["bbox"][0] + item["bbox"][2]) / 2 < width / 2
-            ),
-            key=lambda item: (item["bbox"][1], item["bbox"][0]),
-        )
-        right = sorted(
-            (item for item in band if item not in left),
-            key=lambda item: (item["bbox"][1], item["bbox"][0]),
-        )
-        ordered.extend(left)
-        ordered.extend(right)
-        if separator is not None:
-            ordered.append(separator)
-            # Preserve overlapping items in the next band.
-            band_top = separator["bbox"][1]
-    return ordered
+                for item in columns
+                if band_top <= (item["bbox"][1] + item["bbox"][3]) / 2 < band_bottom
+            ]
+            ordered.extend(_ordered_items(band, page))
+            if separator is not None:
+                ordered.append(separator)
+                # Retain items that overlap a separator in the following region.
+                band_top = separator["bbox"][1]
+        return ordered
+
+    groups = _projection_groups(items, 1, max(2.0, page["height"] * 0.005))
+    if len(groups) > 1:
+        return [item for group in groups for item in _ordered_items(group, page)]
+    # Ambiguous overlaps cannot establish a safe column boundary.
+    # Retain every item in a deterministic top-to-bottom order.
+    return sorted(items, key=lambda item: (item["bbox"][1], item["bbox"][0]))
 
 
 def _ordered_blocks(page: dict[str, Any]) -> list[dict[str, Any]]:
@@ -1615,9 +1655,10 @@ def reconstruct_unit(
     return semantic, figures, warnings
 
 
-def render_html(blocks: list[dict[str, Any]]) -> str:
-    """Render a safe UTF-8 HTML fragment without scripts or external resources."""
+def render_html(blocks: list[dict[str, Any]], page_marker=False) -> str:
+    """Render a safe UTF-8 HTML fragment with a linked figure list."""
     output = []
+    figures = []
     for block in blocks:
         if block["kind"] == "page_marker":
             printed = block["printed_page_number"]
@@ -1626,22 +1667,31 @@ def render_html(blocks: list[dict[str, Any]]) -> str:
                 if printed is not None
                 else f"Input page {block['input_page']}"
             )
-            output.append(
-                f'<p class="page-marker" data-input-page="{block["input_page"]}">{escape(label)}</p>'
-            )
+            if page_marker is True:
+                output.append(
+                    f'<p class="page-marker" data-input-page="{block["input_page"]}">{escape(label)}</p>'
+                )
         elif block["kind"] == "heading":
             level = min(6, max(1, int(block["level"])))
             output.append(f"<h{level}>{escape(block['text'])}</h{level}>")
         elif block["kind"] == "paragraph":
             output.append(f"<p>{escape(block['text'])}</p>")
         elif block["kind"] == "figure":
+            anchor = escape(block["id"])
+            figures.append((anchor, block["id"], block.get("caption") or ""))
             output.append(f'<figure data-figure-id="{escape(block["id"])}">')
             output.append(
-                f'<div class="figure-placeholder">Figure {escape(block["id"])}</div>'
+                f'<div id="{anchor}" class="figure-placeholder">Figure {escape(block["id"])}</div>'
             )
             if block.get("caption"):
                 output.append(f"<figcaption>{escape(block['caption'])}</figcaption>")
             output.append("</figure>")
+    output.extend(['<section class="figures">', "<h2>Figures</h2>", "<ul>"])
+    for anchor, identifier, caption in figures:
+        output.append(
+            f'<li><a href="#{anchor}">{escape(identifier)}</a> -- {escape(caption)}</li>'
+        )
+    output.extend(["</ul>", "</section>"])
     return "\n".join(output) + "\n"
 
 
@@ -1651,6 +1701,7 @@ def export_units(
     selected_units: list[dict[str, Any]],
     destination: Path,
     include_html: bool,
+    include_pdf: bool = False,
 ) -> None:
     """Write selected units and a manifest into a separate export directory."""
     destination.mkdir(parents=True, exist_ok=True)
@@ -1668,6 +1719,14 @@ def export_units(
                 )
                 if reviewed_pages[page]["selected"]
             ]
+            pdf_name = f"{unit['id']}.pdf" if include_pdf else None
+            if include_pdf:
+                with fitz.open() as unit_pdf:
+                    for page in selected_input_pages:
+                        unit_pdf.insert_pdf(
+                            document, from_page=page - 1, to_page=page - 1
+                        )
+                    unit_pdf.save(destination / pdf_name)
             html_name = f"{unit['id']}.html" if include_html else None
             metadata_name = f"{unit['id']}.metadata.json"
             metadata = {
@@ -1700,11 +1759,13 @@ def export_units(
                     "selected_input_pages": selected_input_pages,
                     "html": html_name,
                     "metadata": metadata_name,
+                    **({"pdf": pdf_name} if include_pdf else {}),
                 }
             )
     manifest = {
         "schema_version": SCHEMA_VERSION,
         "kind": "container-manifest",
+        "created": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "source": plan["source"],
         "document_type": plan["document_type"],
         "units": manifest_units,

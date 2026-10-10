@@ -379,3 +379,146 @@ msgstr ""
 
 msgid "Magazine issue"
 msgstr ""
+
+msgid "PDF type"
+msgstr "PDF type"
+
+msgid "Select a valid PDF type."
+msgstr "Select a valid PDF type."
+
+
+msgid "Delete this file and its saved analysis and plan?"
+msgstr "Delete this file and its saved analysis and plan?"
+
+
+msgid "Delete the approved plan?"
+msgstr "Delete the approved plan?"
+
+msgid "Confirm deletion"
+msgstr "Confirm deletion"
+
+msgid "Cancel"
+msgstr "Cancel"
+
+msgid "Apply to units"
+msgstr "Apply to units"
+
+msgid "All"
+msgstr "All"
+
+msgid "Selected"
+msgstr "Selected"
+
+msgid "Include or exclude units"
+msgstr "Include or exclude units"
+
+msgid "Select unit"
+msgstr "Select unit"
+
+msgid "Mixed"
+msgstr "Mixed"
+
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html
+msgid "Clear selection"
+msgstr "Clear selection"
+
+
+#: src/pdfwtf/gui/blueprint.py src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html
+msgid "Export"
+msgstr "Export"
+
+
+#: src/pdfwtf/gui/blueprint.py src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html
+msgid "Export options"
+msgstr "Export options"
+
+
+#: src/pdfwtf/gui/blueprint.py src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html
+msgid "Close"
+msgstr "Close"
+
+
+#: src/pdfwtf/gui/blueprint.py src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html
+msgid "Export is running…"
+msgstr "Export is running…"
+
+
+#: src/pdfwtf/gui/blueprint.py src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html
+msgid "Export is complete."
+msgstr "Export is complete."
+
+
+#: src/pdfwtf/gui/blueprint.py src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html
+msgid "Export could not be completed. Try again."
+msgstr "Export could not be completed. Try again."
+
+
+#: src/pdfwtf/gui/blueprint.py src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html
+msgid "Download export"
+msgstr "Download export"
+
+
+#: src/pdfwtf/gui/blueprint.py src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html
+msgid "Do not write unit PDFs."
+msgstr "Do not write unit PDFs."
+
+
+#: src/pdfwtf/gui/blueprint.py src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html
+msgid "Write HTML for included units."
+msgstr "Write HTML for included units."
+
+
+#: src/pdfwtf/gui/blueprint.py src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html
+msgid "Select valid export options."
+msgstr "Select valid export options."
+
+
+#: src/pdfwtf/gui/blueprint.py src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html
+msgid "The saved plan could not be read."
+msgstr "The saved plan could not be read."
+
+
+#: src/pdfwtf/gui/blueprint.py src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html
+msgid "Wait for the active operation to finish."
+msgstr "Wait for the active operation to finish."
+
+
+#: src/pdfwtf/gui/blueprint.py src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html
+msgid "Export could not start. Try again."
+msgstr "Export could not start. Try again."
+
+
+#: src/pdfwtf/gui/blueprint.py src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html
+msgid "Export failed. Check the host logs."
+msgstr "Export failed. Check the host logs."
+
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html
+msgid "Include the original source PDF in the ZIP."
+msgstr "Include the original source PDF in the ZIP."
+
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html
+msgid "Include the saved plan and analysis JSON in the ZIP."
+msgstr "Include the saved plan and analysis JSON in the ZIP."
+
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html
+msgid "Include unit metadata JSON files in the ZIP."
+msgstr "Include unit metadata JSON files in the ZIP."
+
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html
+msgid "Exports"
+msgstr "Exports"
+
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/input.html src/pdfwtf/gui/templates/pdfwtf_gui/_uploads.html
+msgid "Born-digital"
+msgstr "Born-digital"
+
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/input.html src/pdfwtf/gui/templates/pdfwtf_gui/_uploads.html
+msgid "Scanned"
+msgstr "Scanned"

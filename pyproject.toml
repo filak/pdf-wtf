@@ -10,7 +10,7 @@ target-version = ["py312"]
 
 [project]
 name = "pdfwtf"
-version = "0.1.3"
+version = "0.1.4"
 description = "Smart PDF parsing pipeline: remove pages, OCR scanned PDFs, export images & text"
 authors = [
     { name = "Filip Kriz", email = "1353748+filak@users.noreply.github.com" }

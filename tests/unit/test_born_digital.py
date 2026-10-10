@@ -126,7 +126,7 @@ def test_scan_options_are_rejected(
     vector_pdf, tmp_path, forbid_scan_processing, options
 ):
     output = tmp_path / "out"
-    with pytest.raises(ValueError, match="--born-digital cannot be combined"):
+    with pytest.raises(ValueError, match="--pdf_type born-digital cannot be combined"):
         pipeline.process_pdf(vector_pdf, output, born_digital_flag=True, **options)
     assert not output.exists()
 
@@ -145,10 +145,11 @@ def test_cli_passes_explicit_flag(make_pdf, monkeypatch, enabled):
     )
     args = [str(make_pdf(["digital"]))]
     if enabled:
-        args.append("--born-digital")
+        args.extend(["--pdf_type", "born-digital"])
     result = CliRunner().invoke(cli.main, ["enhance", *(args)])
     assert result.exit_code == 0, result.output
-    assert received["born_digital_flag"] is enabled
+    assert received["pdf_type"] == ("born-digital" if enabled else "auto")
+    assert "born_digital_flag" not in received
 
 
 def test_cli_processes_vector_only_pdf(vector_pdf, tmp_path, forbid_scan_processing):
@@ -160,7 +161,8 @@ def test_cli_processes_vector_only_pdf(vector_pdf, tmp_path, forbid_scan_process
             str(vector_pdf),
             "--outdir",
             str(output),
-            "--born-digital",
+            "--pdf_type",
+            "born-digital",
             "--get-text",
             "--get-doi",
         ],
@@ -185,17 +187,18 @@ def test_cli_reports_conflicting_options(vector_pdf, tmp_path):
             str(vector_pdf),
             "--outdir",
             str(tmp_path / "out"),
-            "--born-digital",
+            "--pdf_type",
+            "born-digital",
             "--remove-bg",
         ],
     )
     assert result.exit_code == 1
-    assert "--born-digital cannot be combined" in result.output
+    assert "--pdf_type born-digital cannot be combined" in result.output
     assert "Done!" not in result.output
 
 
 def test_help_explains_override():
     result = CliRunner().invoke(cli.main, ["enhance", "--help"])
     assert result.exit_code == 0
-    assert "--born-digital" in result.output
+    assert "--pdf_type" in result.output
     assert "Image exports still" in " ".join(result.output.split())

@@ -1,6 +1,7 @@
 """Tests for the optional reusable PDF-WTF-GUI blueprint."""
 
 from io import BytesIO
+from datetime import datetime, timedelta, UTC
 import json
 import mimetypes
 from pathlib import Path
@@ -11,6 +12,7 @@ import pytest
 
 pytest.importorskip("flask")
 
+from pdfwtf import __version__  # noqa: E402
 from pdfwtf.container_analysis import analyze_container  # noqa: E402
 from pdfwtf.gui.adapter import DemoAnalysisAdapter, JobStatus  # noqa: E402
 from pdfwtf.gui.app import create_app  # noqa: E402
@@ -57,6 +59,11 @@ def gui_app(configured_home: Path):
     return app, adapter, configured_home
 
 
+def test_app_config_includes_package_version(gui_app):
+    app, _adapter, _configured_home = gui_app
+    assert app.config["PDFWTF_GUI_VERSION"] == __version__
+
+
 def test_index_uses_namespaced_local_assets_and_language(gui_app):
     app, _adapter, _configured_home = gui_app
     response = app.test_client().get("/?lang=cs")
@@ -67,6 +74,20 @@ def test_index_uses_namespaced_local_assets_and_language(gui_app):
     assert "Vybrat soubor".encode() in response.data
     assert "Není vybrán žádný soubor".encode() in response.data
     assert b"/assets/upload.js" in response.data
+    assert b'id="delete-confirmation"' in response.data
+    title_end = response.data.index(b"</title>")
+    body_start = response.data.index(b"<body")
+    assert b"<div" not in response.data[:title_end]
+    assert response.data.index(b'id="delete-confirmation"') > body_start
+    assert response.data.index(b"/assets/confirmation.js") > body_start
+    assert (
+        response.data.index(b"/assets/vendor/bootstrap/bootstrap.bundle.min.js")
+        > body_start
+    )
+    assert b"/assets/vendor/bootstrap/bootstrap.bundle.min.js" in response.data
+    assert b"/assets/confirmation.js" in response.data
+    assert "Potvrdit smazání".encode() in response.data
+    assert "Zrušit".encode() in response.data
     english = app.test_client().get("/?lang=en")
     assert b"Choose file" in english.data
     assert b"No file selected" in english.data
@@ -176,7 +197,14 @@ def test_upload_review_document_and_approved_plan(gui_app, make_pdf):
         re.DOTALL,
     )
     assert embedded_plan is not None
-    assert json.loads(embedded_plan.group(1)) == plan
+    persisted_plan = json.loads(embedded_plan.group(1))
+    assert {
+        key: value
+        for key, value in persisted_plan.items()
+        if key not in {"created", "updated", "pdf_type"}
+    } == plan
+    assert persisted_plan["created"] == persisted_plan["updated"]
+    assert datetime.fromisoformat(persisted_plan["created"]).tzinfo == UTC
     assert adapter.result(job_id) == analysis
     updated_metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
     assert updated_metadata["document_type"] == "book"
@@ -459,7 +487,10 @@ def test_gui_scripts_use_javascript_mime_despite_system_mapping(
     response.close()
 
 
-def test_standalone_analysis_persists_before_completion(configured_home, make_pdf):
+@pytest.mark.parametrize("pdf_type", ["born-digital", "scanned"])
+def test_standalone_analysis_persists_before_completion(
+    configured_home, make_pdf, pdf_type
+):
     output_dir = configured_home / "custom-output"
     app = create_app(
         {
@@ -472,7 +503,11 @@ def test_standalone_analysis_persists_before_completion(configured_home, make_pd
     source = make_pdf(["digital"])
     client = app.test_client()
     client.post(
-        "/uploads", data={"document": (BytesIO(source.read_bytes()), "file.pdf")}
+        "/uploads",
+        data={
+            "document": (BytesIO(source.read_bytes()), "file.pdf"),
+            "pdf_type": pdf_type,
+        },
     )
     job_id = next((configured_home / "instance/_data/in").iterdir()).name
     client.post(f"/jobs/{job_id}/analyze", data={"document_type": "unit"})
@@ -480,6 +515,27 @@ def test_standalone_analysis_persists_before_completion(configured_home, make_pd
     assert adapter.status(job_id).state == "complete"
     destination = output_dir / job_id / "source.analysis.json"
     assert json.loads(destination.read_text(encoding="utf-8")) == adapter.result(job_id)
+    persisted = json.loads(destination.read_text(encoding="utf-8"))
+    assert persisted["pdf_type"] == pdf_type
+    keys = list(persisted)
+    assert keys[keys.index("document_type") + 1] == "pdf_type"
+    plan = {
+        **persisted,
+        "kind": "plan",
+        "pdf_type": "forged",
+        "pages": [{**page, "selected": True} for page in persisted["pages"]],
+        "units": [
+            {**unit, "selected": True, "boundary_status": "confirmed"}
+            for unit in persisted["units"]
+        ],
+    }
+    assert client.post(f"/jobs/{job_id}/plan", json=plan).status_code == 200
+    saved = json.loads(
+        (output_dir / job_id / "approved.plan.json").read_text(encoding="utf-8")
+    )
+    assert saved["pdf_type"] == pdf_type
+    keys = list(saved)
+    assert keys[keys.index("document_type") + 1] == "pdf_type"
     assert not destination.with_suffix(".json.tmp").exists()
     assert b"Download analysis" in client.get(f"/jobs/{job_id}/status").data
     assert client.get(f"/jobs/{job_id}/analysis").json == adapter.result(job_id)
@@ -488,7 +544,7 @@ def test_standalone_analysis_persists_before_completion(configured_home, make_pd
 
 
 def test_analysis_write_failure_does_not_report_complete(
-    tmp_path, make_pdf, monkeypatch
+    tmp_path, make_pdf, monkeypatch, caplog
 ):
     adapter = DemoAnalysisAdapter(output_dir=tmp_path / "output")
     source = make_pdf(["digital"])
@@ -496,7 +552,7 @@ def test_analysis_write_failure_does_not_report_complete(
 
     def fail_write(_document, path):
         path.write_text("partial", encoding="utf-8")
-        raise OSError("Cannot write analysis.")
+        raise OSError("private document payload")
 
     monkeypatch.setattr("pdfwtf.gui.adapter.write_json_document", fail_write)
     adapter.start(job_id, source, "unit")
@@ -505,6 +561,15 @@ def test_analysis_write_failure_does_not_report_complete(
     with pytest.raises(LookupError):
         adapter.result(job_id)
     assert not list((tmp_path / "output" / job_id).iterdir())
+    records = [
+        record for record in caplog.records if record.name == "pdfwtf.gui.adapter"
+    ]
+    assert len(records) == 1
+    assert records[0].levelname == "ERROR"
+    assert records[0].correlation_id == job_id
+    assert records[0].getMessage() == "GUI analysis failed (OSError)."
+    assert records[0].exc_info is None
+    assert "private document payload" not in caplog.text
 
 
 def test_analysis_download_checks_access_and_readiness(gui_app, make_pdf, monkeypatch):
@@ -628,9 +693,14 @@ def test_file_link_and_document_type_persistence(gui_app, make_pdf):
     directory = next((home / "instance/_data/in").iterdir())
     job_id = directory.name
     metadata_path = directory / "upload.json"
-    assert json.loads(metadata_path.read_text(encoding="utf-8")) == {
+    upload_metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    created = upload_metadata.pop("created")
+    assert created.endswith("Z")
+    assert datetime.fromisoformat(created).tzinfo == UTC
+    assert upload_metadata == {
         "filename": "original.pdf",
         "document_type": "auto",
+        "pdf_type": "born-digital",
     }
     listing = client.get("/").data
     assert f'href="/jobs/{job_id}/document" target="_blank"'.encode() in listing
@@ -645,7 +715,9 @@ def test_file_link_and_document_type_persistence(gui_app, make_pdf):
         assert response.status_code == 200
         metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
         assert metadata["filename"] == "original.pdf"
+        assert metadata["pdf_type"] == "born-digital"
         assert metadata["document_type"] == document_type
+        assert metadata["created"] == created
         assert adapter.result(job_id)["document_type"] == document_type
         assert (
             f'<option value="{document_type}" selected>'.encode()
@@ -770,3 +842,431 @@ def test_plan_delete_enforces_csrf(configured_home):
         {"TESTING": True, "PDFWTF_GUI_ANALYSIS_ADAPTER": ImmediateAdapter()}
     )
     assert app.test_client().delete(f"/jobs/{'a' * 20}/plan").status_code == 400
+
+
+@pytest.mark.parametrize("pdf_type", [None, "born-digital", "scanned", "invalid"])
+def test_upload_pdf_type(gui_app, make_pdf, pdf_type):
+    app, adapter, home = gui_app
+    source = make_pdf(["digital"])
+    data = {"document": (BytesIO(source.read_bytes()), "source.pdf")}
+    if pdf_type is not None:
+        data["pdf_type"] = pdf_type
+    client = app.test_client()
+    form = client.get("/").get_data(as_text=True)
+    assert 'name="pdf_type"' in form
+    assert '<option value="born-digital" selected>' in form
+    assert '<option value="scanned">' in form
+    response = client.post("/uploads", data=data)
+    directories = list((home / "instance/_data/in").iterdir())
+    assert not adapter.jobs
+    if pdf_type == "invalid":
+        assert response.status_code == 400
+        assert not directories
+    else:
+        assert response.status_code == 302
+        metadata = json.loads(
+            (directories[0] / "upload.json").read_text(encoding="utf-8")
+        )
+        assert metadata["pdf_type"] == (pdf_type or "born-digital")
+        listing = client.get("/").get_data(as_text=True)
+        expected_icon = (
+            "bi-file-earmark-break-fill"
+            if pdf_type == "scanned"
+            else "bi-file-pdf-fill"
+        )
+        other_icon = (
+            "bi-file-pdf-fill"
+            if pdf_type == "scanned"
+            else "bi-file-earmark-break-fill"
+        )
+        assert expected_icon in listing
+        assert other_icon not in listing
+
+
+def _saved_export_job(gui_app, make_pdf):
+    app, adapter, home = gui_app
+    client = app.test_client()
+    source = make_pdf(["digital", "digital"])
+    client.post(
+        "/uploads",
+        data={"document": (BytesIO(source.read_bytes()), "issue.pdf")},
+        content_type="multipart/form-data",
+    )
+    job_id = next((home / "instance/_data/in").iterdir()).name
+    client.post(f"/jobs/{job_id}/analyze", data={"document_type": "unit"})
+    analysis = adapter.result(job_id)
+    plan = {
+        "schema_version": analysis["schema_version"],
+        "kind": "plan",
+        "source": analysis["source"],
+        "document_type": analysis["document_type"],
+        "pages": [
+            {**page, "selected": page["input_page"] == 1, "unit_ids": ["reviewed"]}
+            for page in analysis["pages"]
+        ],
+        "units": [
+            {
+                "id": "reviewed",
+                "title": "Reviewed title",
+                "type": "article",
+                "selected": True,
+                "boundary_status": "confirmed",
+                "input_pages": {"start": 1, "end": 2},
+            }
+        ],
+    }
+    assert client.post(f"/jobs/{job_id}/plan", json=plan).status_code == 200
+    output = home / "instance/_data/out" / job_id
+    (output / "source.analysis.json").write_text(
+        json.dumps(analysis, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    persisted_plan = json.loads(
+        (output / "approved.plan.json").read_text(encoding="utf-8")
+    )
+    return client, job_id, persisted_plan
+
+
+def test_export_button_requires_saved_plan_and_modal_defaults_off(gui_app, make_pdf):
+    client, job_id, _plan = _saved_export_job(gui_app, make_pdf)
+    listing = client.get("/").get_data(as_text=True)
+    assert f'data-export-url="/jobs/{job_id}/export"' in listing
+    assert 'id="export-no-pdf-out"' in listing
+    assert 'id="export-get-html"' in listing
+    for control in (
+        "export-no-pdf-out",
+        "export-get-html",
+        "export-get-meta",
+        "export-include-source",
+        "export-debug",
+    ):
+        tag = re.search(rf'<input[^>]*id="{control}"[^>]*>', listing).group()
+        assert "checked" not in tag
+        assert 'role="switch"' in tag
+    assert client.delete(f"/jobs/{job_id}/plan").status_code == 200
+    assert f'data-export-url="/jobs/{job_id}/export"' not in client.get("/").get_data(
+        as_text=True
+    )
+    assert client.post(f"/jobs/{job_id}/export", json={}).status_code == 404
+
+
+@pytest.mark.parametrize("no_pdf_out", [False, True])
+@pytest.mark.parametrize("get_html", [False, True])
+@pytest.mark.parametrize("include_source", [False, True])
+@pytest.mark.parametrize("debug", [False, True])
+@pytest.mark.parametrize("get_meta", [False, True])
+def test_saved_plan_export_downloads_selected_results(
+    gui_app, make_pdf, no_pdf_out, get_html, include_source, debug, get_meta
+):
+    from zipfile import ZipFile
+    import pymupdf
+
+    app, _analysis_adapter, home = gui_app
+    client, job_id, saved_plan = _saved_export_job(gui_app, make_pdf)
+    upload_path = home / "instance/_data/in" / job_id / "upload.json"
+    upload = json.loads(upload_path.read_text(encoding="utf-8"))
+    upload["extra"] = {"unicode": "Žluťoučký", "values": [1, False, None]}
+    upload_path.write_text(json.dumps(upload, ensure_ascii=False), encoding="utf-8")
+    exporter = DemoAnalysisAdapter(output_dir=home / "instance/_data/out")
+    app.config["PDFWTF_GUI_EXPORT_ADAPTER"] = exporter
+    try:
+        response = client.post(
+            f"/jobs/{job_id}/export",
+            json={
+                "no_pdf_out": no_pdf_out,
+                "get_html": get_html,
+                "get_meta": get_meta,
+                "include_source": include_source,
+                "debug": debug,
+            },
+        )
+        assert response.status_code == 202
+        exporter._executor.shutdown(wait=True)
+        status = client.get(response.json["status_url"])
+        assert status.json["state"] == "complete"
+        archive = client.get(status.json["download_url"])
+        assert archive.status_code == 200
+        assert archive.mimetype == "application/zip"
+        assert archive.headers["Cache-Control"] == "private, no-store"
+        with ZipFile(BytesIO(archive.data)) as bundle:
+            names = bundle.namelist()
+            assert ("source.pdf" in names) is include_source
+            for filename in ("approved.plan.json", "source.analysis.json"):
+                assert (filename in names) is debug
+                if debug:
+                    saved_file = home / "instance/_data/out" / job_id / filename
+                    assert bundle.read(filename) == saved_file.read_bytes()
+            if include_source:
+                original_path = home / "instance/_data/in" / job_id / "source.pdf"
+                assert bundle.read("source.pdf") == original_path.read_bytes()
+            assert all(not name.startswith("_units_source/") for name in names)
+            assert "reviewed.pdf" not in names
+            assert ("_units/reviewed.pdf" in names) is not no_pdf_out
+            manifest = json.loads(bundle.read("_units/manifest.json"))
+            upload_path = home / "instance/_data/in" / job_id / "upload.json"
+            assert manifest["upload"] == json.loads(
+                upload_path.read_text(encoding="utf-8")
+            )
+            keys = list(manifest)
+            assert keys[keys.index("kind") + 1] == "upload"
+            assert manifest["created"].endswith("Z")
+            assert datetime.fromisoformat(manifest["created"]).tzinfo == UTC
+            if no_pdf_out:
+                assert "pdf" not in manifest["units"][0]
+            else:
+                assert manifest["units"][0]["pdf"] == "reviewed.pdf"
+            if not no_pdf_out:
+                with pymupdf.open(
+                    stream=bundle.read("_units/reviewed.pdf"), filetype="pdf"
+                ) as pdf:
+                    assert pdf.page_count == 1
+                    source = home / "instance/_data/in" / job_id / "source.pdf"
+                    with pymupdf.open(source) as original:
+                        assert original.page_count == 2
+                        assert pdf[0].get_text() == original[0].get_text()
+            assert ("_units/reviewed.html" in names) is get_html
+            metadata_files = [name for name in names if name.endswith(".metadata.json")]
+            assert bool(metadata_files) is get_meta
+            if get_meta:
+                assert manifest["units"][0]["metadata"] == "reviewed.metadata.json"
+                metadata = json.loads(bundle.read("_units/reviewed.metadata.json"))
+                assert metadata["unit"]["title"] == "Reviewed title"
+            else:
+                assert manifest["units"][0]["metadata"] is None
+        plan_path = home / "instance/_data/out" / job_id / "approved.plan.json"
+        assert json.loads(plan_path.read_text(encoding="utf-8")) == saved_plan
+    finally:
+        exporter.close()
+
+
+@pytest.mark.parametrize(
+    "options", [None, [], {"get_html": "true"}, {"include_source": 1}, {"other": True}]
+)
+def test_export_rejects_invalid_options(gui_app, make_pdf, options):
+    client, job_id, _plan = _saved_export_job(gui_app, make_pdf)
+    assert client.post(f"/jobs/{job_id}/export", json=options).status_code == 400
+
+
+def test_export_requires_host_adapter(gui_app, make_pdf):
+    client, job_id, _plan = _saved_export_job(gui_app, make_pdf)
+    assert client.post(f"/jobs/{job_id}/export", json={}).status_code == 503
+
+
+def test_export_access_checks_and_csrf(gui_app, make_pdf):
+    app, _adapter, _home = gui_app
+    client, job_id, _plan = _saved_export_job(gui_app, make_pdf)
+    observed = []
+
+    def deny(action, identifier):
+        observed.append((action, identifier))
+        return False
+
+    app.config["PDFWTF_GUI_ACCESS_CHECK"] = deny
+    assert client.post(f"/jobs/{job_id}/export", json={}).status_code == 403
+    assert client.get(f"/jobs/{job_id}/export/status").status_code == 403
+    assert client.get(f"/jobs/{job_id}/export/download").status_code == 403
+    assert observed == [
+        ("export", job_id),
+        ("export_status", job_id),
+        ("download_export", job_id),
+    ]
+    app.config["PDFWTF_GUI_ACCESS_CHECK"] = lambda _action, _job_id: True
+    app.config["WTF_CSRF_ENABLED"] = True
+    assert client.post(f"/jobs/{job_id}/export", json={}).status_code == 400
+
+
+def test_active_export_blocks_duplicate_analysis_and_delete(
+    gui_app, make_pdf, monkeypatch
+):
+    from threading import Event
+
+    app, _adapter, home = gui_app
+    client, job_id, _plan = _saved_export_job(gui_app, make_pdf)
+    exporter = DemoAnalysisAdapter(output_dir=home / "instance/_data/out")
+    app.config["PDFWTF_GUI_EXPORT_ADAPTER"] = exporter
+    started = Event()
+    release = Event()
+    from pdfwtf.gui import adapter as adapter_module
+
+    original = adapter_module.process_pdf
+
+    def blocked(*args, **kwargs):
+        started.set()
+        assert release.wait(10)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(adapter_module, "process_pdf", blocked)
+    try:
+        assert client.post(f"/jobs/{job_id}/export", json={}).status_code == 202
+        assert started.wait(5)
+        assert client.post(f"/jobs/{job_id}/export", json={}).status_code == 409
+        assert (
+            client.post(
+                f"/jobs/{job_id}/analyze", data={"document_type": "unit"}
+            ).status_code
+            == 409
+        )
+        assert client.delete(f"/uploads/{job_id}").status_code == 409
+        assert client.get(f"/jobs/{job_id}/export/download").status_code == 409
+    finally:
+        release.set()
+        exporter._executor.shutdown(wait=True)
+        exporter.close()
+    assert client.delete(f"/uploads/{job_id}").status_code == 200
+    assert not (home / "instance/_data/out" / job_id / "export.zip").exists()
+
+
+def test_gui_export_writes_each_included_unit_pdf_from_source(gui_app, make_pdf):
+    from zipfile import ZipFile
+    import pymupdf
+
+    app, _adapter, home = gui_app
+    client, job_id, plan = _saved_export_job(gui_app, make_pdf)
+    plan["pages"][1]["selected"] = True
+    plan["units"].extend(
+        [
+            {
+                **plan["units"][0],
+                "id": "second",
+                "input_pages": {"start": 2, "end": 2},
+            },
+            {
+                **plan["units"][0],
+                "id": "removed",
+                "selected": False,
+                "input_pages": {"start": 1, "end": 1},
+            },
+        ]
+    )
+    for page in plan["pages"]:
+        page["unit_ids"] = [
+            unit["id"]
+            for unit in plan["units"]
+            if unit["input_pages"]["start"]
+            <= page["input_page"]
+            <= unit["input_pages"]["end"]
+        ]
+    assert client.post(f"/jobs/{job_id}/plan", json=plan).status_code == 200
+    exporter = DemoAnalysisAdapter(output_dir=home / "instance/_data/out")
+    app.config["PDFWTF_GUI_EXPORT_ADAPTER"] = exporter
+    try:
+        response = client.post(f"/jobs/{job_id}/export", json={})
+        assert response.status_code == 202
+        exporter._executor.shutdown(wait=True)
+        status = client.get(response.json["status_url"])
+        assert status.json["state"] == "complete"
+        download = client.get(status.json["download_url"])
+        source = home / "instance/_data/in" / job_id / "source.pdf"
+        with (
+            ZipFile(BytesIO(download.data)) as bundle,
+            pymupdf.open(source) as original,
+        ):
+            assert {name for name in bundle.namelist() if name.endswith(".pdf")} == {
+                "_units/reviewed.pdf",
+                "_units/second.pdf",
+            }
+            for identifier, indices in (("reviewed", [0, 1]), ("second", [1])):
+                with pymupdf.open(
+                    stream=bundle.read(f"_units/{identifier}.pdf"),
+                    filetype="pdf",
+                ) as unit_pdf:
+                    assert unit_pdf.page_count == len(indices)
+                    assert [page.get_text() for page in unit_pdf] == [
+                        original[index].get_text() for index in indices
+                    ]
+            manifest = json.loads(bundle.read("_units/manifest.json"))
+            assert [unit["pdf"] for unit in manifest["units"]] == [
+                "reviewed.pdf",
+                "second.pdf",
+            ]
+    finally:
+        exporter.close()
+
+
+def test_plan_timestamps_are_server_owned_and_creation_is_preserved(
+    gui_app, make_pdf, monkeypatch
+):
+    client, job_id, plan = _saved_export_job(gui_app, make_pdf)
+    first_created = plan["created"]
+    first_updated = plan["updated"]
+    assert first_created == first_updated
+    assert first_created.endswith("Z")
+    assert datetime.fromisoformat(first_created).tzinfo == UTC
+    next_time = datetime.fromisoformat(first_updated) + timedelta(seconds=1)
+
+    class SaveClock:
+        @staticmethod
+        def now(timezone):
+            assert timezone == UTC
+            return next_time
+
+    monkeypatch.setattr("pdfwtf.gui.blueprint.datetime", SaveClock)
+    plan["created"] = "forged"
+    plan["updated"] = "forged"
+    plan["units"][0]["title"] = "Edited title"
+    assert client.post(f"/jobs/{job_id}/plan", json=plan).status_code == 200
+    saved = client.get(f"/jobs/{job_id}/plan").json
+    assert saved["created"] == first_created
+    assert saved["updated"] == next_time.isoformat().replace("+00:00", "Z")
+    assert datetime.fromisoformat(saved["updated"]) >= datetime.fromisoformat(
+        first_updated
+    )
+    assert saved["units"][0]["title"] == "Edited title"
+
+
+def test_debug_export_fails_if_saved_analysis_is_missing(gui_app, make_pdf):
+    app, _adapter, home = gui_app
+    client, job_id, _plan = _saved_export_job(gui_app, make_pdf)
+    (home / "instance/_data/out" / job_id / "source.analysis.json").unlink()
+    exporter = DemoAnalysisAdapter(output_dir=home / "instance/_data/out")
+    app.config["PDFWTF_GUI_EXPORT_ADAPTER"] = exporter
+    try:
+        response = client.post(f"/jobs/{job_id}/export", json={"debug": True})
+        assert response.status_code == 202
+        exporter._executor.shutdown(wait=True)
+        assert client.get(response.json["status_url"]).json["state"] == "failed"
+        assert client.get(f"/jobs/{job_id}/export/download").status_code == 409
+    finally:
+        exporter.close()
+
+
+@pytest.mark.parametrize(
+    "method,endpoint",
+    [("GET", "review"), ("GET", "plan"), ("DELETE", "plan"), ("POST", "plan")],
+)
+def test_plan_routes_reject_paths_outside_output(
+    gui_app, make_pdf, tmp_path, monkeypatch, method, endpoint
+):
+    client, job_id, plan = _saved_export_job(gui_app, make_pdf)
+    outside = tmp_path / "outside.plan.json"
+    original = json.dumps(plan).encode("utf-8")
+    outside.write_bytes(original)
+    monkeypatch.setattr("pdfwtf.gui.blueprint._plan_path", lambda _job_id: outside)
+    response = client.open(f"/jobs/{job_id}/{endpoint}", method=method, json=plan)
+    assert response.status_code == 404
+    assert outside.read_bytes() == original
+    response.close()
+
+
+@pytest.mark.parametrize("state", ["queued", "processing", "complete", "failed"])
+def test_plan_mutation_is_blocked_only_while_export_is_active(gui_app, make_pdf, state):
+    app, _adapter, home = gui_app
+    client, job_id, plan = _saved_export_job(gui_app, make_pdf)
+
+    class ExportStatusAdapter:
+        def export_status(self, identifier):
+            assert identifier == job_id
+            return JobStatus(state)
+
+    app.config["PDFWTF_GUI_EXPORT_ADAPTER"] = ExportStatusAdapter()
+    destination = home / "instance/_data/out" / job_id / "approved.plan.json"
+    original = destination.read_bytes()
+    plan["units"][0]["title"] = "Changed during export"
+    save = client.post(f"/jobs/{job_id}/plan", json=plan)
+    delete = client.delete(f"/jobs/{job_id}/plan")
+    if state in {"queued", "processing"}:
+        assert save.status_code == delete.status_code == 409
+        assert save.json["error"] == delete.json["error"]
+        assert destination.read_bytes() == original
+    else:
+        assert save.status_code == delete.status_code == 200
+        assert not destination.exists()

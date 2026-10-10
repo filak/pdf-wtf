@@ -121,6 +121,7 @@ if (app) {
   }
 
   function synchronizeUnit(scroll = false) {
+    updateThumbnailInclusion();
     const cards = [...document.querySelectorAll(".unit-card")];
     const containsPage = (card) => Number(card.querySelector('[name="start"]').value) <= state.currentPage
       && state.currentPage <= Number(card.querySelector('[name="end"]').value);
@@ -153,14 +154,16 @@ if (app) {
 
   async function renderThumbnail(canvas, pageNumber) {
     state.activeThumbnails += 1;
-    const page = await state.document.getPage(pageNumber);
-    const natural = page.getViewport({ scale: 1 });
-    const viewport = page.getViewport({ scale: 150 / natural.width });
-    canvas.width = Math.ceil(viewport.width);
-    canvas.height = Math.ceil(viewport.height);
-    const task = page.render({ canvasContext: canvas.getContext("2d"), viewport });
-    state.thumbnailTasks.add(task);
+    let page = null;
+    let task = null;
     try {
+      page = await state.document.getPage(pageNumber);
+      const natural = page.getViewport({ scale: 1 });
+      const viewport = page.getViewport({ scale: 150 / natural.width });
+      canvas.width = Math.ceil(viewport.width);
+      canvas.height = Math.ceil(viewport.height);
+      task = page.render({ canvasContext: canvas.getContext("2d"), viewport });
+      state.thumbnailTasks.add(task);
       await task.promise;
       canvas.previousElementSibling?.remove();
     } catch (error) {
@@ -168,7 +171,7 @@ if (app) {
     } finally {
       state.thumbnailTasks.delete(task);
       state.activeThumbnails -= 1;
-      page.cleanup();
+      page?.cleanup();
       drainThumbnailQueue();
     }
   }
@@ -243,6 +246,68 @@ if (app) {
     return column;
   }
 
+  function inclusionTargets() {
+    const cards = [...document.querySelectorAll(".unit-card")];
+    const scope = document.querySelector("#unit-inclusion-scope").value;
+    return cards.filter((card) => {
+      if (scope === "selected") return card.querySelector(".merge-unit").checked;
+      const included = state.units[Number(card.dataset.index)].selected;
+      if (scope === "included") return included;
+      if (scope === "removed") return !included;
+      return true;
+    });
+  }
+
+  function updateThumbnailInclusion() {
+    const ranges = [...document.querySelectorAll(".unit-card")].map((card) => ({
+      start: Number(card.querySelector('[name="start"]').value),
+      end: Number(card.querySelector('[name="end"]').value),
+      included: state.units[Number(card.dataset.index)].selected,
+    }));
+    document.querySelectorAll(".thumbnail-button").forEach((button) => {
+      const page = Number(button.dataset.page);
+      const units = ranges.filter((range) => range.start <= page && page <= range.end);
+      button.classList.toggle("excluded", units.length > 0 && units.every((unit) => !unit.included));
+    });
+  }
+
+  function updateInclusionSwitch() {
+    updateThumbnailInclusion();
+    const targets = inclusionTargets();
+    document.querySelectorAll(".unit-card").forEach((card) => {
+      card.hidden = !targets.includes(card);
+    });
+    const included = targets.filter((card) => state.units[Number(card.dataset.index)].selected).length;
+    const control = document.querySelector("#include-units");
+    control.disabled = targets.length === 0;
+    control.checked = targets.length > 0 && included === targets.length;
+    control.indeterminate = included > 0 && included < targets.length;
+    document.querySelector("#include-units-label").textContent = control.indeterminate
+      ? messages.mixed : control.checked ? messages.included : messages.removed;
+  }
+
+  document.querySelector("#unit-inclusion-scope").addEventListener("change", (event) => {
+    if (event.currentTarget.value === "clear-selection") {
+      document.querySelectorAll(".merge-unit").forEach((checkbox) => {
+        checkbox.checked = false;
+      });
+      event.currentTarget.value = "all";
+    }
+    updateInclusionSwitch();
+  });
+  document.querySelector("#include-units").addEventListener("change", (event) => {
+    const targets = inclusionTargets();
+    const included = targets.filter((card) => state.units[Number(card.dataset.index)].selected).length;
+    const mixed = included > 0 && included < targets.length;
+    const selected = mixed || event.currentTarget.checked;
+    targets.forEach((card) => {
+      const control = card.querySelector('input[id^="include-unit-"]');
+      control.checked = selected;
+      control.dispatchEvent(new Event("change"));
+    });
+    updateInclusionSwitch();
+  });
+
   function renderUnits() {
     const container = document.querySelector("#units");
     container.replaceChildren();
@@ -257,6 +322,7 @@ if (app) {
       merge.type = "checkbox";
       merge.className = "form-check-input merge-unit shadow-sm";
       merge.setAttribute("aria-label", messages.select_merge);
+      merge.addEventListener("change", updateInclusionSwitch);
       const heading = document.createElement("strong");
       heading.textContent = unit.id;
       const inclusion = document.createElement("div");
@@ -276,6 +342,7 @@ if (app) {
         unit.selected = included.checked;
         card.classList.toggle("excluded", !unit.selected);
         includedLabel.textContent = unit.selected ? messages.included : messages.removed;
+        updateInclusionSwitch();
       });
       inclusion.append(included, includedLabel);
       header.append(merge, heading, inclusion);
@@ -327,9 +394,11 @@ if (app) {
     });
     synchronizeUnit();
     validateUnitRanges();
+    updateInclusionSwitch();
   }
 
   function validateUnitRanges() {
+    updateThumbnailInclusion();
     const cards = [...document.querySelectorAll(".unit-card")];
     const ranges = cards.map((card) => ({
       start: Number(card.querySelector('[name="start"]').value),
@@ -486,6 +555,7 @@ if (app) {
       readUnitCards();
       state.units.sort(compareUnitPages);
       renderUnits();
+      button.classList.replace("btn-success", "btn-outline-success");
       document.querySelector("#delete-plan").disabled = false;
       const target = document.querySelector("#plan-message");
       target.replaceChildren();
@@ -507,19 +577,11 @@ if (app) {
     }
   }
 
-  document.querySelector("#delete-plan").addEventListener("click", async (event) => {
-    const button = event.currentTarget;
-    button.disabled = true;
-    try {
-      const response = await fetch(app.dataset.deletePlanUrl, {
-        method: "DELETE",
-        headers: { "X-CSRFToken": csrfToken },
-      });
-      if (!response.ok) throw new Error(messages.delete_plan_error);
+  document.querySelector("#delete-plan").addEventListener("htmx:afterRequest", (event) => {
+    if (event.detail.successful) {
       window.location.reload();
-    } catch (error) {
-      showMessage(error.message || messages.delete_plan_error);
-      button.disabled = false;
+    } else {
+      showMessage(messages.delete_plan_error);
     }
   });
   document.addEventListener("click", (event) => {

@@ -5,24 +5,56 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{% block title %}{{ _('PDF-WTF-GUI') }}{% endblock %}</title>
+    <script src="{{ url_for('pdfwtf_gui.static', filename='theme.js') }}"></script>
     <link rel="stylesheet" href="{{ url_for('pdfwtf_gui.static', filename='vendor/bootstrap/bootstrap.min.css') }}">
+    <link rel="stylesheet" href="{{ url_for('pdfwtf_gui.static', filename='vendor/bootstrap/bootstrap-icons.min.css') }}">
     <link rel="stylesheet" href="{{ url_for('pdfwtf_gui.static', filename='gui.css') }}">
     <script src="{{ url_for('pdfwtf_gui.static', filename='vendor/htmx/htmx.min.js') }}" defer></script>
   </head>
   <body class="bg-body-tertiary">
+    <svg xmlns="http://www.w3.org/2000/svg" class="d-none" aria-hidden="true">
+      <symbol id="theme-light" viewBox="0 0 16 16"><circle cx="8" cy="8" r="3"/><path d="M8 0v3m0 10v3M0 8h3m10 0h3M2 2l2 2m8 8l2 2M2 14l2-2M12 4l2-2" stroke="currentColor"/></symbol>
+      <symbol id="theme-dark" viewBox="0 0 16 16"><path d="M14 10A7 7 0 0 1 6 1a7 7 0 1 0 8 9Z"/></symbol>
+      <symbol id="theme-auto" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor"/><path d="M8 1a7 7 0 0 0 0 14Z"/></symbol>
+    </svg>
     <nav class="navbar bg-dark" data-bs-theme="dark">
       <div class="container">
         <div class="d-flex align-items-center">
-          <a class="navbar-brand" href="{{ url_for('pdfwtf_gui.index') }}">{{ _('PDF-WTF-GUI') }}</a>
-          <span class="text-light small">[demo]</span>
+          <a class="navbar-brand" href="{{ url_for('pdfwtf_gui.index') }}">
+            <span class="fw-lighter">PDF-WTF</span>
+  <small>
+    <span class="badge rounded-pill text-bg-info">
+    {{ config.PDFWTF_GUI_VERSION }}
+  </span>
+  </small>
+  <small class="fw-light">[demo]</small>
+          </a>
+
         </div>
+        <div class="d-flex align-items-center gap-3">
         <form action="{{ request.path }}" method="get" class="d-flex align-items-center gap-2">
-          <label class="text-light" for="language">{{ _('Language') }}</label>
+          <label class="text-light" for="language">
+            {{ _('Language') }}</label>
           <select id="language" name="lang" class="form-select form-select-sm shadow-sm" onchange="this.form.submit()">
-            <option value="en"{% if get_locale()|string == 'en' %} selected{% endif %}>English</option>
-            <option value="cs"{% if get_locale()|string == 'cs' %} selected{% endif %}>Čeština</option>
+            <option value="en"{% if get_locale()|string == 'en' %} selected{% endif %}>EN</option>
+            <option value="cs"{% if get_locale()|string == 'cs' %} selected{% endif %}>CS</option>
           </select>
         </form>
+        <details id="theme-picker" class="dropdown">
+          <summary id="bd-theme" class="btn btn-link nav-link text-light px-1" data-label="{{ _('Toggle theme') }}" aria-label="{{ _('Toggle theme') }}" aria-controls="bd-theme-menu">
+            <svg class="theme-icon" aria-hidden="true"><use href="#theme-auto"></use></svg>
+            <span class="visually-hidden">{{ _('Toggle theme') }}</span>
+          </summary>
+          <div id="bd-theme-menu" class="dropdown-menu dropdown-menu-end" aria-labelledby="bd-theme">
+            {% for value, label in [('light', _('Light')), ('dark', _('Dark')), ('auto', _('Auto'))] %}
+            <button type="button" class="dropdown-item d-flex align-items-center gap-2" data-bs-theme-value="{{ value }}" data-label="{{ label }}" aria-pressed="false">
+              <svg class="theme-icon opacity-50" aria-hidden="true"><use href="#theme-{{ value }}"></use></svg>
+              {{ label }}<span class="theme-check ms-auto d-none" aria-hidden="true">✓</span>
+            </button>
+            {% endfor %}
+          </div>
+        </details>
+        </div>
       </div>
     </nav>
     <main class="container py-4">

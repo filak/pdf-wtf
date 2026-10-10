@@ -40,7 +40,10 @@ Removal takes precedence when an index occurs in both lists. Derivatives cover
 all input pages. These options do not filter derivatives. With `--no-pdf-out`,
 the selection lists still set metadata flags.
 
-The `--born-digital` option overrides automatic scan detection. It bypasses
+The `--pdf_type` option accepts `auto`, `born-digital`, and `scanned`.
+The default is `auto`, which detects scanned or hybrid content.
+Use `scanned` to force scan preparation and OCR.
+Use `born-digital` to override automatic scan detection. It bypasses
 scan preparation, page rasterization for processing, and OCR, even when the
 input has no extractable text. Page selection and removal still apply. Image
 and thumbnail exports still render pages without changing the output PDF.
@@ -57,6 +60,8 @@ The default is 0, which disables optional optimization. Level 1 uses lossless
 optimization. Levels 2 and 3 permit lossy optimization. Level 3 is more aggressive.
 This option applies only when OCRmyPDF runs. It does not change PyMuPDF OCR,
 born-digital processing, or image and thumbnail exports.
+Levels 2 and 3 can show a warning if the optional `jbig2` executable is
+unavailable.
 
 A text PDF contains extractable text. A scanned PDF requires OCR to obtain
 text. A hybrid PDF contains mixed text and image content. Scan preparation
@@ -101,6 +106,22 @@ Add `skip: true` when the input index occurs in the removal list. Add
 `keep: true` when it occurs in the extraction list. Omit absent flags.
 Both flags can occur on one page.
 
+Whole-document metadata uses this structure:
+
+```json
+{
+  "input": "F:/Decko/pdf-wtf/instance/_data/in/input.pdf",
+  "output": "F:/Decko/pdf-wtf/instance/_data/out/input.pdf",
+  "doi": [],
+  "pages": {
+    "page_001": {"index": 1, "pgn": "105"},
+    "page_002": {"index": 2, "pgn": "106", "skip": true},
+    "page_003": {"index": 3, "pgn": null},
+    "page_004": {"index": 4, "pgn": "108", "keep": true}
+  }
+}
+```
+
 Derivative processing preserves one page per input page. Page splitting applies
 only to the output PDF. Removing a split input page removes all of its PDF pages.
 
@@ -135,6 +156,11 @@ the configured output directory. A job identifier keeps each upload and plan in
 a separate subdirectory.
 
 Upload and analysis use separate requests. Upload a PDF with the upload form.
+Select the PDF type: `born-digital` (default) or `scanned`.
+Upload metadata stores this value as `pdf_type` in `upload.json`.
+The GUI copies this value into `source.analysis.json` and `approved.plan.json`,
+immediately after `document_type`. Older uploads without `pdf_type` use
+`born-digital`. The server sets the plan value from upload metadata.
 The uploaded-file list appears below the form. Select the document type in the
 file row. Select Analyze to start analysis for that file. Upload does not start
 analysis. Saved uploads remain listed after the host restarts. The standalone
@@ -157,6 +183,40 @@ saved plan, and saved analysis. Deletion is blocked while analysis is queued or 
 uploads cannot be analyzed or reviewed. The delete endpoint is
 `DELETE /uploads/<job_id>`. It uses CSRF protection and the host access check
 with action `delete`.
+
+After a plan is saved, Export appears next to Review in the Process files list.
+Export opens a modal with five switches: `no-pdf-out`, `get-html`,
+`get-meta`, `include-source`, and `debug`. All switches start off each time the modal opens. With all
+switches off,
+export writes one PDF for each included unit and the manifest. `no-pdf-out`
+suppresses unit PDFs. `get-html` adds HTML for included units.
+`get-meta` adds unit `*.metadata.json` files. With `get-meta` off, the ZIP
+contains no unit metadata files and manifest `metadata` fields are `null`. Export uses existing PDF text
+and does not run OCR. The saved plan controls page and unit selection.
+The demo adapter runs export in the background. Download export downloads
+the results as `export.zip`. With `no-pdf-out` off, each included unit has
+a `<unit-id>.pdf` in `_units`. Each PDF uses that unit's reviewed range
+and selected source pages in input order. Shared pages appear in each included
+unit that contains them. The ZIP does not contain a combined document PDF.
+The GUI-only `include-source` switch adds the original uploaded `source.pdf`
+at the ZIP root. This switch is independent of `no-pdf-out`.
+The `_units/manifest.json` file always includes the complete `upload.json`
+object under `upload`, immediately after `kind`.
+The GUI-only `debug` switch copies `approved.plan.json` and
+`source.analysis.json` to the ZIP root. Both files must exist when debug
+export starts. This switch does not enable diagnostic logging.
+Closing the modal does not stop export.
+Open Export again to see the active operation. An active export cannot be
+started twice. Analysis and file deletion are blocked while export is active.
+Plan saving and plan deletion are blocked while export is queued or running.
+Export does not change the source, analysis, or saved plan.
+
+New uploads store a `created` timestamp in `upload.json`. Saving a plan
+stores `created` and `updated` timestamps in `approved.plan.json`. The host
+sets these values in ISO 8601 format with UTC `Z`. The first save sets both
+plan timestamps to the same value. Later saves preserve `created` and replace
+`updated`. Client-supplied timestamp values do not override host values.
+An older plan without `created` receives both timestamps when it is next saved.
 
 ## Component responsibilities
 
@@ -288,3 +348,127 @@ The Review toolbar has a More menu with Show analysis and Delete plan.
 Delete plan removes only `approved.plan.json` and restores the analysis units
 when Review reloads. `DELETE /jobs/<job_id>/plan` uses CSRF protection and the
 host access check with action `delete_plan`. Uploaded PDFs and analysis remain.
+
+The Units card header has an Included/Removed switch and a unit filter.
+All shows every unit. Selected shows only units with checked selection boxes.
+Included shows only included units. Removed shows only removed units.
+The switch applies to the units that match the current filter.
+With no matching units, the filter hides every unit and disables the switch.
+Clear selection unticks every unit selection checkbox and returns to All.
+Clear selection does not change unit inclusion.
+Mixed unit inclusion shows Mixed. Selecting the mixed switch includes all target
+units. Selecting the switch again removes all target units. Save plan persists
+the inclusion changes.
+
+Thumbnails for pages that belong only to removed units use a grey gradient
+and a faded image. Pages shared with an included unit keep normal styling.
+Pages outside all unit ranges keep normal styling. Inclusion and range changes
+update the thumbnails immediately.
+
+## Development commands
+
+Run commands from the repository root unless another directory is specified.
+Supply `PDFWTF_HOME` in the inherited operating-system environment.
+Run each verification command separately.
+
+### Quality checks
+
+For GUI development, install the optional dependencies:
+
+```text
+uv sync --locked --extra gui
+```
+
+Run the unit tests without external services:
+
+```text
+uv run --locked pytest tests/unit
+```
+
+Check Python formatting:
+
+```text
+uv run --locked black --check src tests
+```
+
+Check Python code:
+
+```text
+uv run --locked flake8 src tests
+```
+
+Check dependency vulnerabilities:
+
+```text
+uv run --locked pip-audit
+```
+
+### Windows unpaper wrapper
+
+Use Docker Desktop with the WSL 2 backend.
+Start Docker Desktop before using the wrapper.
+Build the unpaper image:
+
+```text
+docker build -t unpaper-alpine -f dockers/Dockerfile-unpaper .
+```
+
+Check the image:
+
+```text
+docker run --rm unpaper-alpine --version
+```
+
+Add the repository root to `PATH` so the pipeline can find `unpaper.cmd`.
+Run processing through `uv run --locked`.
+Layout, page splitting, and pre-rotation require unpaper.
+If unpaper is unavailable, processing without these options continues without
+optional unpaper cleaning.
+
+### Demo container operations
+
+Check the container state and health:
+
+```text
+docker compose -f dockers/pdf-wtf-gui-compose.yaml ps
+```
+
+Read the application logs:
+
+```text
+docker compose -f dockers/pdf-wtf-gui-compose.yaml logs -f pdf-wtf-gui
+```
+
+The GUI image includes unpaper.
+To run the CLI inside the container, place the PDF in
+`PDFWTF_HOME/instance/_data/in`.
+Run this command:
+
+```text
+docker compose -f dockers/pdf-wtf-gui-compose.yaml exec pdf-wtf-gui pdfwtf enhance input.pdf --layout single --outdir /app/instance/_data/out
+```
+
+The command writes the processed PDF below `PDFWTF_HOME/instance/_data/out`.
+Use `--output-pages` or `--pre-rotate` for other unpaper operations.
+The web review interface does not run this CLI command.
+Rebuild the GUI image after a source, dependency, or configuration change.
+
+### GUI translations
+
+Extract English and Czech messages:
+
+```text
+uv run --locked --extra gui pybabel extract -F babel.cfg -o messages.pot .
+```
+
+Update the translation catalogs:
+
+```text
+uv run --locked --extra gui pybabel update -i messages.pot -d src/pdfwtf/gui/translations
+```
+
+Compile the translation catalogs:
+
+```text
+uv run --locked --extra gui pybabel compile -d src/pdfwtf/gui/translations
+```

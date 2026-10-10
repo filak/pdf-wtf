@@ -1,6 +1,7 @@
 """Command-line entry point."""
 
 from pathlib import Path
+from typing import Literal
 
 import click
 from pydantic import BaseModel
@@ -23,7 +24,7 @@ class PdfCommand(click.Command):
             "Common options": {"output_dir", "input_path_prefix", "debug_flag", "help"},
             "Page selection": {"extract_pages_str", "skip_pages_str"},
             "Enhancement options": {
-                "born_digital_flag",
+                "pdf_type",
                 "languages",
                 "dpi",
                 "ocrlib",
@@ -33,8 +34,9 @@ class PdfCommand(click.Command):
                 "pre_rotate",
                 "remove_background_flag",
             },
-            "Unit options": {"document_type", "plan_path"},
-            "Output options": {
+            "Analyze options": {"document_type"},
+            "Export options": {
+                "plan_path",
                 "no_pdf_flag",
                 "get_doi_flag",
                 "export_format",
@@ -86,7 +88,7 @@ class CliOptions(BaseModel):
     skip_pages_str: str | None = None
     ocrlib: str = "ocrmypdf"
     optimize: int = 0
-    born_digital_flag: bool = False
+    pdf_type: Literal["auto", "born-digital", "scanned"] = "auto"
     languages: str = "eng"
     remove_background_flag: bool = False
     dpi: int = 300
@@ -151,10 +153,12 @@ def _resolve_input_pdf(
     help="Preserve input subdirectories below this path.",
 )
 @click.option(
-    "--born-digital",
-    "born_digital_flag",
-    is_flag=True,
-    help="Skip scan preparation and OCR. Image exports still render pages.",
+    "--pdf_type",
+    type=click.Choice(["auto", "born-digital", "scanned"]),
+    default="auto",
+    show_default=True,
+    help="Set the PDF type: auto detects scans, born-digital skips scan preparation "
+    "and OCR, scanned forces scan processing. Image exports still render pages.",
 )
 @click.option(
     "--doc_type",
@@ -244,7 +248,7 @@ def _resolve_input_pdf(
     "--get-doi",
     "get_doi_flag",
     is_flag=True,
-    help="Find DOI links on the first output page and write JSON metadata.",
+    help="Find DOI candidates on the first derivative page and write JSON metadata.",
 )
 @click.option(
     "--get-format",
@@ -264,7 +268,7 @@ def _resolve_input_pdf(
     "--get-img",
     "export_images_flag",
     is_flag=True,
-    help="Export each output page as an image.",
+    help="Export every input page as an image. Page selection does not filter images.",
 )
 @click.option(
     "--get-meta",
@@ -321,13 +325,13 @@ def main() -> None:
 def analyse(input_pdf: str, output_dir: str | None, **kwargs: object) -> None:
     """Write analysis JSON from existing PDF text without OCR or unit exports."""
     _execute(
-        input_pdf, output_dir, analysis_flag=True, born_digital_flag=True, **kwargs
+        input_pdf, output_dir, analysis_flag=True, pdf_type="born-digital", **kwargs
     )
 
 
 def export(input_pdf: str, output_dir: str | None, **kwargs: object) -> None:
     """Export selected derivatives from the input PDF without OCR or a PDF output."""
-    _execute(input_pdf, output_dir, born_digital_flag=True, no_pdf_flag=True, **kwargs)
+    _execute(input_pdf, output_dir, pdf_type="born-digital", no_pdf_flag=True, **kwargs)
 
 
 _COMMON_PARAMS = {"input_pdf", "output_dir", "input_path_prefix", "debug_flag"}

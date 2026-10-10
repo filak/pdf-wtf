@@ -1,0 +1,46 @@
+<div class="modal fade" id="export-options" tabindex="-1" aria-labelledby="export-options-title" aria-hidden="true"
+     data-starting="{{ _('Export is running…') }}" data-complete="{{ _('Export is complete.') }}"
+     data-error="{{ _('Export could not be completed. Try again.') }}" data-download="{{ _('Download export') }}">
+  <div class="modal-dialog modal-dialog-centered">
+    <form id="export-form" class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title fs-5" id="export-options-title">{{ _('Export options') }}</h2>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ _('Close') }}"></button>
+      </div>
+      <div class="modal-body">
+        <h3 id="export-source-filename" class="fs-6 text-break mb-3"></h3>
+        <div class="form-check form-switch mt-2">
+          <input id="export-get-html" name="get_html" class="form-check-input" type="checkbox" role="switch" aria-describedby="export-html-help">
+          <label class="form-check-label" for="export-get-html">get-html</label>
+          <div id="export-html-help" class="form-text">{{ _('Write HTML for included units.') }}</div>
+        </div>
+        <div class="form-check form-switch mt-2">
+          <input id="export-get-meta" name="get_meta" class="form-check-input" type="checkbox" role="switch" aria-describedby="export-meta-help">
+          <label class="form-check-label" for="export-get-meta">get-meta</label>
+          <div id="export-meta-help" class="form-text">{{ _('Include unit metadata JSON files in the ZIP.') }}</div>
+        </div>
+        <div class="form-check form-switch mt-2">
+          <input id="export-include-source" name="include_source" class="form-check-input" type="checkbox" role="switch" aria-describedby="export-source-help">
+          <label class="form-check-label" for="export-include-source">include-source</label>
+          <div id="export-source-help" class="form-text">{{ _('Include the original source PDF in the ZIP.') }}</div>
+        </div>
+        <div class="form-check form-switch mt-2">
+          <input id="export-no-pdf-out" name="no_pdf_out" class="form-check-input" type="checkbox" role="switch" aria-describedby="export-no-pdf-help">
+          <label class="form-check-label" for="export-no-pdf-out">no-pdf-out</label>
+          <div id="export-no-pdf-help" class="form-text">{{ _('Do not write PDF for units.') }}</div>
+        </div>
+        <div class="form-check form-switch mt-2">
+          <input id="export-debug" name="debug" class="form-check-input" type="checkbox" role="switch" aria-describedby="export-debug-help">
+          <label class="form-check-label" for="export-debug">debug</label>
+          <div id="export-debug-help" class="form-text">{{ _('Include the saved plan and analysis JSON in the ZIP.') }}</div>
+        </div>
+        <div id="export-feedback" class="mt-3" role="status" aria-live="polite"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ _('Close') }}</button>
+        <button id="export-submit" type="submit" class="btn btn-primary">{{ _('Export') }}</button>
+      </div>
+    </form>
+  </div>
+</div>
+<script src="{{ url_for('pdfwtf_gui.static', filename='export.js') }}" defer></script>

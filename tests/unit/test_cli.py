@@ -145,7 +145,8 @@ def test_cli_removes_pages_after_selection(make_pdf, tmp_path, option):
             str(source),
             "--outdir",
             str(output),
-            "--born-digital",
+            "--pdf_type",
+            "born-digital",
             "--extract",
             "2-4",
             option,
@@ -259,7 +260,8 @@ def test_relative_input_processes_pdf_and_exports(make_pdf, configured_home):
         [
             "enhance",
             source.name,
-            "--born-digital",
+            "--pdf_type",
+            "born-digital",
             "--get-doi",
             "--get-img",
             "--get-text",
@@ -346,7 +348,15 @@ def test_cli_output_flows(make_pdf, tmp_path, configured_home, no_pdf, flags):
         doc.saveIncr()
     original = source.read_bytes()
     output = tmp_path / "out"
-    args = [str(source), "--outdir", str(output), "--dpi", "72", "--born-digital"]
+    args = [
+        str(source),
+        "--outdir",
+        str(output),
+        "--dpi",
+        "72",
+        "--pdf_type",
+        "born-digital",
+    ]
     if no_pdf:
         args += ["--no-pdf-out"]
     result = CliRunner().invoke(cli.main, ["enhance", *(args + flags)])
@@ -424,7 +434,7 @@ def test_root_help_lists_actions_and_old_syntax_is_rejected(make_pdf):
         ("export", ["--optimize", "1"]),
         ("export", ["--lang", "ces"]),
         ("export", ["--remove-bg"]),
-        ("export", ["--born-digital"]),
+        ("export", ["--pdf_type", "born-digital"]),
         ("export", ["--no-pdf-out"]),
     ],
 )
@@ -479,3 +489,55 @@ def test_export_requires_explicit_output(make_pdf, tmp_path):
     assert result.exit_code == 1
     assert "No output selected" in result.output
     assert not output.exists()
+
+
+@pytest.mark.parametrize("action", ["analyse", "enhance", "export"])
+def test_document_type_flag_name(action):
+    runner = CliRunner()
+    result = runner.invoke(cli.main, [action, "--help"])
+    assert result.exit_code == 0
+    assert "--doc_type" in result.output
+    assert "--doctype" not in result.output
+    legacy = runner.invoke(cli.main, [action, "--doctype", "book"])
+    assert legacy.exit_code == 2
+    assert "No such option" in legacy.output
+
+
+def test_analysis_doc_type_book(make_pdf, tmp_path):
+    source = make_pdf(["digital"])
+    output = tmp_path / "analysis"
+    result = CliRunner().invoke(
+        cli.main,
+        ["analyse", str(source), "--doc_type", "book", "--outdir", str(output)],
+    )
+    assert result.exit_code == 0, result.output
+    analysis = json.loads((output / "input.analysis.json").read_text("utf-8"))
+    assert analysis["document_type"] == "book"
+    assert all(unit["type"] == "chapter" for unit in analysis["units"])
+
+
+@pytest.mark.parametrize("pdf_type", [None, "auto", "born-digital", "scanned"])
+def test_cli_pdf_type_values(make_pdf, monkeypatch, pdf_type):
+    received = {}
+    monkeypatch.setattr(
+        cli, "process_pdf", lambda *args, **kwargs: received.update(kwargs)
+    )
+    args = ["enhance", str(make_pdf(["digital"]))]
+    if pdf_type is not None:
+        args.extend(["--pdf_type", pdf_type])
+    result = CliRunner().invoke(cli.main, args)
+    assert result.exit_code == 0, result.output
+    assert received["pdf_type"] == (pdf_type or "auto")
+    assert "born_digital_flag" not in received
+
+
+@pytest.mark.parametrize("options", [["--pdf_type", "invalid"], ["--born-digital"]])
+def test_cli_rejects_invalid_or_obsolete_pdf_type(make_pdf, monkeypatch, options):
+    def unexpected(*args, **kwargs):
+        pytest.fail("Invalid options must not start processing.")
+
+    monkeypatch.setattr(cli, "process_pdf", unexpected)
+    result = CliRunner().invoke(
+        cli.main, ["enhance", str(make_pdf(["digital"])), *options]
+    )
+    assert result.exit_code == 2

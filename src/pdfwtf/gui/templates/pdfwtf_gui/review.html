@@ -3,12 +3,12 @@
 {% block content %}
 <div id="review-app"
      data-document-url="{{ url_for('pdfwtf_gui.document', job_id=job_id) }}"
-     data-save-url="{{ url_for('pdfwtf_gui.save_plan', job_id=job_id) }}"
-     data-delete-plan-url="{{ url_for('pdfwtf_gui.delete_plan', job_id=job_id) }}">
+     data-save-url="{{ url_for('pdfwtf_gui.save_plan', job_id=job_id) }}">
   <div id="review-toolbar" class="sticky-top bg-body-tertiary">
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 pb-2">
       <div>
-        <h1 class="h3 mb-1">{{ _('Review') }} <span class="badge theme-primary">{{ {
+        <h1 class="h3 mb-1">{{ _('Review') }}
+          <span class="fs-6 badge theme-primary">{{ {
           'auto': _('Automatic'),
           'unit': _('Single unit'),
           'journal-issue': _('Journal issue'),
@@ -19,23 +19,32 @@
         }.get(analysis.document_type, analysis.document_type) }}</span>
         </h1>
       </div>
-      {% if analysis.source.bibliographic.journal_title %}
+      {% if analysis.source.bibliographic %}
       <div class="flex-grow-1 text-center text-break fw-semibold px-2">
-        {{ analysis.source.bibliographic.journal_title }}
+        <span class="badge text-bg-secondary">{{ analysis.source.bibliographic.kind }}</span>
+        {{ analysis.source.bibliographic.book_title | truncate(30) }}
+        {{ analysis.source.bibliographic.journal_title | truncate(30) }}
         {{ analysis.source.bibliographic.year }},
         {{ analysis.source.bibliographic.volume }}
         ({{ analysis.source.bibliographic.issue }})
+        {{ analysis.source.bibliographic.issn }}
+        {{ analysis.source.bibliographic.isbn }}
       </div>
       {% endif %}
       <div class="d-flex gap-2">
-        <button id="add-unit" class="btn btn-outline-primary shadow-sm" type="button">{{ _('Add unit') }}</button>
-        <button id="merge-units" class="btn btn-outline-primary shadow-sm" type="button">{{ _('Merge selected') }}</button>
-        <button id="save-plan" class="btn btn-primary shadow-sm" type="button">{{ _('Save plan') }}</button>
+        <button id="add-unit" class="btn btn-sm btn-outline-primary shadow-sm" type="button">{{ _('Add unit') }}</button>
+        <button id="merge-units" class="btn btn-sm btn-outline-primary shadow-sm" type="button">{{ _('Merge selected') }}</button>
+        <button id="save-plan" class="btn btn-sm {{ 'btn-outline-success' if plan else 'btn-success' }} shadow-sm" type="button">{{ _('Save plan') }}</button>
         <details id="review-more" class="position-relative">
-          <summary class="btn btn-outline-secondary shadow-sm"><span aria-hidden="true">☰</span> {{ _('More') }}</summary>
+          <summary class="btn btn-sm btn-outline-secondary shadow-sm"><span aria-hidden="true">☰</span> {{ _('More') }}</summary>
           <div class="dropdown-menu dropdown-menu-end d-block shadow-sm">
-            <a class="dropdown-item" href="{{ url_for('pdfwtf_gui.download_analysis', job_id=job_id, inline=1) }}" target="_blank" rel="noopener">{{ _('Show analysis') }}</a>
-            <button id="delete-plan" class="dropdown-item text-danger" type="button"{% if not plan %} disabled{% endif %}>{{ _('Delete plan') }}</button>
+            <a class="dropdown-item text-success" href="{{ url_for('pdfwtf_gui.index') }}">{{ _('Exports') }}</a>
+            <a class="dropdown-item text-primary" href="{{ url_for('pdfwtf_gui.download_analysis', job_id=job_id, inline=1) }}" target="_blank" rel="noopener">{{ _('Show analysis') }}</a>
+            <button id="delete-plan" class="dropdown-item text-danger" type="button"
+                    hx-delete="{{ url_for('pdfwtf_gui.delete_plan', job_id=job_id) }}"
+                    hx-confirm="{{ _('Delete the approved plan?') }}"
+                    hx-headers='{{ {"X-CSRFToken": csrf_token()} | tojson }}'
+                    hx-swap="none" hx-disabled-elt="this"{% if not plan %} disabled{% endif %}>{{ _('Delete plan') }}</button>
           </div>
         </details>
       </div>
@@ -56,7 +65,8 @@
 
   <div id="plan-message" aria-live="polite"></div>
   <div class="review-layout">
-    <aside class="thumbnail-panel card" aria-label="{{ _('Page thumbnails') }}">
+    <aside class="thumbnail-panel card">
+      <div class="card-header"><h2 class="h5 mb-0">{{ _('Pages') }}</h2></div>
       <div id="thumbnails" class="card-body p-2"></div>
     </aside>
     <section class="preview-panel card">
@@ -78,12 +88,27 @@
       </div>
     </section>
     <section class="units-panel card">
-      <div class="card-header"><h2 class="h5 mb-0">{{ _('Units') }}</h2></div>
+      <div class="card-header d-flex flex-wrap align-items-center gap-2">
+        <h2 class="h5 mb-0 me-auto">{{ _('Units') }}</h2>
+        <label class="visually-hidden" for="unit-inclusion-scope">{{ _('Apply to units') }}</label>
+        <select id="unit-inclusion-scope" class="form-select form-select-sm w-auto">
+          <option value="all">{{ _('All') }}</option>
+          <option value="selected">{{ _('Selected') }}</option>
+          <option value="included">{{ _('Included') }}</option>
+          <option value="removed">{{ _('Removed') }}</option>
+          <option value="clear-selection">{{ _('Clear selection') }}</option>
+        </select>
+        <div class="form-check form-switch mb-0">
+          <input id="include-units" class="form-check-input" type="checkbox" role="switch" aria-label="{{ _('Include or exclude units') }}">
+          <label id="include-units-label" class="form-check-label small" for="include-units">{{ _('Included') }}</label>
+        </div>
+      </div>
       <div id="units" class="card-body"></div>
     </section>
   </div>
 </div>
 
+{% include "pdfwtf_gui/_delete_confirmation.html" %}
 <script id="analysis-data" type="application/json">{{ analysis|tojson }}</script>
 <script id="plan-data" type="application/json">{{ plan|tojson }}</script>
 <script id="gui-messages" type="application/json">{{ {
@@ -93,7 +118,8 @@
   'loading_error': _('The PDF preview could not load.'),
   'merge_title': _('Merged unit'),
   'removed': _('Removed'),
-  'select_merge': _('Select for merge'),
+  'select_merge': _('Select unit'),
+  'mixed': _('Mixed'),
   'title': _('Title'),
   'type': _('Type'),
   'start_page': _('Start page'),

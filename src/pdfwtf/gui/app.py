@@ -11,6 +11,7 @@ from flask import Flask, request
 from flask_babel import Babel, get_locale
 from flask_wtf.csrf import CSRFProtect
 
+from pdfwtf import __version__
 from pdfwtf.configuration import load_config
 from pdfwtf.gui.adapter import DemoAnalysisAdapter
 from pdfwtf.gui.blueprint import create_gui_blueprint
@@ -31,6 +32,7 @@ def create_app(overrides: Mapping[str, Any] | None = None) -> Flask:
         BABEL_DEFAULT_LOCALE="en",
         BABEL_SUPPORTED_LOCALES=("en", "cs"),
         BABEL_TRANSLATION_DIRECTORIES=str(Path(__file__).parent / "translations"),
+        PDFWTF_GUI_VERSION=__version__,
         PDFWTF_GUI_INPUT_DIR=input_dir,
         PDFWTF_GUI_OUTPUT_DIR=output_dir,
         PDFWTF_GUI_BASE_TEMPLATE="pdfwtf_gui/standalone_base.html",
@@ -45,6 +47,7 @@ def create_app(overrides: Mapping[str, Any] | None = None) -> Flask:
             output_dir=Path(app.config["PDFWTF_GUI_OUTPUT_DIR"])
         )
         app.config["PDFWTF_GUI_ANALYSIS_ADAPTER"] = adapter
+        app.config.setdefault("PDFWTF_GUI_EXPORT_ADAPTER", adapter)
         atexit.register(adapter.close)
 
     Babel(app, locale_selector=_select_locale)

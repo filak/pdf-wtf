@@ -372,3 +372,103 @@ msgstr ""
 
 msgid "Magazine issue"
 msgstr ""
+
+
+#: src/pdfwtf/gui/blueprint.py src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html
+msgid "Export"
+msgstr ""
+
+
+#: src/pdfwtf/gui/blueprint.py src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html
+msgid "Export options"
+msgstr ""
+
+
+#: src/pdfwtf/gui/blueprint.py src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html
+msgid "Close"
+msgstr ""
+
+
+#: src/pdfwtf/gui/blueprint.py src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html
+msgid "Export is running…"
+msgstr ""
+
+
+#: src/pdfwtf/gui/blueprint.py src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html
+msgid "Export is complete."
+msgstr ""
+
+
+#: src/pdfwtf/gui/blueprint.py src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html
+msgid "Export could not be completed. Try again."
+msgstr ""
+
+
+#: src/pdfwtf/gui/blueprint.py src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html
+msgid "Download export"
+msgstr ""
+
+
+#: src/pdfwtf/gui/blueprint.py src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html
+msgid "Do not write unit PDFs."
+msgstr ""
+
+
+#: src/pdfwtf/gui/blueprint.py src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html
+msgid "Write HTML for included units."
+msgstr ""
+
+
+#: src/pdfwtf/gui/blueprint.py src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html
+msgid "Select valid export options."
+msgstr ""
+
+
+#: src/pdfwtf/gui/blueprint.py src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html
+msgid "The saved plan could not be read."
+msgstr ""
+
+
+#: src/pdfwtf/gui/blueprint.py src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html
+msgid "Wait for the active operation to finish."
+msgstr ""
+
+
+#: src/pdfwtf/gui/blueprint.py src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html
+msgid "Export could not start. Try again."
+msgstr ""
+
+
+#: src/pdfwtf/gui/blueprint.py src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html
+msgid "Export failed. Check the host logs."
+msgstr ""
+
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html
+msgid "Include the original source PDF in the ZIP."
+msgstr ""
+
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html
+msgid "Include the saved plan and analysis JSON in the ZIP."
+msgstr ""
+
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html
+msgid "Include unit metadata JSON files in the ZIP."
+msgstr ""
+
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html
+msgid "Exports"
+msgstr ""
+
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/input.html src/pdfwtf/gui/templates/pdfwtf_gui/_uploads.html
+msgid "Born-digital"
+msgstr ""
+
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/input.html src/pdfwtf/gui/templates/pdfwtf_gui/_uploads.html
+msgid "Scanned"
+msgstr ""

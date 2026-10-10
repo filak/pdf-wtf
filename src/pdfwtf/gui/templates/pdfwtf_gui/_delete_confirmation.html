@@ -1,0 +1,16 @@
+<div class="modal fade" id="delete-confirmation" tabindex="-1" aria-labelledby="delete-confirmation-title" aria-describedby="delete-confirmation-message" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title fs-5" id="delete-confirmation-title">{{ _('Confirm deletion') }}</h2>
+      </div>
+      <div class="modal-body" id="delete-confirmation-message"></div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" id="delete-confirmation-cancel">{{ _('Cancel') }}</button>
+        <button type="button" class="btn btn-danger" id="delete-confirmation-submit">{{ _('Delete') }}</button>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="{{ url_for('pdfwtf_gui.static', filename='vendor/bootstrap/bootstrap.bundle.min.js') }}" defer></script>
+<script src="{{ url_for('pdfwtf_gui.static', filename='confirmation.js') }}" defer></script>

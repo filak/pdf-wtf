@@ -457,3 +457,40 @@ def test_unit_publication_failure_preserves_pdf(
     else:
         assert not pdf.exists()
     assert not list((configured_home / "instance/temp").iterdir())
+
+
+def test_scanned_pdf_type_forces_scan_processing(make_pdf, tmp_path, monkeypatch):
+    source = make_pdf(["digital"])
+    observed = []
+
+    def unexpected(*args, **kwargs):
+        pytest.fail("Explicit scanned type must bypass automatic detection.")
+
+    def prepare(source, *args):
+        observed.append("prepare")
+        return [], False
+
+    def ocr(source, destination, *args, **kwargs):
+        observed.append("ocr")
+        shutil.copy2(source, destination)
+
+    monkeypatch.setattr(pipeline, "is_scanned_or_hybrid", unexpected)
+    monkeypatch.setattr(pipeline, "_process_scanned", prepare)
+    monkeypatch.setattr(pipeline, "run_ocr", ocr)
+    pipeline.process_pdf(source, tmp_path / "out", pdf_type="scanned", dpi=72)
+    assert observed == ["prepare", "ocr"]
+    assert page_count(tmp_path / "out/input.pdf") == 1
+
+
+def test_born_digital_pdf_type_bypasses_detection_and_ocr(
+    make_pdf, tmp_path, monkeypatch
+):
+    def unexpected(*args, **kwargs):
+        pytest.fail("Born-digital type must bypass detection and scan processing.")
+
+    source = make_pdf(["scan"])
+    monkeypatch.setattr(pipeline, "is_scanned_or_hybrid", unexpected)
+    monkeypatch.setattr(pipeline, "_process_scanned", unexpected)
+    monkeypatch.setattr(pipeline, "run_ocr", unexpected)
+    pipeline.process_pdf(source, tmp_path / "out", pdf_type="born-digital")
+    assert page_count(tmp_path / "out/input.pdf") == 1

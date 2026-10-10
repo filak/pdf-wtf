@@ -281,10 +281,19 @@ def process_pdf(
     document_type: str | None = None,
     plan_path: str | Path | None = None,
     export_html_flag: bool = False,
+    pdf_type: str = "auto",
+    export_unit_pdfs_flag: bool = False,
 ) -> None:
     """Process one PDF without replacing its source or publishing partial OCR."""
+    if pdf_type not in {"auto", "born-digital", "scanned"}:
+        raise ValueError("PDF type must be auto, born-digital, or scanned.")
+    if born_digital_flag and pdf_type == "scanned":
+        raise ValueError("born_digital_flag cannot be combined with pdf_type scanned.")
+    born_digital_flag = born_digital_flag or pdf_type == "born-digital"
     if analysis_flag and plan_path is not None:
         raise ValueError("--analysis and --plan are mutually exclusive.")
+    if export_unit_pdfs_flag and plan_path is None:
+        raise ProcessingError("Unit PDF export requires a reviewed plan.")
     unit_workflow = analysis_flag or plan_path is not None or export_html_flag
     if set(unit_types) - UNIT_TYPES:
         raise ProcessingError("Unknown unit type in --unit_type.")
@@ -294,7 +303,7 @@ def process_pdf(
         raise ProcessingError("--unit_type requires --plan or --get-html for export.")
     if unit_workflow and not born_digital_flag:
         raise ValueError(
-            "Container analysis and unit export currently require --born-digital."
+            "Container analysis and unit export currently require --pdf_type born-digital."
         )
     if analysis_flag and any(
         (
@@ -358,7 +367,7 @@ def process_pdf(
         or pre_rotate is not None
     ):
         raise ValueError(
-            "--born-digital cannot be combined with --remove-bg, --layout "
+            "--pdf_type born-digital cannot be combined with --remove-bg, --layout "
             "(single or double), --output-pages, or --pre-rotate."
         )
     for name in (scan_dir, txt_dir, img_dir, thumb_dir):
@@ -428,6 +437,7 @@ def process_pdf(
                 selected_units,
                 staged_units,
                 include_html=export_html_flag,
+                include_pdf=export_unit_pdfs_flag,
             )
         pages_to_keep = (
             [page["input_page"] for page in unit_plan["pages"] if page["selected"]]
@@ -455,7 +465,9 @@ def process_pdf(
             working_pdf = directory / "working.pdf"
             result = directory / "result.pdf"
             shutil.copy2(source, working_pdf)
-            if not born_digital_flag and is_scanned_or_hybrid(working_pdf):
+            if not born_digital_flag and (
+                pdf_type == "scanned" or is_scanned_or_hybrid(working_pdf)
+            ):
                 images, rotated = _process_scanned(
                     working_pdf,
                     directory,

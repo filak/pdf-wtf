@@ -31,7 +31,7 @@ The source PDF is always the required positional argument. `--doc_type`
 describes document structure. It does not describe whether the PDF is scanned.
 The `analyse` and `export` actions use existing PDF text and do not run OCR.
 When `enhance` processes a reviewed plan or exports unit HTML, use
-`--born-digital`. Image-only pages have no extracted text in these workflows.
+`--pdf_type born-digital`. Image-only pages have no extracted text in these workflows.
 
 The `export` action accepts repeatable `--unit_type TYPE` filters.
 Without a filter, selection is unchanged. Export filters the selected units from
@@ -270,6 +270,10 @@ A reviewed plan has this shape:
 }
 ```
 
+The GUI host adds top-level `created` and `updated` ISO 8601 UTC timestamps
+to its saved plans. These values describe plan saves. They do not affect
+page or unit selection. Older plans without these fields remain valid.
+
 The processor validates the complete plan before it writes result files. It
 checks the schema version, source fingerprint, page count, bibliographic source,
 document type, page records, unit IDs, titles, types, selection values,
@@ -295,11 +299,26 @@ supplies `--doc_type`, it must equal the plan's document type.
 
 Unit results are separate from whole-document derivatives. They are written to
 `_units_<source-stem>`.
+The manifest `created` value records export creation time in ISO 8601 UTC
+format ending in `Z`. Each export writes a new creation timestamp.
 
-`manifest.json` has `schema_version`, `kind`, `source`, `document_type`, and a
+`manifest.json` has `schema_version`, `kind`, `created`, `source`, `document_type`, and a
 `units` array. Each unit entry repeats its ID, title, type, input range, and
 selected input pages. It links the unit metadata filename and the optional HTML
 filename.
+
+GUI plan export can also write `<unit-id>.pdf` for each selected unit.
+The PDF contains only selected source pages inside that unit's reviewed range,
+in input order. Overlapping units each include their selected shared pages.
+Removed units produce no results. With `no-pdf-out` on, GUI export omits all
+unit PDFs. When a unit PDF is written, its manifest entry includes a `pdf`
+field with the filename. GUI export does not write a combined document PDF.
+Inside the GUI ZIP, unit results use `_units`. Its manifest always includes
+the complete upload metadata under `upload`, immediately after `kind`.
+The GUI-only `include-source` switch optionally adds the original uploaded
+`source.pdf` at the ZIP root. All GUI export switches default to off. The GUI `get-meta` switch controls
+unit metadata JSON files in the ZIP. When off, these files are omitted and
+manifest unit `metadata` fields are `null`. The manifest remains in the ZIP.
 
 `<unit-id>.metadata.json` has `schema_version`, `kind`, `source`,
 `document_type`, `unit`, `figures`, `warnings`, and `semantic_blocks`. Each
@@ -311,11 +330,23 @@ ID, input page, bounding box, image xref, and optional caption.
 use detected printed numbers. If detection is uncertain, the marker explicitly
 uses the input page index. Extracted text is HTML-escaped. The fragment has no
 script, positioning CSS, or image URL.
+A Figures section appears at the end of the HTML fragment.
+The fragment has no `html`, `head`, or `body` wrapper tags.
+It uses a standard `ul`/`li` list in figure occurrence order. Each item has
+`id -- caption`. The ID is a local link to that figure placeholder.
+The placeholder anchor uses the figure `id` value. Figure IDs must be
+unique within the fragment. Captionless figures use an empty caption. With no figures, the
+section contains an empty list. Figure IDs and captions are
+HTML-escaped.
 
 ## Reconstruction limits
 
-The reading-order implementation handles common single-column pages and two
-columns separated by full-width blocks. It uses native font size and font names
+The reading-order implementation detects whitespace gutters for common single-,
+two-, and three-column pages. It reads each column from top to bottom before
+moving right. Full-width blocks divide the page into separate column regions.
+Native text blocks that contain separate columns are split at line-level gutters.
+Ambiguous overlaps use top-to-bottom order and require review. It uses native
+font size and font names
 for conservative heading classification. It joins wrapped lines and removes a
 hyphen only before a lowercase continuation.
 

@@ -281,6 +281,13 @@ def test_raster_figure_has_stable_placeholder_and_caption(tmp_path):
     metadata = json.loads((destination / "article.metadata.json").read_text("utf-8"))
     assert "Figure figure-001-001" in html
     assert "<figcaption>Figure 1. Reviewed caption.</figcaption>" in html
+    assert '<div id="figure-001-001" class="figure-placeholder">' in html
+    assert (
+        '<li><a href="#figure-001-001">figure-001-001</a> -- Figure 1. Reviewed caption.</li>'
+        in html
+    )
+    assert html.index("<h2>Figures</h2>") > html.index("</figure>")
+    assert html.endswith("</ul>\n</section>\n")
     assert "A navy rectangle" not in html
     assert "Printed page iv" in html
     assert "Reviewed figure title" in html
@@ -343,7 +350,14 @@ def test_cli_end_to_end_analysis_plan_and_html(make_pdf, tmp_path):
     analysis_output = tmp_path / "analysis-out"
     result = CliRunner().invoke(
         cli.main,
-        ["analyse", str(source), "--outdir", str(analysis_output), "--doctype", "unit"],
+        [
+            "analyse",
+            str(source),
+            "--outdir",
+            str(analysis_output),
+            "--doc_type",
+            "unit",
+        ],
     )
     assert result.exit_code == 0, result.output
     analysis = json.loads((analysis_output / "input.analysis.json").read_text("utf-8"))
@@ -372,7 +386,8 @@ def test_cli_end_to_end_analysis_plan_and_html(make_pdf, tmp_path):
             str(source),
             "--outdir",
             str(pdf_output),
-            "--born-digital",
+            "--pdf_type",
+            "born-digital",
             "--plan",
             str(plan_path),
         ],
@@ -451,6 +466,7 @@ def test_captionless_reviewed_figure_exports_html(tmp_path):
     html = (destination / "article.html").read_text(encoding="utf-8")
     assert "Figure figure-1" in html
     assert "<figcaption>" not in html
+    assert '<li><a href="#figure-1">figure-1</a> -- </li>' in html
 
 
 def test_overlapping_figure_preserves_text_and_warns(tmp_path):
@@ -785,3 +801,126 @@ def test_cli_unit_type_rejects_unknown_type():
     result = CliRunner().invoke(cli.main, ["export", "--unit_type", "invalid"])
     assert result.exit_code == 2
     assert "Invalid value for '--unit_type'" in result.output
+
+
+@pytest.mark.parametrize(
+    "title, expected",
+    [
+        ("Introduction to physics", "chapter"),
+        ("Preface", "preface"),
+        ("Table of contents", "table-of-contents"),
+    ],
+)
+def test_book_unit_type_default(title, expected):
+    signal = {"author_pattern": True, "abstract_pattern": True, "doi_pattern": True}
+    assert _unit_type("book", {"title": title}, signal) == expected
+
+
+def test_book_analysis_defaults_units_to_chapters(tmp_path):
+    source = make_structured_pdf(tmp_path / "book.pdf")
+    analysis = analyze_container(source, "book")
+    assert analysis["units"]
+    assert all(unit["type"] == "chapter" for unit in analysis["units"])
+
+
+def test_html_figure_links_use_figure_ids_and_untrusted_text_is_escaped():
+    from html.parser import HTMLParser
+    from pdfwtf.container_analysis import render_html
+
+    class Elements(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.tags = []
+
+        def handle_starttag(self, tag, attrs):
+            self.tags.append((tag, dict(attrs)))
+
+    html = render_html(
+        [
+            {"kind": "figure", "id": 'same"<&', "caption": "<script>unsafe</script>"},
+            {"kind": "paragraph", "text": "Last content paragraph."},
+            {"kind": "figure", "id": 'other"<&', "caption": None},
+        ],
+    )
+    parsed = Elements()
+    parsed.feed(html)
+    placeholders = [
+        attrs["id"]
+        for tag, attrs in parsed.tags
+        if tag == "div" and attrs.get("class") == "figure-placeholder"
+    ]
+    links = [attrs["href"] for tag, attrs in parsed.tags if tag == "a"]
+    assert placeholders == ['same"<&', 'other"<&']
+    assert links == [f"#{identifier}" for identifier in placeholders]
+    assert not any(tag == "script" for tag, _attrs in parsed.tags)
+    assert not any(tag in {"html", "head", "body"} for tag, _attrs in parsed.tags)
+    assert "-- &lt;script&gt;unsafe&lt;/script&gt;</li>" in html
+    assert "other&quot;&lt;&amp;</a> -- </li>" in html
+    assert html.index("<h2>Figures</h2>") > html.index("Last content paragraph.")
+    assert html.endswith("</ul>\n</section>\n")
+
+
+def test_html_without_figures_has_final_empty_figure_list():
+    from pdfwtf.container_analysis import render_html
+
+    html = render_html([{"kind": "paragraph", "text": "Article content."}])
+    assert html.startswith("<p>Article content.</p>")
+    assert "<body" not in html
+    assert "</body>" not in html
+    assert html.endswith(
+        '<section class="figures">\n<h2>Figures</h2>\n<ul>\n' "</ul>\n</section>\n"
+    )
+
+
+@pytest.mark.parametrize("column_starts", [(25, 190), (25, 225, 425)])
+def test_column_reading_order_uses_gutters_not_page_midpoint(tmp_path, column_starts):
+    from pdfwtf.container_analysis import reconstruct_unit
+
+    source = tmp_path / "column-flow.pdf"
+    with fitz.open() as document:
+        page = document.new_page(width=600, height=600)
+        for row, y in enumerate((110, 155, 200)):
+            for column, x in enumerate(column_starts):
+                page.insert_text(
+                    (x, y), f"Column {column + 1} passage {row + 1}.", fontsize=10
+                )
+        document.save(source)
+    with fitz.open(source) as document:
+        blocks, _figures, _warnings = reconstruct_unit(document, unit("article", 1, 1))
+    text = " ".join(
+        block["text"] for block in blocks if block["kind"] in {"paragraph", "heading"}
+    )
+    expected = [
+        f"Column {column + 1} passage {row + 1}."
+        for column in range(len(column_starts))
+        for row in range(3)
+    ]
+    assert all(text.count(value) == 1 for value in expected)
+    assert [text.index(value) for value in expected] == sorted(
+        text.index(value) for value in expected
+    )
+
+
+def test_three_columns_restart_below_full_width_separator():
+    from pdfwtf.container_analysis import _ordered_items
+
+    items = [{"id": "heading", "bbox": [20, 10, 580, 35]}]
+    for band, top in (("upper", 60), ("lower", 300)):
+        for row, offset in enumerate((0, 70)):
+            for column, x in enumerate((20, 220, 420)):
+                items.append(
+                    {
+                        "id": f"{band}-{column}-{row}",
+                        "bbox": [x, top + offset, x + 140, top + offset + 20],
+                    }
+                )
+    items.append({"id": "separator", "bbox": [20, 230, 580, 260]})
+    expected = [
+        "heading",
+        *(f"upper-{column}-{row}" for column in range(3) for row in range(2)),
+        "separator",
+        *(f"lower-{column}-{row}" for column in range(3) for row in range(2)),
+    ]
+    assert [
+        item["id"] for item in _ordered_items(items, {"width": 600, "height": 600})
+    ] == expected

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, UTC
 from pathlib import Path
 import re
 import secrets
@@ -25,7 +26,11 @@ from werkzeug.datastructures import FileStorage
 from werkzeug.exceptions import RequestEntityTooLarge
 
 from pdfwtf.container_analysis import PlanValidationError, validate_plan
-from pdfwtf.gui.adapter import AnalysisAdapter
+from pdfwtf.gui.adapter import (
+    AnalysisAdapter,
+    ExportAdapter,
+    document_with_pdf_type,
+)
 
 _JOB_ID = re.compile(r"^[A-Za-z0-9_-]{20,128}$")
 _DOCUMENT_TYPES = (
@@ -84,6 +89,16 @@ def create_gui_blueprint() -> Blueprint:
         if error:
             return render_template("pdfwtf_gui/_job_error.html", message=error), 400
 
+        pdf_type = request.form.get("pdf_type", "born-digital")
+        if pdf_type not in {"born-digital", "scanned"}:
+            return (
+                render_template(
+                    "pdfwtf_gui/_job_error.html",
+                    message=_("Select a valid PDF type."),
+                ),
+                400,
+            )
+
         job_id = secrets.token_urlsafe(24)
         job_dir = _input_dir() / job_id
         job_dir.mkdir(parents=True, exist_ok=False)
@@ -105,7 +120,12 @@ def create_gui_blueprint() -> Blueprint:
                 )
             (job_dir / "upload.json").write_text(
                 json.dumps(
-                    {"filename": upload.filename, "document_type": "auto"},
+                    {
+                        "filename": upload.filename,
+                        "created": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+                        "document_type": "auto",
+                        "pdf_type": pdf_type,
+                    },
                     ensure_ascii=False,
                 ),
                 encoding="utf-8",
@@ -130,6 +150,10 @@ def create_gui_blueprint() -> Blueprint:
     def delete_upload(job_id: str) -> Response:
         _valid_job_id(job_id)
         _authorize("delete", job_id)
+        if _export_active(job_id):
+            return _delete_error(
+                job_id, _("Wait for the active operation to finish."), 409
+            )
         try:
             status = _adapter().status(job_id)
         except KeyError:
@@ -142,16 +166,19 @@ def create_gui_blueprint() -> Blueprint:
         metadata = source.parent / "upload.json"
         plan = _plan_path(job_id)
         analysis = plan.parent / "source.analysis.json"
+        archive = plan.parent / "export.zip"
         paths = (
             (source, _input_dir()),
             (metadata, _input_dir()),
             (plan, _output_dir()),
             (analysis, _output_dir()),
+            (archive, _output_dir()),
         )
         if any(not path.resolve().is_relative_to(root) for path, root in paths):
             abort(404)
         try:
             # Remove only the files owned by this upload, never an entire tree.
+            archive.unlink(missing_ok=True)
             analysis.unlink(missing_ok=True)
             plan.unlink(missing_ok=True)
             metadata.unlink(missing_ok=True)
@@ -170,6 +197,14 @@ def create_gui_blueprint() -> Blueprint:
     def start_job(job_id: str) -> tuple[str, int] | str:
         _valid_job_id(job_id)
         _authorize("start", job_id)
+        if _export_active(job_id):
+            return (
+                render_template(
+                    "pdfwtf_gui/_job_error.html",
+                    message=_("Wait for the active operation to finish."),
+                ),
+                409,
+            )
         source = _input_dir() / job_id / "source.pdf"
         if not source.is_file() or not source.resolve().is_relative_to(_input_dir()):
             abort(404)
@@ -222,6 +257,7 @@ def create_gui_blueprint() -> Blueprint:
                 job_id=job_id,
                 demo=status.demo,
                 update_actions=request.headers.get("HX-Request") == "true",
+                has_plan=_has_plan(job_id),
                 document_type=_upload_metadata(
                     _input_dir() / job_id / "source.pdf"
                 ).get("document_type", "auto"),
@@ -260,6 +296,8 @@ def create_gui_blueprint() -> Blueprint:
             return redirect(url_for("pdfwtf_gui.index"))
         plan = None
         destination = _plan_path(job_id)
+        if not destination.resolve().is_relative_to(_output_dir()):
+            abort(404)
         if destination.is_file():
             try:
                 plan = json.loads(destination.read_text(encoding="utf-8"))
@@ -321,10 +359,107 @@ def create_gui_blueprint() -> Blueprint:
         response.headers["Cache-Control"] = "private, no-store"
         return response
 
+    @blueprint.post("/jobs/<job_id>/export")
+    def start_export(job_id: str) -> tuple[Response, int]:
+        _valid_job_id(job_id)
+        _authorize("export", job_id)
+        source = _input_dir() / job_id / "source.pdf"
+        plan_path = _plan_path(job_id)
+        if (
+            not source.is_file()
+            or not source.resolve().is_relative_to(_input_dir())
+            or not plan_path.resolve().is_relative_to(_output_dir())
+            or not plan_path.is_file()
+        ):
+            abort(404)
+        options = request.get_json(silent=True)
+        if (
+            not isinstance(options, dict)
+            or set(options)
+            - {"no_pdf_out", "get_html", "get_meta", "include_source", "debug"}
+            or any(type(value) is not bool for value in options.values())
+        ):
+            return jsonify(error=_("Select valid export options.")), 400
+        try:
+            plan = json.loads(plan_path.read_text(encoding="utf-8"))
+            if not isinstance(plan, dict):
+                raise ValueError("Invalid plan.")
+        except (OSError, ValueError):
+            return jsonify(error=_("The saved plan could not be read.")), 400
+        adapter = _export_adapter()
+        try:
+            analysis_status = _adapter().status(job_id)
+        except KeyError:
+            analysis_status = None
+        if analysis_status is not None and analysis_status.state in {
+            "queued",
+            "processing",
+        }:
+            return jsonify(error=_("Wait for the active operation to finish.")), 409
+        try:
+            adapter.start_export(job_id, source, plan, **options)
+        except LookupError:
+            return jsonify(error=_("Wait for the active operation to finish.")), 409
+        except Exception:
+            current_app.logger.exception("Cannot start GUI export")
+            return jsonify(error=_("Export could not start. Try again.")), 500
+        return (
+            jsonify(status_url=url_for("pdfwtf_gui.export_status", job_id=job_id)),
+            202,
+        )
+
+    @blueprint.get("/jobs/<job_id>/export/status")
+    def export_status(job_id: str) -> Response:
+        _valid_job_id(job_id)
+        _authorize("export_status", job_id)
+        source = _input_dir() / job_id / "source.pdf"
+        if not source.is_file() or not source.resolve().is_relative_to(_input_dir()):
+            abort(404)
+        try:
+            status = _export_adapter().export_status(job_id)
+        except KeyError:
+            abort(404)
+        payload = {"state": status.state}
+        if status.state == "complete":
+            payload["download_url"] = url_for(
+                "pdfwtf_gui.download_export", job_id=job_id
+            )
+        elif status.state == "failed":
+            payload["error"] = _("Export failed. Check the host logs.")
+        response = jsonify(payload)
+        response.headers["Cache-Control"] = "private, no-store"
+        return response
+
+    @blueprint.get("/jobs/<job_id>/export/download")
+    def download_export(job_id: str) -> Response:
+        _valid_job_id(job_id)
+        _authorize("download_export", job_id)
+        source = _input_dir() / job_id / "source.pdf"
+        if not source.is_file() or not source.resolve().is_relative_to(_input_dir()):
+            abort(404)
+        try:
+            archive = _export_adapter().export_path(job_id)
+        except KeyError:
+            abort(404)
+        except LookupError:
+            abort(409)
+        if not archive.is_file() or not archive.resolve().is_relative_to(_output_dir()):
+            abort(404)
+        response = send_file(
+            archive,
+            mimetype="application/zip",
+            as_attachment=True,
+            download_name="export.zip",
+        )
+        response.headers["Cache-Control"] = "private, no-store"
+        return response
+
     @blueprint.post("/jobs/<job_id>/plan")
     def save_plan(job_id: str) -> tuple[Response, int] | Response:
         _valid_job_id(job_id)
         _authorize("save_plan", job_id)
+        if _export_active(job_id):
+            return jsonify(error=_("Wait for the active operation to finish.")), 409
         plan = request.get_json(silent=True)
         if not isinstance(plan, dict):
             return jsonify(error=_("The plan must be a JSON object.")), 400
@@ -337,6 +472,22 @@ def create_gui_blueprint() -> Blueprint:
             return jsonify(error=_("The plan is not valid."), details=str(error)), 400
 
         destination = _plan_path(job_id)
+        if not destination.resolve().is_relative_to(_output_dir()):
+            abort(404)
+        timestamp = datetime.now(UTC).isoformat().replace("+00:00", "Z")
+        created = timestamp
+        if destination.is_file():
+            try:
+                existing = json.loads(destination.read_text(encoding="utf-8"))
+                if isinstance(existing, dict) and isinstance(
+                    existing.get("created"), str
+                ):
+                    created = existing["created"]
+            except (OSError, ValueError):
+                pass
+        plan = document_with_pdf_type(plan, source)
+        plan["created"] = created
+        plan["updated"] = timestamp
         destination.parent.mkdir(parents=True, exist_ok=True)
         staged = destination.with_suffix(".json.tmp")
         staged.write_text(
@@ -349,14 +500,19 @@ def create_gui_blueprint() -> Blueprint:
         )
 
     @blueprint.delete("/jobs/<job_id>/plan")
-    def delete_plan(job_id: str) -> Response:
+    def delete_plan(job_id: str) -> tuple[Response, int] | Response:
         _valid_job_id(job_id)
         _authorize("delete_plan", job_id)
+        if _export_active(job_id):
+            return jsonify(error=_("Wait for the active operation to finish.")), 409
         try:
             _document_path(job_id)
         except KeyError:
             abort(404)
-        _plan_path(job_id).unlink(missing_ok=True)
+        destination = _plan_path(job_id)
+        if not destination.resolve().is_relative_to(_output_dir()):
+            abort(404)
+        destination.unlink(missing_ok=True)
         return jsonify(message=_("The plan was deleted."))
 
     @blueprint.get("/jobs/<job_id>/plan")
@@ -368,7 +524,10 @@ def create_gui_blueprint() -> Blueprint:
         except KeyError:
             abort(404)
         destination = _plan_path(job_id)
-        if not destination.is_file():
+        if (
+            not destination.resolve().is_relative_to(_output_dir())
+            or not destination.is_file()
+        ):
             abort(404)
         return send_file(
             destination,
@@ -395,6 +554,28 @@ def _adapter() -> AnalysisAdapter:
     if adapter is None:
         raise RuntimeError("PDFWTF_GUI_ANALYSIS_ADAPTER is required.")
     return adapter
+
+
+def _export_adapter() -> ExportAdapter:
+    adapter = current_app.config.get("PDFWTF_GUI_EXPORT_ADAPTER")
+    if adapter is None:
+        abort(503, description="The host has not configured export processing.")
+    return adapter
+
+
+def _export_active(job_id: str) -> bool:
+    adapter = current_app.config.get("PDFWTF_GUI_EXPORT_ADAPTER")
+    if adapter is None:
+        return False
+    try:
+        return adapter.export_status(job_id).state in {"queued", "processing"}
+    except KeyError:
+        return False
+
+
+def _has_plan(job_id: str) -> bool:
+    path = _plan_path(job_id)
+    return path.resolve().is_relative_to(_output_dir()) and path.is_file()
 
 
 def _configured_directory(name: str) -> Path:
@@ -522,7 +703,9 @@ def _uploaded_files() -> list[dict[str, Any]]:
             {
                 "job_id": job_id,
                 "filename": filename,
+                "pdf_type": metadata.get("pdf_type", "born-digital"),
                 "has_analysis": has_analysis,
+                "has_plan": _has_plan(job_id),
                 "document_type": document_type,
                 "uploaded_at": source.stat().st_mtime_ns,
             }

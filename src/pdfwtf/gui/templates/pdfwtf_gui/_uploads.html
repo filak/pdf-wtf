@@ -1,14 +1,20 @@
 <div id="uploaded-files" class="mt-3" aria-live="polite">
-  <h2 class="h5">{{ _('Uploaded files') }}</h2>
+  <h2 class="h5">{{ _('Process files') }}</h2>
   {% for upload in uploads %}
   <div class="upload-row border rounded p-2 mb-1">
     <form id="upload-form-{{ upload.job_id }}" method="post" action="{{ url_for('pdfwtf_gui.start_job', job_id=upload.job_id) }}"
           hx-post="{{ url_for('pdfwtf_gui.start_job', job_id=upload.job_id) }}"
           hx-target="#job-state-{{ upload.job_id }}" hx-swap="innerHTML"
           hx-disabled-elt="#upload-form-{{ upload.job_id }} button, #upload-form-{{ upload.job_id }} select" class="d-flex flex-wrap align-items-center gap-1">
-      <a class="text-break flex-grow-1 small" href="{{ url_for('pdfwtf_gui.document', job_id=upload.job_id) }}" target="_blank" rel="noopener">{{ upload.filename }}</a>
+      {% if upload.pdf_type == 'scanned' %}
+      <i class="bi bi-file-earmark-break-fill flex-shrink-0" role="img" aria-label="{{ _('Scanned') }}"></i>
+      {% else %}
+      <i class="bi bi-file-pdf-fill flex-shrink-0" role="img" aria-label="{{ _('Born-digital') }}"></i>
+      {% endif %}
+      <a class="text-break small" href="{{ url_for('pdfwtf_gui.document', job_id=upload.job_id) }}" target="_blank" rel="noopener">{{ upload.filename }}</a>
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button class="btn btn-sm btn-outline-danger shadow-sm" type="button"
+      <button class="btn btn-sm btn-outline-danger shadow-sm me-auto" type="button"
+              hx-confirm="{{ _('Delete this file and its saved analysis and plan?') }}"
               hx-delete="{{ url_for('pdfwtf_gui.delete_upload', job_id=upload.job_id) }}"
               hx-target="closest .upload-row" hx-swap="outerHTML"
               hx-disabled-elt="#upload-form-{{ upload.job_id }} button, #upload-form-{{ upload.job_id }} select">{{ _('Delete') }}</button>
@@ -17,7 +23,7 @@
       {% include "pdfwtf_gui/_document_type.html" %}
       {% endwith %}
       <button class="btn btn-sm btn-primary shadow-sm" type="submit">{{ _('Analyze') }}</button>
-      {% with job_id=upload.job_id, has_analysis=upload.has_analysis %}
+      {% with job_id=upload.job_id, has_analysis=upload.has_analysis, has_plan=upload.has_plan %}
       {% include "pdfwtf_gui/_analysis_actions.html" %}
       {% endwith %}
     </form>
