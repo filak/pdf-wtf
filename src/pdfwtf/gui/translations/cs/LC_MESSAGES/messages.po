@@ -316,6 +316,10 @@ msgstr "Dokument PDF"
 msgid "Choose file"
 msgstr "Vybrat soubor"
 
+#: src/pdfwtf/gui/templates/pdfwtf_gui/input.html:26
+msgid "or drop a PDF here"
+msgstr "nebo sem přetáhněte PDF"
+
 #: src/pdfwtf/gui/templates/pdfwtf_gui/input.html:25
 msgid "No file selected"
 msgstr "Není vybrán žádný soubor"

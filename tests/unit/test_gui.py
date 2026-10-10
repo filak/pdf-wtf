@@ -76,6 +76,8 @@ def test_index_uses_namespaced_local_assets_and_language(gui_app):
     assert "Vybrat soubor".encode() in response.data
     assert "Není vybrán žádný soubor".encode() in response.data
     assert b"/assets/upload.js" in response.data
+    assert b'id="document-drop-zone"' in response.data
+    assert "nebo sem přetáhněte PDF".encode() in response.data
     assert b'id="delete-confirmation"' in response.data
     title_end = response.data.index(b"</title>")
     body_start = response.data.index(b"<body")
@@ -92,6 +94,7 @@ def test_index_uses_namespaced_local_assets_and_language(gui_app):
     assert "Zrušit".encode() in response.data
     english = app.test_client().get("/?lang=en")
     assert b"Choose file" in english.data
+    assert b"or drop a PDF here" in english.data
     assert b"No file selected" in english.data
 
 

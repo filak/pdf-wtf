@@ -18,11 +18,14 @@
         >
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <label class="visually-hidden" for="document">{{ _('PDF document') }}</label>
-          <div class="document-picker">
-            <span class="btn btn-outline-secondary shadow-sm" aria-hidden="true">{{ _('Choose file') }}</span>
-            <input id="document" name="document" type="file" accept="application/pdf,.pdf" aria-describedby="document-filename" required>
+          <div id="document-drop-zone" class="document-drop-zone d-flex flex-wrap align-items-center gap-2 w-100">
+            <div class="document-picker">
+              <span class="btn btn-outline-secondary shadow-sm" aria-hidden="true">{{ _('Choose file') }}</span>
+              <input id="document" name="document" type="file" accept="application/pdf,.pdf" aria-describedby="document-filename document-drop-hint" required>
+            </div>
+            <span id="document-filename" class="text-break flex-grow-1" aria-live="polite" data-empty="{{ _('No file selected') }}">{{ _('No file selected') }}</span>
+            <span id="document-drop-hint" class="text-body-secondary">{{ _('or drop a PDF here') }}</span>
           </div>
-          <span id="document-filename" class="text-break flex-grow-1" aria-live="polite" data-empty="{{ _('No file selected') }}">{{ _('No file selected') }}</span>
           <label for="pdf_type">{{ _('PDF type') }}</label>
           <select id="pdf_type" name="pdf_type" class="form-select w-auto">
             <option value="born-digital" selected>{{ _('Born-digital') }}</option>

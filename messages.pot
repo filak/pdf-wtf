@@ -314,6 +314,10 @@ msgstr ""
 msgid "Choose file"
 msgstr ""
 
+#: src/pdfwtf/gui/templates/pdfwtf_gui/input.html:26
+msgid "or drop a PDF here"
+msgstr ""
+
 #: src/pdfwtf/gui/templates/pdfwtf_gui/input.html:25
 msgid "No file selected"
 msgstr ""
@@ -519,4 +523,3 @@ msgstr ""
 #: src/pdfwtf/gui/templates/pdfwtf_gui/standalone_base.html:49
 msgid "Auto"
 msgstr ""
-
