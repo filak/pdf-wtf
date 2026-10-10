@@ -1,5 +1,6 @@
 """Command-line entry point."""
 
+import logging
 from pathlib import Path
 from typing import Literal
 
@@ -297,19 +298,26 @@ def enhance(input_pdf: str, output_dir: str | None, **kwargs: object) -> None:
 def _execute(input_pdf: str, output_dir: str | None, **kwargs: object) -> None:
     """Invoke the shared processor with action-specific options."""
     options = CliOptions(**kwargs)
-    configure_logging(options.debug_flag)
     show_info(input_pdf, output_dir, options.debug_flag)
     try:
+        configure_logging(
+            options.debug_flag, load_config().logs_dir / "pdf-wtf-log.txt"
+        )
+        logging.getLogger(__name__).info("PDF processing started.")
         process_pdf(input_pdf, output_dir, **options.model_dump())
     except (ConfigurationError, ProcessingError) as error:
+        logging.getLogger(__name__).error("PDF processing failed.")
         raise click.ClickException(str(error)) from error
     except ValueError as error:
+        logging.getLogger(__name__).error("PDF processing failed.")
         raise click.ClickException(str(error)) from error
     except Exception as error:
+        logging.getLogger(__name__).error("PDF processing failed.")
         # Tool exceptions can contain document data. Do not print their payloads.
         raise click.ClickException(
             "PDF processing failed. Check the input and required tools."
         ) from error
+    logging.getLogger(__name__).info("PDF processing completed.")
     click.echo("Done!")
 
 

@@ -260,3 +260,15 @@ For status checks, logs, and development commands, see the
 - [Project](specs/PROJECT.md): scope, components, processing rules, and development commands.
 - [Configuration](specs/CONFIGURATION.md): environment setup, paths, and host integration.
 - [Container analysis](specs/CONTAINER_ANALYSIS.md): reviewed plans, schemas, and unit results.
+
+## Application log files
+
+The CLI appends operational records to `pdf-wtf-log.txt`.
+The standalone GUI appends operational records to `pdf-wtf-gui-log.txt`.
+Both files use UTF-8 and the configured `logs_dir`.
+The default directory is `PDFWTF_HOME/instance/logs`.
+Console logging remains enabled. CLI `--debug` enables debug severity.
+The GUI logs request methods, endpoint names, status codes, and client addresses.
+It does not log request query strings or bodies.
+The demo container mounts `instance/logs` from the host.
+Log files are not rotated automatically.

@@ -7,7 +7,7 @@ from pathlib import Path
 import secrets
 from typing import Any, Mapping
 
-from flask import Flask, request
+from flask import Flask, Response, request
 from flask_babel import Babel, get_locale
 from flask_wtf.csrf import CSRFProtect
 
@@ -15,6 +15,7 @@ from pdfwtf import __version__
 from pdfwtf.configuration import load_config
 from pdfwtf.gui.adapter import DemoAnalysisAdapter
 from pdfwtf.gui.blueprint import create_gui_blueprint
+from pdfwtf.logging_utils import configure_logging
 
 
 def create_app(overrides: Mapping[str, Any] | None = None) -> Flask:
@@ -41,6 +42,20 @@ def create_app(overrides: Mapping[str, Any] | None = None) -> Flask:
     )
     if overrides:
         app.config.from_mapping(overrides)
+
+    configure_logging(app.debug, shared.logs_dir / "pdf-wtf-gui-log.txt")
+    app.logger.info("GUI host initialized.")
+
+    @app.after_request
+    def log_response(response: Response) -> Response:
+        app.logger.info(
+            "Request completed: %s %s status=%s",
+            request.method,
+            request.endpoint or "unmatched",
+            response.status_code,
+            extra={"client_address": request.remote_addr or "-"},
+        )
+        return response
 
     adapter = app.config.get("PDFWTF_GUI_ANALYSIS_ADAPTER")
     if adapter is None:
