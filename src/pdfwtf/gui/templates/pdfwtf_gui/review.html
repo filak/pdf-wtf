@@ -1,5 +1,5 @@
 {% extends config.PDFWTF_GUI_BASE_TEMPLATE %}
-{% block title %}{{ _('Review') }} | config.APP_NAME{% endblock %}
+{% block title %}{{ _('Review') }} | {{ config.APP_NAME }}{% endblock %}
 {% block content %}
 <div id="review-app"
      data-document-url="{{ url_for('pdfwtf_gui.document', job_id=job_id) }}"
