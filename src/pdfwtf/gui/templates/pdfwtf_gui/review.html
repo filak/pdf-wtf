@@ -8,6 +8,13 @@
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 pb-2">
       <div>
         <h1 class="h3 mb-1">{{ _('Review') }}
+
+          {% if analysis.pdf_type == 'scanned' %}
+          <i class="bi bi-file-earmark-break-fill" role="img" aria-label="{{ _('Scanned') }}"></i>
+          {% else %}
+          <i class="bi bi-file-pdf-fill" role="img" aria-label="{{ _('Born-digital') }}"></i>
+          {% endif %}
+
           <span class="fs-6 badge theme-primary">{{ {
           'auto': _('Automatic'),
           'unit': _('Single unit'),
@@ -17,7 +24,7 @@
           'proceedings': _('Proceedings'),
           'unknown': _('Unknown'),
         }.get(analysis.document_type, analysis.document_type) }}</span>
-        </h1>
+      </h1>
       </div>
       {% if analysis.source.bibliographic %}
       <div class="flex-grow-1 text-center text-break fw-semibold px-2">
