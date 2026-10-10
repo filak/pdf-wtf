@@ -113,9 +113,19 @@ def test_windows_batch_wrapper_propagates_python_status(configured_home, code):
     script = configured_home / "src/tools/unpaper_wrap.py"
     script.parent.mkdir(parents=True)
     script.write_text(f"raise SystemExit({code})\n")
-    wrapper = Path(__file__).resolve().parents[2] / "unpaper.cmd"
+    repository = Path(__file__).resolve().parents[2]
+    comspec = os.environ.get("COMSPEC")
+    assert comspec, "COMSPEC must specify cmd.exe."
+    command_processor = Path(comspec)
+    assert (
+        command_processor.is_absolute()
+        and command_processor.is_file()
+        and command_processor.name.casefold() == "cmd.exe"
+    ), "COMSPEC must specify an existing absolute path to cmd.exe."
+    # Keep the checkout path out of the shell command.
     result = subprocess.run(
-        [os.environ["COMSPEC"], "/d", "/c", str(wrapper), "--version"],
+        [str(command_processor), "/d", "/c", "unpaper.cmd --version"],
+        cwd=repository,
         capture_output=True,
         text=True,
         check=False,
