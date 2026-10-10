@@ -468,8 +468,8 @@ def create_gui_blueprint() -> Blueprint:
             validate_plan(plan, source)
         except KeyError:
             abort(404)
-        except PlanValidationError as error:
-            return jsonify(error=_("The plan is not valid."), details=str(error)), 400
+        except PlanValidationError:
+            return jsonify(error=_("The plan is not valid.")), 400
 
         destination = _plan_path(job_id)
         if not destination.resolve().is_relative_to(_output_dir()):
