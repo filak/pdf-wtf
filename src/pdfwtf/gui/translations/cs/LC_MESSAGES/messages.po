@@ -7,8 +7,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: pdfwtf 0.1.4\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-10 18:06+0200\n"
-"PO-Revision-Date: 2026-10-10 18:09+0200\n"
+"POT-Creation-Date: 2026-10-10 18:27+0200\n"
+"PO-Revision-Date: 2026-10-10 18:28+0200\n"
 "Last-Translator: PDF-WTF contributors\n"
 "Language-Team: cs <LL@li.org>\n"
 "Language: cs\n"
@@ -332,11 +332,6 @@ msgstr "Nahrát"
 msgid "Uploading…"
 msgstr "Probíhá nahrávání…"
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:2
-#: src/pdfwtf/gui/templates/pdfwtf_gui/standalone_base.html:7
-msgid "PDF-WTF-GUI"
-msgstr "PDF-WTF-GUI"
-
 #: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:35
 msgid "Add unit"
 msgstr "Přidat jednotku"
@@ -526,6 +521,9 @@ msgstr "Tmavý"
 #: src/pdfwtf/gui/templates/pdfwtf_gui/standalone_base.html:49
 msgid "Auto"
 msgstr "Automaticky"
+
+#~ msgid "PDF-WTF-GUI"
+#~ msgstr "PDF-WTF-GUI"
 
 #~ msgid "Analyze a PDF"
 #~ msgstr "Analyzovat PDF"

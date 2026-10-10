@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-10 18:06+0200\n"
+"POT-Creation-Date: 2026-10-10 18:27+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -330,11 +330,6 @@ msgstr ""
 msgid "Uploading…"
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:2
-#: src/pdfwtf/gui/templates/pdfwtf_gui/standalone_base.html:7
-msgid "PDF-WTF-GUI"
-msgstr ""
-
 #: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:35
 msgid "Add unit"
 msgstr ""
@@ -524,3 +519,4 @@ msgstr ""
 #: src/pdfwtf/gui/templates/pdfwtf_gui/standalone_base.html:49
 msgid "Auto"
 msgstr ""
+

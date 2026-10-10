@@ -27,6 +27,7 @@ def create_app(overrides: Mapping[str, Any] | None = None) -> Flask:
 
     app = Flask(__name__)
     app.config.from_mapping(
+        APP_NAME="PDF-WTF-GUI",
         SECRET_KEY=secrets.token_urlsafe(32),
         MAX_CONTENT_LENGTH=100 * 1024 * 1024,
         BABEL_DEFAULT_LOCALE="en",

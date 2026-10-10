@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>{% block title %}{{ _('PDF-WTF-GUI') }}{% endblock %}</title>
+    <title>{% block title %}{{ config.APP_NAME }}{% endblock %}</title>
     <script src="{{ url_for('pdfwtf_gui.static', filename='theme.js') }}"></script>
     <link rel="stylesheet" href="{{ url_for('pdfwtf_gui.static', filename='vendor/bootstrap/bootstrap.min.css') }}">
     <link rel="stylesheet" href="{{ url_for('pdfwtf_gui.static', filename='vendor/bootstrap/bootstrap-icons.min.css') }}">
