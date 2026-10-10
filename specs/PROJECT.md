@@ -22,8 +22,8 @@ page ranges, OCR backend, languages, resolution, scan cleanup, and exports.
 CLI page numbers start at 1.
 
 Select an action before the input PDF: `pdfwtf ACTION INPUT_PDF`.
-The actions are `analyse`, `enhance`, and `export`. Both arguments are required.
-`analyse` writes analysis JSON from existing PDF text. It does not run OCR.
+The actions are `analyze`, `enhance`, and `export`. Both arguments are required.
+`analyze` writes analysis JSON from existing PDF text. It does not run OCR.
 `enhance` performs the existing PDF processing with optional derivative exports.
 `export` writes explicitly selected derivatives from the input PDF. It does not
 run scan cleanup or OCR and does not write a processed PDF.
@@ -410,7 +410,7 @@ Start Docker Desktop before using the wrapper.
 Build the unpaper image:
 
 ```text
-docker build -t unpaper-alpine -f dockers/Dockerfile-unpaper .
+docker build -t unpaper-alpine -f .Dockerfile-unpaper .
 ```
 
 Check the image:
@@ -430,13 +430,13 @@ optional unpaper cleaning.
 Check the container state and health:
 
 ```text
-docker compose -f dockers/pdf-wtf-gui-compose.yaml ps
+docker compose -f compose-pdf-wtf-gui.yaml ps
 ```
 
 Read the application logs:
 
 ```text
-docker compose -f dockers/pdf-wtf-gui-compose.yaml logs -f pdf-wtf-gui
+docker compose -f compose-pdf-wtf-gui.yaml logs -f pdf-wtf-gui
 ```
 
 The GUI image includes unpaper.
@@ -445,7 +445,7 @@ To run the CLI inside the container, place the PDF in
 Run this command:
 
 ```text
-docker compose -f dockers/pdf-wtf-gui-compose.yaml exec pdf-wtf-gui pdfwtf enhance input.pdf --layout single --outdir /app/instance/_data/out
+docker compose -f compose-pdf-wtf-gui.yaml exec pdf-wtf-gui pdfwtf enhance input.pdf --layout single --outdir /app/instance/_data/out
 ```
 
 The command writes the processed PDF below `PDFWTF_HOME/instance/_data/out`.

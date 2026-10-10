@@ -405,7 +405,7 @@ def test_cli_rejects_no_output(make_pdf, tmp_path):
     assert not output.exists()
 
 
-@pytest.mark.parametrize("action", ["analyse", "enhance", "export"])
+@pytest.mark.parametrize("action", ["analyze", "enhance", "export"])
 def test_action_help_has_input_and_current_directories(action, configured_home):
     result = CliRunner().invoke(cli.main, [action, "--help"])
     assert result.exit_code == 0
@@ -417,7 +417,7 @@ def test_root_help_lists_actions_and_old_syntax_is_rejected(make_pdf):
     help_result = CliRunner().invoke(cli.main, ["--help"])
     assert help_result.exit_code == 0
     assert all(
-        action in help_result.output for action in ("analyse", "enhance", "export")
+        action in help_result.output for action in ("analyze", "enhance", "export")
     )
     result = CliRunner().invoke(cli.main, [str(make_pdf(["digital"]))])
     assert result.exit_code == 2
@@ -427,10 +427,10 @@ def test_root_help_lists_actions_and_old_syntax_is_rejected(make_pdf):
 @pytest.mark.parametrize(
     "action, flags",
     [
-        ("analyse", ["--analysis"]),
+        ("analyze", ["--analysis"]),
         ("enhance", ["--analysis"]),
-        ("analyse", ["--get-text"]),
-        ("analyse", ["--optimize", "1"]),
+        ("analyze", ["--get-text"]),
+        ("analyze", ["--optimize", "1"]),
         ("export", ["--optimize", "1"]),
         ("export", ["--lang", "ces"]),
         ("export", ["--remove-bg"]),
@@ -491,7 +491,7 @@ def test_export_requires_explicit_output(make_pdf, tmp_path):
     assert not output.exists()
 
 
-@pytest.mark.parametrize("action", ["analyse", "enhance", "export"])
+@pytest.mark.parametrize("action", ["analyze", "enhance", "export"])
 def test_document_type_flag_name(action):
     runner = CliRunner()
     result = runner.invoke(cli.main, [action, "--help"])
@@ -508,7 +508,7 @@ def test_analysis_doc_type_book(make_pdf, tmp_path):
     output = tmp_path / "analysis"
     result = CliRunner().invoke(
         cli.main,
-        ["analyse", str(source), "--doc_type", "book", "--outdir", str(output)],
+        ["analyze", str(source), "--doc_type", "book", "--outdir", str(output)],
     )
     assert result.exit_code == 0, result.output
     analysis = json.loads((output / "input.analysis.json").read_text("utf-8"))

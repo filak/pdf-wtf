@@ -62,16 +62,12 @@ cd pdf-wtf
 ```
 
 To update the repo run:
+
 ```text
 git pull
 ```
 
-Run the following commands from the repository root.
-Install the locked Python dependencies:
-
-```text
-uv sync --locked
-```
+## Configuration
 
 Set `PDFWTF_HOME` to the absolute repository path in the operating-system
 environment. The application requires this value.
@@ -83,7 +79,7 @@ On Windows, run this command in CMD from the repository root:
 setx PDFWTF_HOME "%CD%"
 ```
 
-Restart the terminal or VS Code after setting this value.
+> Restart the terminal or VS Code after setting this value.
 
 On Linux, run this command in Bash from the repository root:
 
@@ -94,6 +90,31 @@ export PDFWTF_HOME="$(pwd -P)"
 Review `instance/conf/pdf-wtf.ini`.
 For persistent environment setup and path overrides, see the
 [configuration specification](specs/CONFIGURATION.md).
+
+## Docker
+
+> If You do not want to install anything just spin up the Docker
+
+```text
+docker compose -f compose-pdf-wtf-gui.yaml up -d
+```
+
+and open PDF-WTF-GUI in a browser http://127.0.0.1:5001
+
+Try the client - run
+
+```text
+docker compose -f compose-pdf-wtf-gui.yaml exec pdf-wtf-gui pdfwtf --help
+```
+
+## Development
+
+Run the following commands from the repository root.
+Install the locked Python dependencies:
+
+```text
+uv sync --locked
+```
 
 For the Windows unpaper wrapper, see the
 [development commands](specs/PROJECT.md#development-commands).
@@ -106,7 +127,7 @@ Both arguments are required.
 | Action | Result |
 | --- | --- |
 | `enhance` | Process a PDF with optional scan cleanup, OCR, and exports. |
-| `analyse` | Write analysis proposals from existing PDF text without OCR. |
+| `analyze` | Write analysis proposals from existing PDF text without OCR. |
 | `export` | Write selected exports without OCR or a processed PDF. |
 
 List the actions and their options:
@@ -114,7 +135,7 @@ List the actions and their options:
 ```text
 uv run --locked pdfwtf --help
 uv run --locked pdfwtf enhance --help
-uv run --locked pdfwtf analyse --help
+uv run --locked pdfwtf analyze --help
 uv run --locked pdfwtf export --help
 ```
 
@@ -194,7 +215,7 @@ The container workflow uses existing PDF text and whole-page unit boundaries.
 Write analysis proposals:
 
 ```text
-uv run --locked pdfwtf analyse issue.pdf --doc_type journal-issue
+uv run --locked pdfwtf analyze issue.pdf --doc_type journal-issue
 ```
 
 Review the proposals in a consuming application, such as the demo GUI.
@@ -219,16 +240,6 @@ For schemas, output filenames, and analysis limits, see the
 
 PDF-WTF-GUI demonstrates PDF review and unit export.
 Run the demo in Docker with Docker Desktop or Docker Engine and Docker Compose.
-Use the repository root as `PDFWTF_HOME`.
-
-Build and start the demo from the repository root:
-
-```text
-cd dockers
-docker buildx bake -f pdf-wtf-gui-compose.yaml --allow=fs.read=..
-cd ..
-docker compose -f dockers/pdf-wtf-gui-compose.yaml up -d
-```
 
 Open http://127.0.0.1:5001 in a browser.
 
@@ -254,7 +265,7 @@ Do not run `pdfwtf-gui` directly on the host.
 Stop the demo from the repository root:
 
 ```text
-docker compose -f dockers/pdf-wtf-gui-compose.yaml down
+docker compose -f compose-pdf-wtf-gui.yaml down
 ```
 
 Uploaded documents and saved plans remain in `PDFWTF_HOME/instance/_data`.

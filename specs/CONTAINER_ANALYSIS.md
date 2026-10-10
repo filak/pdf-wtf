@@ -16,7 +16,7 @@ review and editing.
 
 Use this sequence:
 
-1. Run `pdfwtf analyse INPUT_PDF` to write machine proposals and evidence.
+1. Run `pdfwtf analyze INPUT_PDF` to write machine proposals and evidence.
 2. Review the analysis in the consuming application.
 3. Write a plan with confirmed whole-page boundaries.
 4. Run `--plan PATH` to process selected units.
@@ -29,7 +29,7 @@ plan.
 
 The source PDF is always the required positional argument. `--doc_type`
 describes document structure. It does not describe whether the PDF is scanned.
-The `analyse` and `export` actions use existing PDF text and do not run OCR.
+The `analyze` and `export` actions use existing PDF text and do not run OCR.
 When `enhance` processes a reviewed plan or exports unit HTML, use
 `--pdf_type born-digital`. Image-only pages have no extracted text in these workflows.
 
@@ -43,7 +43,7 @@ Analysis type detection uses title keywords and document-type defaults. These
 are proposals for operator review. Journal and magazine units default to
 `article` when no type keyword matches. Book units default to `chapter` when
 no type keyword matches. Operators assign the correct types in
-the reviewed plan before export. The `analyse` action does not filter unit types.
+the reviewed plan before export. The `analyze` action does not filter unit types.
 
 ## Common JSON fields
 

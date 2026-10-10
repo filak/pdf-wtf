@@ -351,7 +351,7 @@ def test_cli_end_to_end_analysis_plan_and_html(make_pdf, tmp_path):
     result = CliRunner().invoke(
         cli.main,
         [
-            "analyse",
+            "analyze",
             str(source),
             "--outdir",
             str(analysis_output),
@@ -739,11 +739,11 @@ def test_magazine_photo_caption_without_prefix(tmp_path, document_type, bold, ex
 
 
 def test_cli_analysis_rejects_unit_type_filter():
-    result = CliRunner().invoke(cli.main, ["analyse", "--unit_type", "article"])
+    result = CliRunner().invoke(cli.main, ["analyze", "--unit_type", "article"])
     assert result.exit_code == 2
     assert "No such option" in result.output
     assert "--unit_type" in result.output
-    help_result = CliRunner().invoke(cli.main, ["analyse", "--help"])
+    help_result = CliRunner().invoke(cli.main, ["analyze", "--help"])
     assert "--unit_type" not in help_result.output
 
 

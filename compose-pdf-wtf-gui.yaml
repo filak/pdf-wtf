@@ -1,8 +1,7 @@
 services:
   pdf-wtf-gui:
     build:
-      context: ..
-      dockerfile: dockers/Dockerfile-pdf-wtf-gui
+      dockerfile: .Dockerfile-pdf-wtf-gui
     image: pdf-wtf-gui:local
     init: true
     restart: unless-stopped

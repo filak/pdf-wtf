@@ -327,10 +327,10 @@ class PdfGroup(click.Group, PdfCommand):
 
 @click.group(cls=PdfGroup)
 def main() -> None:
-    """Analyse, enhance, or export one PDF. Select an action first."""
+    """Analyze, enhance, or export one PDF. Select an action first."""
 
 
-def analyse(input_pdf: str, output_dir: str | None, **kwargs: object) -> None:
+def analyze(input_pdf: str, output_dir: str | None, **kwargs: object) -> None:
     """Write analysis JSON from existing PDF text without OCR or unit exports."""
     _execute(
         input_pdf, output_dir, analysis_flag=True, pdf_type="born-digital", **kwargs
@@ -343,7 +343,7 @@ def export(input_pdf: str, output_dir: str | None, **kwargs: object) -> None:
 
 
 _COMMON_PARAMS = {"input_pdf", "output_dir", "input_path_prefix", "debug_flag"}
-_ANALYSE_PARAMS = _COMMON_PARAMS | {"document_type"}
+_ANALYZE_PARAMS = _COMMON_PARAMS | {"document_type"}
 _EXPORT_PARAMS = _COMMON_PARAMS | {
     "dpi",
     "get_doi_flag",
@@ -370,10 +370,10 @@ def _unit_type_option() -> click.Option:
 main.add_command(enhance)
 main.add_command(
     PdfCommand(
-        "analyse",
-        params=[param for param in enhance.params if param.name in _ANALYSE_PARAMS],
-        callback=analyse,
-        help=analyse.__doc__,
+        "analyze",
+        params=[param for param in enhance.params if param.name in _ANALYZE_PARAMS],
+        callback=analyze,
+        help=analyze.__doc__,
     )
 )
 main.add_command(
