@@ -230,7 +230,7 @@ cd ..
 docker compose -f dockers/pdf-wtf-gui-compose.yaml up -d
 ```
 
-Open [PDF-WTF-GUI](http://127.0.0.1:5001) in a browser.
+Open http://127.0.0.1:5001 in a browser.
 
 1. Upload a PDF.
 2. Select the document type in the file row.
