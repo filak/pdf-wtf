@@ -3,7 +3,12 @@
   const key = 'pdfwtf-theme';
   const system = matchMedia('(prefers-color-scheme: dark)');
   let theme = 'auto';
-  try { const saved = localStorage.getItem(key); if (['light', 'dark', 'auto'].includes(saved)) theme = saved; } catch (_) {}
+  try {
+    const saved = localStorage.getItem(key);
+    if (['light', 'dark', 'auto'].includes(saved)) theme = saved;
+  } catch {
+    // Keep the automatic theme when browser storage is unavailable.
+  }
   const apply = () => {
     document.documentElement.dataset.bsTheme = theme === 'auto' ? (system.matches ? 'dark' : 'light') : theme;
     document.querySelectorAll('[data-bs-theme-value]').forEach(button => {
@@ -25,7 +30,11 @@
     const picker = document.getElementById('theme-picker');
     document.querySelectorAll('[data-bs-theme-value]').forEach(button => button.addEventListener('click', () => {
       theme = button.dataset.bsThemeValue;
-      try { localStorage.setItem(key, theme); } catch (_) {}
+      try {
+        localStorage.setItem(key, theme);
+      } catch {
+        // Apply the theme for this page when the preference cannot be saved.
+      }
       apply(); picker.open = false; document.getElementById('bd-theme').focus();
     }));
     document.addEventListener('click', event => { if (!picker.contains(event.target)) picker.open = false; });

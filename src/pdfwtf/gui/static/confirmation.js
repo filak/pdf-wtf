@@ -1,5 +1,5 @@
 const confirmationElement = document.getElementById("delete-confirmation");
-const confirmationModal = new bootstrap.Modal(confirmationElement);
+const confirmationModal = new window.bootstrap.Modal(confirmationElement);
 let pendingConfirmation = null;
 let confirmationTrigger = null;
 

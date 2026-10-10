@@ -377,7 +377,7 @@ def create_gui_blueprint() -> Blueprint:
             not isinstance(options, dict)
             or set(options)
             - {"no_pdf_out", "get_html", "get_meta", "include_source", "debug"}
-            or any(type(value) is not bool for value in options.values())
+            or any(not isinstance(value, bool) for value in options.values())
         ):
             return jsonify(error=_("Select valid export options.")), 400
         try:
