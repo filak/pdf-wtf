@@ -388,7 +388,7 @@ The container workflow supports born-digital PDFs and whole-page unit
 boundaries. First, write a machine analysis:
 
 ```powershell
-uv run --locked pdfwtf analyse issue.pdf --doctype journal-issue
+uv run --locked pdfwtf analyse issue.pdf --doc_type journal-issue
 ```
 
 The command writes `issue.analysis.json` in the output directory. The analysis
@@ -415,7 +415,7 @@ into separate article regions.
 Process a single unit without a reviewed plan:
 
 ```powershell
-uv run --locked pdfwtf export article.pdf --doctype unit --get-html
+uv run --locked pdfwtf export article.pdf --doc_type unit --get-html
 ```
 
 See [the container analysis specification](specs/CONTAINER_ANALYSIS.md) for the

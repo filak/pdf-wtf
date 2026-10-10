@@ -157,7 +157,7 @@ def _resolve_input_pdf(
     help="Skip scan preparation and OCR. Image exports still render pages.",
 )
 @click.option(
-    "--doctype",
+    "--doc_type",
     "document_type",
     type=click.Choice(
         ["unit", "journal-issue", "magazine-issue", "book", "proceedings", "auto"]

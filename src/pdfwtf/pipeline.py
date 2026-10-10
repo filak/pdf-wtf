@@ -315,7 +315,7 @@ def process_pdf(
     if plan_path is not None and (extract_pages_str or skip_pages_str):
         raise ValueError("--plan cannot be combined with --extract or --remove.")
     if export_html_flag and plan_path is None and document_type not in (None, "unit"):
-        raise ValueError("Direct --get-html processing requires --doctype unit.")
+        raise ValueError("Direct --get-html processing requires --doc_type unit.")
     if no_pdf_flag and not any(
         (
             export_json_flag,

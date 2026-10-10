@@ -24,10 +24,10 @@ Use this sequence:
 
 An analysis proposes units and extracts DOI candidates for each proposed unit.
 It does not generate unit result files. Plan processing never repeats partition
-analysis. `--doctype unit --get-html` can process the complete PDF without a
+analysis. `--doc_type unit --get-html` can process the complete PDF without a
 plan.
 
-The source PDF is always the required positional argument. `--doctype`
+The source PDF is always the required positional argument. `--doc_type`
 describes document structure. It does not describe whether the PDF is scanned.
 The `analyse` and `export` actions use existing PDF text and do not run OCR.
 When `enhance` processes a reviewed plan or exports unit HTML, use
@@ -41,7 +41,8 @@ If no types match, export writes an empty unit manifest.
 
 Analysis type detection uses title keywords and document-type defaults. These
 are proposals for operator review. Journal and magazine units default to
-`article` when no type keyword matches. Operators assign the correct types in
+`article` when no type keyword matches. Book units default to `chapter` when
+no type keyword matches. Operators assign the correct types in
 the reviewed plan before export. The `analyse` action does not filter unit types.
 
 ## Common JSON fields
@@ -177,7 +178,7 @@ The analysis filename is `<source-stem>.analysis.json`. It has this shape:
 ```
 
 `document_type` is `unit`, `journal-issue`, `magazine-issue`, `book`, `proceedings`, or `unknown`.
-`--doctype auto` uses document-level evidence to propose the value. It can
+`--doc_type auto` uses document-level evidence to propose the value. It can
 produce `unknown`. An uncertain result requires review.
 
 `pages` contains one entry for each input page in input order. `input_page` is
@@ -288,7 +289,7 @@ selected unit's metadata and HTML contain only its selected pages.
 unit must be selected. Each selected unit must contain a selected page. The
 processor follows confirmed ranges exactly. It does not infer a replacement
 range. `pages[].unit_ids` must agree with those ranges. If the user also
-supplies `--doctype`, it must equal the plan's document type.
+supplies `--doc_type`, it must equal the plan's document type.
 
 ## Result contracts
 

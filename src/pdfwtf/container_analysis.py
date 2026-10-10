@@ -1086,7 +1086,7 @@ def validate_plan(
         errors.append("document_type is invalid.")
     if cli_document_type is not None and cli_document_type != document_type:
         errors.append(
-            f"--doctype {cli_document_type} conflicts with plan document_type {document_type!r}."
+            f"--doc_type {cli_document_type} conflicts with plan document_type {document_type!r}."
         )
     actual_source = source_identity(pdf_path)
     source = plan.get("source")
