@@ -20,7 +20,14 @@ from .page_metadata import build_page_metadata
 from .utils.common import _extract_doi_candidates
 
 SCHEMA_VERSION = "1.2"
-DOCUMENT_TYPES = {"unit", "journal-issue", "book", "proceedings", "unknown"}
+DOCUMENT_TYPES = {
+    "unit",
+    "journal-issue",
+    "magazine-issue",
+    "book",
+    "proceedings",
+    "unknown",
+}
 PAGE_TYPES = {"normal", "full-page-advertisement", "unknown"}
 UNIT_TYPES = {
     "preface",
@@ -221,8 +228,26 @@ def _page_signals(page: dict[str, Any]) -> dict[str, Any]:
         span["size"] for line in lines for span in line["spans"] if span["text"].strip()
     ]
     body_size = median(sizes) if sizes else 0
+    title_lines = [
+        line
+        for line in lines
+        if not re.search(
+            r"https?://|www\.|[\w.+-]+@[\w.-]+", line["text"], re.IGNORECASE
+        )
+        and not re.search(
+            r"\b(?:prof|doc|mudr|rndr|phdr|drsc|csc|phd|frcp|fesc)\b",
+            line["text"],
+            re.IGNORECASE,
+        )
+        and not re.fullmatch(
+            r"(?:references|bibliography|literat[uú]ra|correspondence|author contact)[:. ]*",
+            line["text"].strip(),
+            re.IGNORECASE,
+        )
+        and line["bbox"][1] < page["height"] * 0.85
+    ]
     title_line = max(
-        lines,
+        title_lines,
         key=lambda line: (
             max((span["size"] for span in line["spans"]), default=0),
             -line["bbox"][1],
@@ -245,6 +270,86 @@ def _page_signals(page: dict[str, Any]) -> dict[str, Any]:
         "abstract_pattern": bool(re.search(r"\babstract\b", text, re.IGNORECASE)),
         "doi_pattern": bool(_DOI.search(text)),
     }
+
+
+def _magazine_signals(page: dict[str, Any]) -> dict[str, Any]:
+    """Use display typography, including lower-page titles, for magazines."""
+    signal = _page_signals(page)
+    lines = [
+        line
+        for block in page["text_blocks"]
+        for line in block["lines"]
+        if line["bbox"][1] < page["height"] * 0.85
+    ]
+
+    def letter_size(line: dict[str, Any]) -> float:
+        return max(
+            (
+                span["size"]
+                for span in line["spans"]
+                if sum(character.isalpha() for character in span["text"]) >= 3
+            ),
+            default=0,
+        )
+
+    eligible = [
+        line
+        for line in lines
+        if letter_size(line) > 0
+        and not re.search(r"https?://|www\.|@", line["text"], re.IGNORECASE)
+    ]
+    anchor = max(
+        eligible, key=lambda line: (letter_size(line), -line["bbox"][1]), default=None
+    )
+    if anchor is None:
+        signal.update(title_bbox=None, prominent_title=False)
+        return signal
+    largest = letter_size(anchor)
+    sizes = [
+        span["size"]
+        for line in eligible
+        for span in line["spans"]
+        for character in span["text"]
+        if character.isalpha()
+    ]
+    body_size = median(sizes) if sizes else 0
+    cluster = [anchor]
+    nearby = sorted(
+        (
+            line
+            for line in eligible
+            if line is not anchor and letter_size(line) >= max(24, largest * 0.5)
+        ),
+        key=lambda line: line["bbox"][1],
+    )
+    for line in nearby:
+        bounds = [
+            min(item["bbox"][0] for item in cluster),
+            min(item["bbox"][1] for item in cluster),
+            max(item["bbox"][2] for item in cluster),
+            max(item["bbox"][3] for item in cluster),
+        ]
+        gap = max(line["bbox"][1] - bounds[3], bounds[1] - line["bbox"][3], 0)
+        if (
+            gap <= largest * 0.65
+            and line["bbox"][0] < bounds[2]
+            and bounds[0] < line["bbox"][2]
+        ):
+            cluster.append(line)
+    cluster.sort(key=lambda line: (line["bbox"][1], line["bbox"][0]))
+    bbox = [
+        min(line["bbox"][0] for line in cluster),
+        min(line["bbox"][1] for line in cluster),
+        max(line["bbox"][2] for line in cluster),
+        max(line["bbox"][3] for line in cluster),
+    ]
+    signal.update(
+        title=" ".join(line["text"] for line in cluster),
+        title_bbox=bbox,
+        title_y=bbox[1],
+        prominent_title=largest >= 24 and largest >= body_size * 1.8,
+    )
+    return signal
 
 
 def _page_lines(page: dict[str, Any]) -> list[str]:
@@ -272,6 +377,65 @@ def _compact_identifier(value: str) -> str | None:
         if character.isdigit() or character == "X"
     )
     return compact if len(compact) in {8, 10, 13} else None
+
+
+def _footer_source(structure: dict[str, Any]) -> dict[str, Any] | None:
+    """Prefer repeated journal citations in the bottom region of input pages."""
+    candidates: Counter[tuple[str, str, str, str | None]] = Counter()
+    footer_texts = []
+    for page in structure["pages"]:
+        texts = set()
+        for block in page["text_blocks"]:
+            lines = [
+                line["text"].strip()
+                for line in block["lines"]
+                if line["bbox"][1] >= page["height"] * 0.85
+            ]
+            texts.update(lines)
+            if lines:
+                texts.add(" ".join(lines))
+        footer_texts.extend(sorted(texts))
+        page_candidates = set()
+        for text in sorted(texts):
+            text = re.sub(r"^\d+\s+", "", text)
+            citation = re.match(
+                r"^(?P<title>.{3,100}?)\s*[.,]?\s+"
+                r"(?P<year>(?:19|20)\d{2})\s*;\s*"
+                r"(?P<volume>\d+)\s*(?:\((?P<issue>\d+(?:[-–]\d+)?)\))?"
+                r"(?:\s*[:;,]|\s*$)",
+                text,
+            )
+            if citation is None:
+                citation = re.match(
+                    r"^(?P<title>.{3,100}?)\s*[,.:]\s*"
+                    r"(?P<issue>\d{1,3}(?:\s*[-–]\s*\d{1,3})?)\s*/\s*"
+                    r"(?P<year>(?:19|20)\d{2})\s*,?\s*vol(?:ume)?\.?\s*"
+                    r"(?P<volume>[A-Za-z0-9.-]+)",
+                    text,
+                    re.IGNORECASE,
+                )
+            if citation:
+                issue = citation.group("issue")
+                page_candidates.add(
+                    (
+                        citation.group("title").strip(" .,:;-"),
+                        citation.group("year"),
+                        citation.group("volume"),
+                        re.sub(r"\s*[-–]\s*", "-", issue) if issue else None,
+                    )
+                )
+        candidates.update(sorted(page_candidates, key=repr))
+    if not candidates:
+        return None
+    title, year, volume, issue = candidates.most_common(1)[0][0]
+    issn = _ISSN.search("\n".join(footer_texts))
+    return {
+        "journal_title": title,
+        "year": year,
+        "volume": volume,
+        "issue": issue,
+        "issn": f"{issn.group(1)}-{issn.group(2).upper()}" if issn else None,
+    }
 
 
 def _bibliographic_source(
@@ -355,7 +519,7 @@ def _bibliographic_source(
             "isbn": isbn,
             "volume": volume,
         }
-    return {
+    source = {
         "kind": "journal",
         "journal_title": (
             citation_title or expanded_page_title or page_title or metadata_title
@@ -365,14 +529,74 @@ def _bibliographic_source(
         "volume": volume,
         "issue": issue,
     }
+    footer = _footer_source(structure)
+    if footer:
+        source.update(
+            {key: value for key, value in footer.items() if value is not None}
+        )
+    return source
 
 
-def _page_figures(page: dict[str, Any]) -> list[dict[str, Any]]:
+def _magazine_captions(
+    page: dict[str, Any],
+    images: list[dict[str, Any]],
+) -> dict[int, tuple[str, list[float]]]:
+    """Associate small bold lines below photos with the nearest image."""
+    captions: dict[int, list[dict[str, Any]]] = {}
+    for block in page["text_blocks"]:
+        for line in block["lines"]:
+            spans = [span for span in line["spans"] if span["text"].strip()]
+            if not spans or not any(character.isalpha() for character in line["text"]):
+                continue
+            if line["bbox"][1] >= page["height"] * 0.94:
+                continue
+            if max(span["size"] for span in spans) > 14:
+                continue
+            total = sum(len(span["text"]) for span in spans)
+            bold = sum(
+                len(span["text"])
+                for span in spans
+                if span["flags"] & 16 or "bold" in span["font"].lower()
+            )
+            if bold < total * 0.7:
+                continue
+            candidates = []
+            for index, image in enumerate(images):
+                rect, bbox = image["bbox"], line["bbox"]
+                gap = bbox[1] - rect[3]
+                overlap = min(rect[2], bbox[2]) - max(rect[0], bbox[0])
+                width = min(rect[2] - rect[0], bbox[2] - bbox[0])
+                if 0 <= gap <= 18 and width > 0 and overlap / width >= 0.5:
+                    candidates.append((gap, -overlap, index))
+            if candidates:
+                index = min(candidates)[2]
+                captions.setdefault(index, []).append(line)
+    result = {}
+    for index, lines in captions.items():
+        lines.sort(key=lambda line: (line["bbox"][1], line["bbox"][0]))
+        result[index] = (
+            " ".join(line["text"] for line in lines),
+            [
+                min(line["bbox"][0] for line in lines),
+                min(line["bbox"][1] for line in lines),
+                max(line["bbox"][2] for line in lines),
+                max(line["bbox"][3] for line in lines),
+            ],
+        )
+    return result
+
+
+def _page_figures(
+    page: dict[str, Any], document_type: str | None = None
+) -> list[dict[str, Any]]:
     """Describe raster figures and associate nearby explicit captions."""
     blocks = _ordered_blocks(page)
     caption_indices: set[int] = set()
     figures = []
     images = [image for image in page["raster_images"] if _is_figure_image(page, image)]
+    magazine_captions = (
+        _magazine_captions(page, images) if document_type == "magazine-issue" else {}
+    )
     for number, image in enumerate(images, start=1):
         caption = None
         caption_bbox = None
@@ -389,6 +613,8 @@ def _page_figures(page: dict[str, Any]) -> list[dict[str, Any]]:
                 caption_bbox = block["bbox"]
                 caption_indices.add(index)
                 break
+        if caption is None and number - 1 in magazine_captions:
+            caption, caption_bbox = magazine_captions[number - 1]
         figures.append(
             {
                 "id": f"figure-{page['input_page']:03d}-{number:03d}",
@@ -500,7 +726,7 @@ def _unit_type(
         return "abstract"
     if document_type == "book" or _CHAPTER.search(title):
         return "chapter"
-    if document_type in {"journal-issue", "proceedings"} or (
+    if document_type in {"journal-issue", "magazine-issue", "proceedings"} or (
         signal["author_pattern"]
         and (signal["abstract_pattern"] or signal["doi_pattern"])
     ):
@@ -531,6 +757,45 @@ def _classify_auto(
     return "unknown", [
         "Automatic classification did not find enough independent evidence."
     ]
+
+
+def _footer_unit_starts(structure: dict[str, Any]) -> list[int]:
+    """Find article starts from repeated citation footer runs."""
+    runs: list[tuple[str | None, int, int]] = []
+    for page in structure["pages"]:
+        citations = []
+        for block in page["text_blocks"]:
+            for line in block["lines"]:
+                if line["bbox"][1] < page["height"] * 0.9:
+                    continue
+                match = re.fullmatch(
+                    r"(.{3,100}?)\s*[.,]?\s+((?:19|20)\d{2})\s*;\s*"
+                    r"(\d+)\s*(?:\(([^)]+)\))?\s*:\s*"
+                    r"(\d+(?:\s*[-–—−]\s*\d+)?)\s*[.]?",
+                    line["text"].strip(),
+                )
+                if match:
+                    signature = re.sub(r"\s+", "", match.group(0)).casefold()
+                    citations.append((line["bbox"][1], signature))
+        signature = max(citations)[1] if citations else None
+        number = page["input_page"]
+        if runs and runs[-1][0] == signature:
+            key, start, _end = runs[-1]
+            runs[-1] = (key, start, number)
+        else:
+            runs.append((signature, number, number))
+    starts = []
+    for index, (signature, start, end) in enumerate(runs):
+        if signature is None:
+            continue
+        previous_repeated = (
+            index > 0
+            and runs[index - 1][0] is not None
+            and runs[index - 1][2] - runs[index - 1][1] >= 1
+        )
+        if end > start or previous_repeated:
+            starts.append(start)
+    return starts
 
 
 def _candidate_starts(
@@ -583,6 +848,18 @@ def _candidate_starts(
                             "y": 0,
                         },
                     )
+    elif document_type == "magazine-issue":
+        seen_titles = set()
+        for page, signal in zip(structure["pages"], signals):
+            title_key = signal["title"].casefold()
+            if signal["prominent_title"] and title_key not in seen_titles:
+                candidates[page["input_page"]] = {
+                    "input_page": page["input_page"],
+                    "title": signal["title"],
+                    "evidence": ["large magazine article title typography"],
+                    "y": 0,
+                }
+                seen_titles.add(title_key)
     elif document_type in {"journal-issue", "proceedings"}:
         for page, signal in zip(structure["pages"], signals):
             evidence = []
@@ -595,7 +872,7 @@ def _candidate_starts(
             if signal["doi_pattern"]:
                 evidence.append("DOI pattern")
             required = signal["prominent_title"] and signal["author_pattern"]
-            if document_type == "journal-issue":
+            if document_type in {"journal-issue", "magazine-issue"}:
                 required = required and (
                     signal["abstract_pattern"] or signal["doi_pattern"]
                 )
@@ -605,6 +882,19 @@ def _candidate_starts(
                     "title": signal["title"],
                     "evidence": evidence,
                     "y": signal["title_y"],
+                }
+    if document_type in {"journal-issue", "magazine-issue", "proceedings"}:
+        for number in _footer_unit_starts(structure):
+            if number in candidates:
+                candidates[number]["evidence"].append(
+                    "repeated article citation footer"
+                )
+            else:
+                candidates[number] = {
+                    "input_page": number,
+                    "title": signals[number - 1]["title"],
+                    "evidence": ["repeated article citation footer"],
+                    "y": 0,
                 }
     if 1 not in candidates:
         candidates[1] = {
@@ -618,7 +908,14 @@ def _candidate_starts(
 
 def analyze_container(pdf_path: Path, requested_type: str) -> dict[str, Any]:
     """Create conservative whole-page unit proposals with review evidence."""
-    if requested_type not in {"unit", "journal-issue", "book", "proceedings", "auto"}:
+    if requested_type not in {
+        "unit",
+        "journal-issue",
+        "magazine-issue",
+        "book",
+        "proceedings",
+        "auto",
+    }:
         raise ValueError("Unsupported document type.")
     identity = source_identity(pdf_path)
     structure = extract_structure(pdf_path)
@@ -634,6 +931,9 @@ def analyze_container(pdf_path: Path, requested_type: str) -> dict[str, Any]:
     if document_type in {"unit", "unknown"}:
         candidates = _candidate_starts("unit", structure, signals)[:1]
     else:
+        candidates = _candidate_starts(document_type, structure, signals)
+    if document_type == "magazine-issue":
+        signals = [_magazine_signals(page) for page in structure["pages"]]
         candidates = _candidate_starts(document_type, structure, signals)
     confirmed_starts = []
     suspected_shared = []
@@ -699,7 +999,7 @@ def analyze_container(pdf_path: Path, requested_type: str) -> dict[str, Any]:
                     else None
                 ),
                 "sections": _page_sections(page, signal["title_bbox"]),
-                "figures": _page_figures(page),
+                "figures": _page_figures(page, document_type),
                 "unit_ids": page_unit_ids,
                 "warnings": [],
             }

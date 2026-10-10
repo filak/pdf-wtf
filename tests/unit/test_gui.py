@@ -102,6 +102,9 @@ def test_upload_review_document_and_approved_plan(gui_app, make_pdf):
     assert review.status_code == 200
     assert b"pdf.min.mjs" not in review.data
     assert b"gui.js" in review.data
+    assert b'id="review-more"' in review.data
+    assert b'id="delete-plan"' in review.data
+    assert b"Show analysis" in review.data
 
     document = client.get(f"/jobs/{job_id}/document")
     assert document.status_code == 200
@@ -195,6 +198,24 @@ def test_upload_review_document_and_approved_plan(gui_app, make_pdf):
 
     document.close()
     downloaded.close()
+    app.config["PDFWTF_GUI_ACCESS_CHECK"] = (
+        lambda action, _job_id: action != "delete_plan"
+    )
+    assert client.delete(f"/jobs/{job_id}/plan").status_code == 403
+    app.config["PDFWTF_GUI_ACCESS_CHECK"] = None
+    assert client.delete(f"/jobs/{job_id}/plan").status_code == 200
+    assert client.get(f"/jobs/{job_id}/plan").status_code == 404
+    assert not (
+        configured_home / "instance/_data/out" / job_id / "approved.plan.json"
+    ).exists()
+    assert (configured_home / "instance/_data/in" / job_id / "source.pdf").is_file()
+    assert adapter.result(job_id) == analysis
+    restored = client.get(f"/jobs/{job_id}/review")
+    assert (
+        b'<script id="plan-data" type="application/json">null</script>' in restored.data
+    )
+    assert client.delete(f"/jobs/{job_id}/plan").status_code == 200
+    assert client.post(f"/jobs/{job_id}/plan", json=plan).status_code == 200
     deleted = client.delete(f"/uploads/{job_id}")
     assert deleted.status_code == 200
     assert not (configured_home / "instance/_data/in" / job_id).exists()
@@ -729,3 +750,23 @@ def test_completion_refreshes_document_type_selector(
     assert b'name="document_type" required hx-swap-oob="outerHTML"' in response.data
     assert b'<option value="book" selected>' in response.data
     assert b'<option value="auto" selected>' not in response.data
+
+
+@pytest.mark.parametrize("filename", ["openjpeg.wasm", "jbig2.wasm", "qcms_bg.wasm"])
+def test_image_decoder_assets_are_served_as_wasm(gui_app, monkeypatch, filename):
+    app, _adapter, _home = gui_app
+    monkeypatch.setattr(
+        mimetypes, "guess_type", lambda *_args, **_kwargs: ("text/plain", None)
+    )
+    response = app.test_client().get(f"/assets/vendor/pdfjs/wasm/{filename}")
+    assert response.status_code == 200
+    assert response.mimetype == "application/wasm"
+    assert response.data.startswith(b"\x00asm")
+    response.close()
+
+
+def test_plan_delete_enforces_csrf(configured_home):
+    app = create_app(
+        {"TESTING": True, "PDFWTF_GUI_ANALYSIS_ADAPTER": ImmediateAdapter()}
+    )
+    assert app.test_client().delete(f"/jobs/{'a' * 20}/plan").status_code == 400

@@ -109,6 +109,7 @@ class DemoAnalysisAdapter:
             if job.document_type == "auto" and detected_type in {
                 "unit",
                 "journal-issue",
+                "magazine-issue",
                 "book",
                 "proceedings",
             }:

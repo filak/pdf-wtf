@@ -23,6 +23,7 @@
                 //"--outdir=f:\\Decko\\pdf-wtf\\instance\\_data\\out-pdf",
                 //"--layout=double",
                 //"--pre-rotate=90",
+                "enhance",
                 "born_digital.pdf",
                 "--get-doi",
                 "--get-img",

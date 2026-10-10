@@ -12,6 +12,7 @@ import pymupdf as fitz
 
 from .configuration import load_config
 from .container_analysis import (
+    UNIT_TYPES,
     analyze_container,
     direct_unit_plan,
     export_units,
@@ -276,6 +277,7 @@ def process_pdf(
     no_pdf_flag: bool = False,
     export_json_flag: bool = False,
     analysis_flag: bool = False,
+    unit_types: tuple[str, ...] = (),
     document_type: str | None = None,
     plan_path: str | Path | None = None,
     export_html_flag: bool = False,
@@ -284,6 +286,12 @@ def process_pdf(
     if analysis_flag and plan_path is not None:
         raise ValueError("--analysis and --plan are mutually exclusive.")
     unit_workflow = analysis_flag or plan_path is not None or export_html_flag
+    if set(unit_types) - UNIT_TYPES:
+        raise ProcessingError("Unknown unit type in --unit_type.")
+    if unit_types and analysis_flag:
+        raise ProcessingError("--unit_type is only supported for unit export.")
+    if unit_types and not unit_workflow:
+        raise ProcessingError("--unit_type requires --plan or --get-html for export.")
     if unit_workflow and not born_digital_flag:
         raise ValueError(
             "Container analysis and unit export currently require --born-digital."
@@ -409,6 +417,10 @@ def process_pdf(
             selected_units = validate_plan(unit_plan, input_pdf, "unit")
         staged_units = None
         if unit_plan is not None and selected_units is not None:
+            if unit_types:
+                selected_units = [
+                    unit for unit in selected_units if unit["type"] in unit_types
+                ]
             staged_units = workspace / "unit_exports"
             export_units(
                 input_pdf,

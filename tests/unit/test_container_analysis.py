@@ -343,15 +343,7 @@ def test_cli_end_to_end_analysis_plan_and_html(make_pdf, tmp_path):
     analysis_output = tmp_path / "analysis-out"
     result = CliRunner().invoke(
         cli.main,
-        [
-            str(source),
-            "--outdir",
-            str(analysis_output),
-            "--born-digital",
-            "--analysis",
-            "--doctype",
-            "unit",
-        ],
+        ["analyse", str(source), "--outdir", str(analysis_output), "--doctype", "unit"],
     )
     assert result.exit_code == 0, result.output
     analysis = json.loads((analysis_output / "input.analysis.json").read_text("utf-8"))
@@ -376,6 +368,7 @@ def test_cli_end_to_end_analysis_plan_and_html(make_pdf, tmp_path):
     result = CliRunner().invoke(
         cli.main,
         [
+            "enhance",
             str(source),
             "--outdir",
             str(pdf_output),
@@ -391,13 +384,12 @@ def test_cli_end_to_end_analysis_plan_and_html(make_pdf, tmp_path):
     result = CliRunner().invoke(
         cli.main,
         [
+            "export",
             str(source),
             "--outdir",
             str(metadata_output),
-            "--born-digital",
             "--plan",
             str(plan_path),
-            "--no-pdf-out",
         ],
     )
     assert result.exit_code == 0, result.output
@@ -408,14 +400,13 @@ def test_cli_end_to_end_analysis_plan_and_html(make_pdf, tmp_path):
     result = CliRunner().invoke(
         cli.main,
         [
+            "export",
             str(source),
             "--outdir",
             str(result_output),
-            "--born-digital",
             "--plan",
             str(plan_path),
             "--get-html",
-            "--no-pdf-out",
         ],
     )
     assert result.exit_code == 0, result.output
@@ -572,3 +563,225 @@ def test_reviewed_unit_types_are_valid(tmp_path, unit_type):
     plan = reviewed_plan(source, [unit("one", 1, 1)])
     plan["units"][0]["type"] = unit_type
     assert validate_plan(plan, source) == plan["units"]
+
+
+@pytest.mark.parametrize(
+    "footer",
+    [
+        "Journal of Footer Studies. 2024;12(3):101-110",
+        "Journal of Footer Studies, 3/2024, vol. 12",
+    ],
+)
+def test_source_metadata_prefers_repeated_late_page_footers(tmp_path, footer):
+    source = tmp_path / "footers.pdf"
+    with fitz.open() as document:
+        for number in range(8):
+            page = document.new_page(width=600, height=800)
+            page.insert_text((30, 40), "Article title", fontsize=18)
+            page.insert_text(
+                (30, 150), "References: Other Journal. 1999;7(1):1-5", fontsize=10
+            )
+            if number >= 5:
+                page.insert_text((30, 750), footer, fontsize=10)
+                page.insert_text((30, 775), "ISSN 1234-567X", fontsize=10)
+        document.save(source)
+    bibliographic = analyze_container(source, "journal-issue")["source"][
+        "bibliographic"
+    ]
+    assert bibliographic == {
+        "kind": "journal",
+        "journal_title": "Journal of Footer Studies",
+        "year": "2024",
+        "volume": "12",
+        "issue": "3",
+        "issn": "1234-567X",
+    }
+
+
+@pytest.mark.parametrize(
+    "contact", ["prof. MUDr. Alex Smith, DrSc.", "MUDr. Alex Smith, PhD."]
+)
+def test_references_and_contacts_do_not_create_unit_starts(tmp_path, contact):
+    source = tmp_path / "contacts.pdf"
+    with fitz.open() as document:
+        first = document.new_page(width=400, height=500)
+        first.insert_text((30, 40), "First article title", fontsize=18)
+        first.insert_text((30, 70), "Alice Smith", fontsize=10)
+        first.insert_text((30, 100), "Abstract", fontsize=10)
+        for number in range(2):
+            page = document.new_page(width=400, height=500)
+            page.insert_text((30, 40), "Literatúra", fontsize=9)
+            for line in range(8):
+                page.insert_text(
+                    (30, 65 + line * 10),
+                    "Smith AB, Jones CD. Journal reference.",
+                    fontsize=7,
+                )
+            page.insert_text((30, 155), "doi:10.1234/reference", fontsize=7)
+            page.insert_text((30, 220), contact, fontsize=9)
+            page.insert_text((30, 235), "alex@example.org", fontsize=9)
+            if number:
+                page.insert_text((30, 460), "www.example.org", fontsize=11)
+        document.save(source)
+    analysis = analyze_container(source, "journal-issue")
+    assert analysis["suspected_shared_page_boundaries"] == []
+    assert len(analysis["units"]) == 1
+    assert analysis["units"][0]["input_pages"] == {"start": 1, "end": 3}
+
+
+@pytest.mark.parametrize("changing_footer", [False, True])
+def test_repeated_citation_footer_changes_propose_unit_boundaries(
+    tmp_path, changing_footer
+):
+    source = tmp_path / "footer-units.pdf"
+    with fitz.open() as document:
+        for number in range(4):
+            page = document.new_page(width=600, height=800)
+            page.insert_text((30, 100), "Unmarked article heading", fontsize=10)
+            page.insert_text(
+                (30, 130), "Body content without author or DOI signals.", fontsize=10
+            )
+            page_range = "12-13" if changing_footer and number >= 2 else "10-11"
+            page.insert_text(
+                (30, 760), f"Test Journal 2024;12(3): {page_range}", fontsize=8
+            )
+            page.insert_text((550, 760), str(10 + number), fontsize=8)
+        document.save(source)
+    analysis = analyze_container(source, "journal-issue")
+    assert [unit["input_pages"]["start"] for unit in analysis["units"]] == (
+        [1, 3] if changing_footer else [1]
+    )
+    assert analysis["suspected_shared_page_boundaries"] == []
+
+
+def test_magazine_issue_analysis_and_plan(tmp_path):
+    source = make_structured_pdf(tmp_path / "source.pdf", 2)
+    analysis = analyze_container(source, "magazine-issue")
+    assert analysis["document_type"] == "magazine-issue"
+    assert analysis["source"]["bibliographic"]["kind"] == "journal"
+    plan = reviewed_plan(source, [unit("one", 1, 2)], "magazine-issue")
+    assert validate_plan(plan, source) == plan["units"]
+
+
+def test_magazine_uses_large_multiline_titles_without_academic_signals(tmp_path):
+    source = tmp_path / "magazine.pdf"
+    with fitz.open() as document:
+        for number in range(4):
+            page = document.new_page(width=600, height=800)
+            for line in range(15):
+                page.insert_text(
+                    (30, 100 + line * 15),
+                    "Magazine body text and travel descriptions.",
+                    fontsize=10,
+                )
+            page.insert_text((30, 30), "TRAVEL SECTION", fontsize=14)
+            if number in (0, 2):
+                page.insert_text((30, 430), f"Journey {number + 1}", fontsize=44)
+                page.insert_text((30, 480), "Across the mountains", fontsize=32)
+            else:
+                page.insert_text((30, 430), "A LARGE PULL QUOTE", fontsize=16)
+            page.insert_text((500, 760), str(number + 1), fontsize=50)
+        document.save(source)
+    analysis = analyze_container(source, "magazine-issue")
+    assert [unit["input_pages"]["start"] for unit in analysis["units"]] == [1, 3]
+    assert (
+        analysis["pages"][2]["main_title"]["text"] == "Journey 3 Across the mountains"
+    )
+    assert analysis["units"][1]["title"] == analysis["pages"][2]["main_title"]["text"]
+    assert analysis["suspected_shared_page_boundaries"] == []
+
+
+@pytest.mark.parametrize(
+    "document_type, bold, expected",
+    [
+        ("magazine-issue", True, "Mountain lake at sunrise"),
+        ("magazine-issue", False, None),
+        ("journal-issue", True, None),
+    ],
+)
+def test_magazine_photo_caption_without_prefix(tmp_path, document_type, bold, expected):
+    source = tmp_path / "caption.pdf"
+    image = io.BytesIO()
+    Image.new("RGB", (100, 80), "navy").save(image, format="PNG")
+    with fitz.open() as document:
+        page = document.new_page(width=400, height=500)
+        page.insert_text((30, 40), "Article opening", fontsize=36)
+        page.insert_image(fitz.Rect(50, 100, 250, 260), stream=image.getvalue())
+        page.insert_text(
+            (50, 273),
+            "Mountain lake at sunrise",
+            fontsize=9,
+            fontname="hebo" if bold else "helv",
+        )
+        page.insert_text(
+            (50, 310), "Unrelated bold heading", fontsize=12, fontname="hebo"
+        )
+        document.save(source)
+    figure = analyze_container(source, document_type)["pages"][0]["figures"][0]
+    assert figure["caption"] == expected
+    assert (figure["caption_bbox"] is not None) == (expected is not None)
+
+
+def test_cli_analysis_rejects_unit_type_filter():
+    result = CliRunner().invoke(cli.main, ["analyse", "--unit_type", "article"])
+    assert result.exit_code == 2
+    assert "No such option" in result.output
+    assert "--unit_type" in result.output
+    help_result = CliRunner().invoke(cli.main, ["analyse", "--help"])
+    assert "--unit_type" not in help_result.output
+
+
+@pytest.mark.parametrize(
+    "types, expected",
+    [
+        (("chapter",), ["first"]),
+        (("chapter", "editorial"), ["first", "second"]),
+        (("poster",), []),
+    ],
+)
+def test_cli_export_unit_type_selection(tmp_path, types, expected):
+    source = make_structured_pdf(tmp_path / "input.pdf")
+    units = [
+        unit("first", 1, 1),
+        unit("second", 2, 2),
+        unit("excluded", 3, 3, selected=False),
+    ]
+    units[1]["type"] = "editorial"
+    plan = reviewed_plan(source, units)
+    plan_path = tmp_path / "approved.plan.json"
+    original = json.dumps(plan)
+    plan_path.write_text(original, encoding="utf-8")
+    output = tmp_path / "export"
+    args = [
+        "export",
+        str(source),
+        "--outdir",
+        str(output),
+        "--plan",
+        str(plan_path),
+        "--get-html",
+    ]
+    for value in types:
+        args.extend(["--unit_type", value])
+    result = CliRunner().invoke(cli.main, args)
+    assert result.exit_code == 0, result.output
+    destination = output / "_units_input"
+    manifest = json.loads((destination / "manifest.json").read_text("utf-8"))
+    assert [item["id"] for item in manifest["units"]] == expected
+    assert sorted(path.stem for path in destination.glob("*.html")) == sorted(expected)
+    assert plan_path.read_text("utf-8") == original
+
+
+def test_cli_unit_type_requires_unit_export(make_pdf):
+    source = make_pdf(["digital"])
+    result = CliRunner().invoke(
+        cli.main, ["export", str(source), "--get-text", "--unit_type", "article"]
+    )
+    assert result.exit_code != 0
+    assert "requires --plan or --get-html" in result.output
+
+
+def test_cli_unit_type_rejects_unknown_type():
+    result = CliRunner().invoke(cli.main, ["export", "--unit_type", "invalid"])
+    assert result.exit_code == 2
+    assert "Invalid value for '--unit_type'" in result.output

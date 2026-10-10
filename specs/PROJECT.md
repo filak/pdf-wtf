@@ -21,7 +21,14 @@ The `pdfwtf` command processes one input PDF per invocation. Options select
 page ranges, OCR backend, languages, resolution, scan cleanup, and exports.
 CLI page numbers start at 1.
 
-Pass the input PDF as the first positional argument: `pdfwtf input.pdf`.
+Select an action before the input PDF: `pdfwtf ACTION INPUT_PDF`.
+The actions are `analyse`, `enhance`, and `export`. Both arguments are required.
+`analyse` writes analysis JSON from existing PDF text. It does not run OCR.
+`enhance` performs the existing PDF processing with optional derivative exports.
+`export` writes explicitly selected derivatives from the input PDF. It does not
+run scan cleanup or OCR and does not write a processed PDF.
+Use `pdfwtf ACTION --help` for action-specific options. The `--analysis` flag
+and the former command syntax without an action are not supported.
 The input argument is required. The input file must exist. Filenames and
 relative file paths resolve from the configured input directory. Its default is
 `PDFWTF_HOME/instance/_data/in`. Absolute file paths select files directly.
@@ -56,7 +63,7 @@ text. A hybrid PDF contains mixed text and image content. Scan preparation
 includes orientation correction and optional dark-background cropping.
 The unpaper integration supports layout, page splitting, and pre-rotation.
 
-The default output is a processed PDF. `--no-pdf-out` disables final PDF output.
+For `enhance`, the default output is a processed PDF. `--no-pdf-out` disables final PDF output.
 With this option, select at least one derivative output. The pipeline can still
 create a temporary processed PDF for exports.
 
@@ -276,3 +283,8 @@ Publication replaces an existing output PDF through a staged file on the output
 filesystem. Generated export directories replace their existing files. Export
 files and metadata are not published as one atomic transaction. Concurrent
 writers to the same output remain unsupported.
+
+The Review toolbar has a More menu with Show analysis and Delete plan.
+Delete plan removes only `approved.plan.json` and restores the analysis units
+when Review reloads. `DELETE /jobs/<job_id>/plan` uses CSRF protection and the
+host access check with action `delete_plan`. Uploaded PDFs and analysis remain.

@@ -6,12 +6,55 @@ import click
 from pydantic import BaseModel
 
 from pdfwtf.configuration import ConfigurationError, load_config
+from pdfwtf.container_analysis import UNIT_TYPES
 from pdfwtf.logging_utils import configure_logging
 from pdfwtf.pipeline import ProcessingError, process_pdf
 
 
 class PdfCommand(click.Command):
     """Show configured directories when help is requested."""
+
+    def format_options(
+        self, ctx: click.Context, formatter: click.HelpFormatter
+    ) -> None:
+        if self.name != "enhance":
+            return super().format_options(ctx, formatter)
+        groups = {
+            "Common options": {"output_dir", "input_path_prefix", "debug_flag", "help"},
+            "Page selection": {"extract_pages_str", "skip_pages_str"},
+            "Enhancement options": {
+                "born_digital_flag",
+                "languages",
+                "dpi",
+                "ocrlib",
+                "optimize",
+                "layout",
+                "output_pages",
+                "pre_rotate",
+                "remove_background_flag",
+            },
+            "Unit options": {"document_type", "plan_path"},
+            "Output options": {
+                "no_pdf_flag",
+                "get_doi_flag",
+                "export_format",
+                "export_html_flag",
+                "export_images_flag",
+                "export_json_flag",
+                "export_texts_flag",
+                "export_thumbs_flag",
+            },
+        }
+        for title, names in groups.items():
+            rows = [
+                record
+                for param in self.get_params(ctx)
+                if param.name in names
+                and (record := param.get_help_record(ctx)) is not None
+            ]
+            if rows:
+                with formatter.section(title):
+                    formatter.write_dl(rows)
 
     def format_epilog(self, ctx: click.Context, formatter: click.HelpFormatter) -> None:
         super().format_epilog(ctx, formatter)
@@ -58,6 +101,7 @@ class CliOptions(BaseModel):
     export_texts_flag: bool = False
     export_thumbs_flag: bool = False
     analysis_flag: bool = False
+    unit_types: tuple[str, ...] = ()
     document_type: str | None = None
     plan_path: str | None = None
     export_html_flag: bool = False
@@ -87,7 +131,7 @@ def _resolve_input_pdf(
     )
 
 
-@click.command(cls=PdfCommand)
+@click.command("enhance", cls=PdfCommand)
 @click.argument(
     "input_pdf",
     required=True,
@@ -113,15 +157,11 @@ def _resolve_input_pdf(
     help="Skip scan preparation and OCR. Image exports still render pages.",
 )
 @click.option(
-    "--analysis",
-    "analysis_flag",
-    is_flag=True,
-    help="Write page descriptions, unit proposals, and evidence without processing units.",
-)
-@click.option(
     "--doctype",
     "document_type",
-    type=click.Choice(["unit", "journal-issue", "book", "proceedings", "auto"]),
+    type=click.Choice(
+        ["unit", "journal-issue", "magazine-issue", "book", "proceedings", "auto"]
+    ),
     help="Describe the document structure. The reviewed plan is authoritative.",
 )
 @click.option(
@@ -129,12 +169,6 @@ def _resolve_input_pdf(
     "plan_path",
     type=click.Path(exists=True, dir_okay=False, resolve_path=True),
     help="Process units from a reviewed JSON plan.",
-)
-@click.option(
-    "--get-html",
-    "export_html_flag",
-    is_flag=True,
-    help="Write a UTF-8 HTML fragment for each selected unit.",
 )
 @click.option(
     "--extract",
@@ -207,22 +241,36 @@ def _resolve_input_pdf(
     help="Do not write the output PDF.",
 )
 @click.option(
-    "--get-meta",
-    "export_json_flag",
-    is_flag=True,
-    help="Write JSON metadata.",
-)
-@click.option(
     "--get-doi",
     "get_doi_flag",
     is_flag=True,
     help="Find DOI links on the first output page and write JSON metadata.",
 )
 @click.option(
+    "--get-format",
+    "export_format",
+    default="png",
+    type=click.Choice(["png"]),
+    show_default=True,
+    help="Select the page image format.",
+)
+@click.option(
+    "--get-html",
+    "export_html_flag",
+    is_flag=True,
+    help="Write a UTF-8 HTML fragment for each selected unit.",
+)
+@click.option(
     "--get-img",
     "export_images_flag",
     is_flag=True,
     help="Export each output page as an image.",
+)
+@click.option(
+    "--get-meta",
+    "export_json_flag",
+    is_flag=True,
+    help="Write JSON metadata.",
 )
 @click.option(
     "--get-text",
@@ -236,17 +284,14 @@ def _resolve_input_pdf(
     is_flag=True,
     help="Export page images and JPEG thumbnails.",
 )
-@click.option(
-    "--get-format",
-    "export_format",
-    default="png",
-    type=click.Choice(["png"]),
-    show_default=True,
-    help="Select the page image format.",
-)
 @click.option("--debug", "debug_flag", is_flag=True, help="Enable debug logging.")
-def main(input_pdf: str, output_dir: str | None, **kwargs: object) -> None:
-    """Process one PDF. Scan layout, splitting, and pre-rotation require unpaper."""
+def enhance(input_pdf: str, output_dir: str | None, **kwargs: object) -> None:
+    """Enhance a PDF with scan cleanup, OCR, and optional exports."""
+    _execute(input_pdf, output_dir, **kwargs)
+
+
+def _execute(input_pdf: str, output_dir: str | None, **kwargs: object) -> None:
+    """Invoke the shared processor with action-specific options."""
     options = CliOptions(**kwargs)
     configure_logging(options.debug_flag)
     show_info(input_pdf, output_dir, options.debug_flag)
@@ -262,6 +307,72 @@ def main(input_pdf: str, output_dir: str | None, **kwargs: object) -> None:
             "PDF processing failed. Check the input and required tools."
         ) from error
     click.echo("Done!")
+
+
+class PdfGroup(click.Group, PdfCommand):
+    """Show configured directories for the action selector."""
+
+
+@click.group(cls=PdfGroup)
+def main() -> None:
+    """Analyse, enhance, or export one PDF. Select an action first."""
+
+
+def analyse(input_pdf: str, output_dir: str | None, **kwargs: object) -> None:
+    """Write analysis JSON from existing PDF text without OCR or unit exports."""
+    _execute(
+        input_pdf, output_dir, analysis_flag=True, born_digital_flag=True, **kwargs
+    )
+
+
+def export(input_pdf: str, output_dir: str | None, **kwargs: object) -> None:
+    """Export selected derivatives from the input PDF without OCR or a PDF output."""
+    _execute(input_pdf, output_dir, born_digital_flag=True, no_pdf_flag=True, **kwargs)
+
+
+_COMMON_PARAMS = {"input_pdf", "output_dir", "input_path_prefix", "debug_flag"}
+_ANALYSE_PARAMS = _COMMON_PARAMS | {"document_type"}
+_EXPORT_PARAMS = _COMMON_PARAMS | {
+    "dpi",
+    "get_doi_flag",
+    "export_json_flag",
+    "export_images_flag",
+    "export_format",
+    "export_texts_flag",
+    "export_thumbs_flag",
+    "document_type",
+    "plan_path",
+    "export_html_flag",
+}
+
+
+def _unit_type_option() -> click.Option:
+    return click.Option(
+        ["--unit_type", "unit_types"],
+        type=click.Choice(sorted(UNIT_TYPES)),
+        multiple=True,
+        help="Select units of this type. Repeat to select several types.",
+    )
+
+
+main.add_command(enhance)
+main.add_command(
+    PdfCommand(
+        "analyse",
+        params=[param for param in enhance.params if param.name in _ANALYSE_PARAMS],
+        callback=analyse,
+        help=analyse.__doc__,
+    )
+)
+main.add_command(
+    PdfCommand(
+        "export",
+        params=[param for param in enhance.params if param.name in _EXPORT_PARAMS]
+        + [_unit_type_option()],
+        callback=export,
+        help=export.__doc__,
+    )
+)
 
 
 if __name__ == "__main__":

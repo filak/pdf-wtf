@@ -105,3 +105,32 @@ def test_local_pdf_page_selection_and_exports(sample_pdf, tmp_path):
         assert thumbnail.width <= 400
         assert thumbnail.height <= 400
     assert sha256(sample_pdf.read_bytes()).hexdigest() == source_hash
+
+
+@pytest.mark.parametrize("sample_pdf", ["born_digital_issue.pdf"], indirect=True)
+def test_issue_reference_pages_are_not_unit_boundaries(sample_pdf):
+    from pdfwtf.container_analysis import analyze_container
+
+    analysis = analyze_container(sample_pdf, "journal-issue")
+    suspected = {
+        item["input_page"] for item in analysis["suspected_shared_page_boundaries"]
+    }
+    starts = {unit["input_pages"]["start"] for unit in analysis["units"]}
+    assert not {16, 31, 43}.intersection(suspected | starts)
+    assert {3, 6, 11, 17, 26, 32, 37, 44, 50, 52}.issubset(starts)
+
+
+@pytest.mark.parametrize("sample_pdf", ["cykloturistika_1_2026_web.pdf"], indirect=True)
+def test_magazine_display_titles_propose_article_boundaries(sample_pdf):
+    from pdfwtf.container_analysis import analyze_container
+
+    analysis = analyze_container(sample_pdf, "magazine-issue")
+    starts = {unit["input_pages"]["start"] for unit in analysis["units"]}
+    assert {4, 14, 16, 22, 36, 44, 48, 54, 62, 68, 71, 74, 82}.issubset(starts)
+    assert not {15, 17, 18, 23, 24, 38, 49, 50, 75, 76}.intersection(starts)
+    assert analysis["suspected_shared_page_boundaries"] == []
+    photo_captions = [
+        figure for figure in analysis["pages"][22]["figures"] if figure["caption"]
+    ]
+    assert photo_captions
+    assert all(figure["caption_bbox"] is not None for figure in photo_captions)

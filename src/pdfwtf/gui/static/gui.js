@@ -208,7 +208,10 @@ if (app) {
       button.className = "thumbnail-button mb-2 shadow-sm";
       button.dataset.page = pageNumber;
       button.setAttribute("aria-label", format(messages.view_page, { page: pageNumber }));
-      button.innerHTML = `<div class="thumbnail-placeholder"></div><canvas></canvas><span>${pageNumber}</span>`;
+      button.innerHTML = '<div class="thumbnail-placeholder"></div><canvas></canvas><span></span>';
+      const printedNumber = reviewData.pages[pageNumber - 1]?.printed_page_number;
+      button.querySelector("span").textContent = printedNumber
+        ? `${pageNumber} [${printedNumber}]` : String(pageNumber);
       button.addEventListener("click", () => selectPage(pageNumber, true));
       container.append(button);
       observer.observe(button);
@@ -483,6 +486,7 @@ if (app) {
       readUnitCards();
       state.units.sort(compareUnitPages);
       renderUnits();
+      document.querySelector("#delete-plan").disabled = false;
       const target = document.querySelector("#plan-message");
       target.replaceChildren();
       const alert = document.createElement("div");
@@ -502,6 +506,29 @@ if (app) {
       button.textContent = oldText;
     }
   }
+
+  document.querySelector("#delete-plan").addEventListener("click", async (event) => {
+    const button = event.currentTarget;
+    button.disabled = true;
+    try {
+      const response = await fetch(app.dataset.deletePlanUrl, {
+        method: "DELETE",
+        headers: { "X-CSRFToken": csrfToken },
+      });
+      if (!response.ok) throw new Error(messages.delete_plan_error);
+      window.location.reload();
+    } catch (error) {
+      showMessage(error.message || messages.delete_plan_error);
+      button.disabled = false;
+    }
+  });
+  document.addEventListener("click", (event) => {
+    const menu = document.querySelector("#review-more");
+    if (!menu.contains(event.target)) menu.open = false;
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") document.querySelector("#review-more").open = false;
+  });
 
   document.querySelector("#previous-page").addEventListener("click", () => selectPage(state.currentPage - 1));
   document.querySelector("#next-page").addEventListener("click", () => selectPage(state.currentPage + 1));
@@ -554,7 +581,10 @@ if (app) {
   });
 
   renderUnits();
-  pdfjsLib.getDocument({ url: app.dataset.documentUrl }).promise
+  pdfjsLib.getDocument({
+    url: app.dataset.documentUrl,
+    wasmUrl: new URL("./vendor/pdfjs/wasm/", import.meta.url).href,
+  }).promise
     .then((document) => {
       state.document = document;
       previewInput.max = document.numPages;

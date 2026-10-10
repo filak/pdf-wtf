@@ -168,7 +168,7 @@ The GUI image includes unpaper. To process a PDF with the CLI inside the
 container, place it in `PDFWTF_HOME/instance/_data/in`, then run:
 
 ```
-docker compose -f dockers/pdf-wtf-gui-compose.yaml exec pdf-wtf-gui pdfwtf input.pdf --layout single --outdir /app/instance/_data/out
+docker compose -f dockers/pdf-wtf-gui-compose.yaml exec pdf-wtf-gui pdfwtf enhance input.pdf --layout single --outdir /app/instance/_data/out
 ```
 
 The command writes the processed PDF under `PDFWTF_HOME/instance/_data/out`.
@@ -223,10 +223,20 @@ uv run --locked --extra gui pybabel update -i messages.pot -d src/pdfwtf/gui/tra
 uv run --locked --extra gui pybabel compile -d src/pdfwtf/gui/translations
 ```
 
+Select an action before the input PDF:
+
+- `analyse` writes analysis JSON from existing PDF text.
+- `enhance` runs PDF processing and can also export derivatives.
+- `export` writes selected derivatives without OCR or a processed PDF.
+
+Use `uv run --locked pdfwtf --help` to list actions.
+Use `uv run --locked pdfwtf export --help` to list export options.
+The input PDF and action are required. The former `--analysis` flag is removed.
+
 Process a PDF with the command-line interface:
 
 ```
-uv run --locked pdfwtf input.pdf --outdir output --get-text
+uv run --locked pdfwtf enhance input.pdf --outdir output --get-text
 ```
 
 Use a filename or a relative path below the configured input directory. The
@@ -249,7 +259,7 @@ If the input is born digital, use `--born-digital` to bypass automatic scan
 detection, scan preparation, and OCR:
 
 ```
-uv run --locked pdfwtf input.pdf --outdir output --born-digital --get-text
+uv run --locked pdfwtf enhance input.pdf --outdir output --born-digital --get-text
 ```
 
 Page selection and removal still work. The output PDF retains the selected
@@ -303,7 +313,7 @@ Use `--optimize` to set OCRmyPDF optimization. The default is `0`.
 - `3`: Use more aggressive lossy optimization.
 
 ```powershell
-uv run --locked pdfwtf scan_with_text.pdf --optimize 1 --get-text
+uv run --locked pdfwtf enhance scan_with_text.pdf --optimize 1 --get-text
 ```
 
 Levels `2` and `3` can show a warning if the optional `jbig2` executable is
@@ -312,14 +322,16 @@ unavailable. The option applies only when OCRmyPDF runs. It has no effect with
 
 ### Output selection
 
-The default output is a processed PDF. Add export options to write derivatives.
-Use `--no-pdf-out` to write derivatives only. Select at least one export option.
+The `enhance` action writes a processed PDF by default. Add export options to
+write derivatives. Use `export` to read the input PDF without OCR and write
+only derivatives. Select at least one export option or a reviewed plan.
+For OCR before derivative output, use `enhance --no-pdf-out` with export options.
 
 ```powershell
-uv run --locked pdfwtf input.pdf
-uv run --locked pdfwtf input.pdf --get-text
-uv run --locked pdfwtf input.pdf --no-pdf-out --get-text
-uv run --locked pdfwtf input.pdf --no-pdf-out --get-meta --get-img --get-thumb
+uv run --locked pdfwtf enhance input.pdf
+uv run --locked pdfwtf enhance input.pdf --get-text
+uv run --locked pdfwtf export input.pdf --get-text
+uv run --locked pdfwtf export input.pdf --get-meta --get-img --get-thumb
 ```
 
 Use `--get-meta` to write JSON metadata. JSON includes `doi` and `pages`. The
@@ -376,7 +388,7 @@ The container workflow supports born-digital PDFs and whole-page unit
 boundaries. First, write a machine analysis:
 
 ```powershell
-uv run --locked pdfwtf issue.pdf --born-digital --analysis --doctype journal-issue
+uv run --locked pdfwtf analyse issue.pdf --doctype journal-issue
 ```
 
 The command writes `issue.analysis.json` in the output directory. The analysis
@@ -389,7 +401,7 @@ consuming application keeps this file unchanged and writes corrections and
 selections to `issue.plan.json`. Process the reviewed plan:
 
 ```powershell
-uv run --locked pdfwtf issue.pdf --born-digital --plan issue.plan.json --get-html --no-pdf-out
+uv run --locked pdfwtf export issue.pdf --plan issue.plan.json --get-html
 ```
 
 The plan's page selections control the output PDF and the pages included in
@@ -403,8 +415,18 @@ into separate article regions.
 Process a single unit without a reviewed plan:
 
 ```powershell
-uv run --locked pdfwtf article.pdf --born-digital --doctype unit --get-html --no-pdf-out
+uv run --locked pdfwtf export article.pdf --doctype unit --get-html
 ```
 
 See [the container analysis specification](specs/CONTAINER_ANALYSIS.md) for the
 analysis schema, reviewed plan schema, result contracts, and heuristic limits.
+
+After review, select one or more unit types for export:
+
+```
+pdfwtf export issue.pdf --plan approved.plan.json --get-html --unit_type article
+```
+
+Analysis proposes unit types. Operators correct these types in the reviewed plan.
+Export respects plan selection and exports only matching units. Repeat
+`--unit_type` to select several types. Page derivatives are not filtered.

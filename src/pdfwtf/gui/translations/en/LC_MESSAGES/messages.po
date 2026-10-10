@@ -361,3 +361,21 @@ msgstr ""
 #: src/pdfwtf/gui/blueprint.py
 msgid "Cover"
 msgstr ""
+
+msgid "More"
+msgstr ""
+
+msgid "Show analysis"
+msgstr ""
+
+msgid "Delete plan"
+msgstr ""
+
+msgid "The plan could not be deleted."
+msgstr ""
+
+msgid "The plan was deleted."
+msgstr ""
+
+msgid "Magazine issue"
+msgstr ""

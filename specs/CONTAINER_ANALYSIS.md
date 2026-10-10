@@ -16,7 +16,7 @@ review and editing.
 
 Use this sequence:
 
-1. Run `--analysis` to write machine proposals and evidence.
+1. Run `pdfwtf analyse INPUT_PDF` to write machine proposals and evidence.
 2. Review the analysis in the consuming application.
 3. Write a plan with confirmed whole-page boundaries.
 4. Run `--plan PATH` to process selected units.
@@ -29,7 +29,20 @@ plan.
 
 The source PDF is always the required positional argument. `--doctype`
 describes document structure. It does not describe whether the PDF is scanned.
-The container workflow currently requires `--born-digital`.
+The `analyse` and `export` actions use existing PDF text and do not run OCR.
+When `enhance` processes a reviewed plan or exports unit HTML, use
+`--born-digital`. Image-only pages have no extracted text in these workflows.
+
+The `export` action accepts repeatable `--unit_type TYPE` filters.
+Without a filter, selection is unchanged. Export filters the selected units from
+`--plan`, or the direct unit from `--get-html`. It does not change the saved plan
+or filter page derivatives. A filter requires one of these unit export options.
+If no types match, export writes an empty unit manifest.
+
+Analysis type detection uses title keywords and document-type defaults. These
+are proposals for operator review. Journal and magazine units default to
+`article` when no type keyword matches. Operators assign the correct types in
+the reviewed plan before export. The `analyse` action does not filter unit types.
 
 ## Common JSON fields
 
@@ -163,7 +176,7 @@ The analysis filename is `<source-stem>.analysis.json`. It has this shape:
 }
 ```
 
-`document_type` is `unit`, `journal-issue`, `book`, `proceedings`, or `unknown`.
+`document_type` is `unit`, `journal-issue`, `magazine-issue`, `book`, `proceedings`, or `unknown`.
 `--doctype auto` uses document-level evidence to propose the value. It can
 produce `unknown`. An uncertain result requires review.
 
@@ -314,3 +327,34 @@ Vector graphics and table rules produce review warnings. Complex layouts,
 multi-page figures, vector-only figures, tables, sidebars, footnotes, and true
 within-page unit boundaries require review. The processor does not silently
 discard a detected text block.
+
+Journal source detection checks the bottom 15 percent of every input page for
+citation lines. It prefers repeated footer citations over first-page titles
+and body text. Recognized footer patterns include `Journal. 2024;12(3):101-110`
+and `Journal, 3/2024, vol. 12`. Other layouts use the existing source fallback.
+Detected source metadata remains a proposal for review.
+
+Unit title candidates exclude contact addresses, websites, academic credentials,
+reference section labels, and footer text. DOI references and author contact
+blocks on article-ending pages do not by themselves establish a new unit.
+
+Journal and proceedings unit detection also checks citation footers in the
+bottom 10 percent of each page. A citation repeated on consecutive pages
+identifies an article run. A changed citation after a repeated run proposes a
+new unit at the changed page. The signature includes the full article page
+range. Standalone printed page numbers do not establish a boundary.
+
+`magazine-issue` uses the journal source metadata contract. Select this type
+explicitly. Automatic detection does not distinguish a magazine from an
+academic journal. Magazine segmentation uses display titles of at least 24 PDF
+points and at least 1.8 times the character-weighted median font size.
+Adjacent large title lines are combined into `main_title`. Titles can occur
+below photographs. Author, abstract, and DOI signals are not required.
+Page numbers, footer text, websites, and repeated display titles do not create
+new title-based boundaries. Proposed units still require review.
+
+For magazine issues, photo captions can use unprefixed bold text directly below
+an image. The detector checks horizontal alignment, a gap of at most 18 PDF
+points, and text of at most 14 PDF points. It associates each caption line with
+one nearest image and excludes page footers. Academic journal caption rules
+continue to require explicit caption prefixes.

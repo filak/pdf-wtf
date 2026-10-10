@@ -140,3 +140,7 @@
 .pdf-text-layer[data-main-rotation="270"] { transform: rotate(270deg) translateX(-100%); }
 
 .badge.theme-primary { background-color: var(--bs-primary); color: white; }
+
+#review-more > summary { list-style: none; }
+#review-more > summary::-webkit-details-marker { display: none; }
+#review-more .dropdown-menu { right: 0; }

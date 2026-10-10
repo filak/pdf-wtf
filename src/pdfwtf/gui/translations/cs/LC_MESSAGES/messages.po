@@ -361,3 +361,21 @@ msgstr "Celostránková inzerce"
 #: src/pdfwtf/gui/blueprint.py
 msgid "Cover"
 msgstr "Obálka"
+
+msgid "More"
+msgstr "Další"
+
+msgid "Show analysis"
+msgstr "Zobrazit analýzu"
+
+msgid "Delete plan"
+msgstr "Smazat plán"
+
+msgid "The plan could not be deleted."
+msgstr "Plán se nepodařilo smazat."
+
+msgid "The plan was deleted."
+msgstr "Plán byl smazán."
+
+msgid "Magazine issue"
+msgstr "Číslo magazínu"

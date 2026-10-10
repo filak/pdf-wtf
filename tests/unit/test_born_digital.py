@@ -146,7 +146,7 @@ def test_cli_passes_explicit_flag(make_pdf, monkeypatch, enabled):
     args = [str(make_pdf(["digital"]))]
     if enabled:
         args.append("--born-digital")
-    result = CliRunner().invoke(cli.main, args)
+    result = CliRunner().invoke(cli.main, ["enhance", *(args)])
     assert result.exit_code == 0, result.output
     assert received["born_digital_flag"] is enabled
 
@@ -156,6 +156,7 @@ def test_cli_processes_vector_only_pdf(vector_pdf, tmp_path, forbid_scan_process
     result = CliRunner().invoke(
         cli.main,
         [
+            "enhance",
             str(vector_pdf),
             "--outdir",
             str(output),
@@ -180,6 +181,7 @@ def test_cli_reports_conflicting_options(vector_pdf, tmp_path):
     result = CliRunner().invoke(
         cli.main,
         [
+            "enhance",
             str(vector_pdf),
             "--outdir",
             str(tmp_path / "out"),
@@ -193,7 +195,7 @@ def test_cli_reports_conflicting_options(vector_pdf, tmp_path):
 
 
 def test_help_explains_override():
-    result = CliRunner().invoke(cli.main, ["--help"])
+    result = CliRunner().invoke(cli.main, ["enhance", "--help"])
     assert result.exit_code == 0
     assert "--born-digital" in result.output
     assert "Image exports still" in " ".join(result.output.split())

@@ -28,7 +28,14 @@ from pdfwtf.container_analysis import PlanValidationError, validate_plan
 from pdfwtf.gui.adapter import AnalysisAdapter
 
 _JOB_ID = re.compile(r"^[A-Za-z0-9_-]{20,128}$")
-_DOCUMENT_TYPES = ("auto", "unit", "journal-issue", "book", "proceedings")
+_DOCUMENT_TYPES = (
+    "auto",
+    "unit",
+    "journal-issue",
+    "magazine-issue",
+    "book",
+    "proceedings",
+)
 AccessCheck = Callable[[str, str | None], bool]
 
 
@@ -44,11 +51,13 @@ def create_gui_blueprint() -> Blueprint:
 
     @blueprint.after_request
     def javascript_content_type(response: Response) -> Response:
-        """Serve GUI scripts independently of operating-system MIME mappings."""
+        """Serve GUI browser assets independently of system MIME mappings."""
         if request.endpoint == "pdfwtf_gui.static" and request.path.endswith(
             (".js", ".mjs")
         ):
             response.mimetype = "text/javascript"
+        elif request.endpoint == "pdfwtf_gui.static" and request.path.endswith(".wasm"):
+            response.mimetype = "application/wasm"
         return response
 
     @blueprint.url_defaults
@@ -338,6 +347,17 @@ def create_gui_blueprint() -> Blueprint:
             message=_("The approved plan was saved."),
             download_url=url_for("pdfwtf_gui.download_plan", job_id=job_id),
         )
+
+    @blueprint.delete("/jobs/<job_id>/plan")
+    def delete_plan(job_id: str) -> Response:
+        _valid_job_id(job_id)
+        _authorize("delete_plan", job_id)
+        try:
+            _document_path(job_id)
+        except KeyError:
+            abort(404)
+        _plan_path(job_id).unlink(missing_ok=True)
+        return jsonify(message=_("The plan was deleted."))
 
     @blueprint.get("/jobs/<job_id>/plan")
     def download_plan(job_id: str) -> Response:
