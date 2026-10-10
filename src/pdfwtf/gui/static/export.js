@@ -43,21 +43,29 @@ async function checkExport(statusUrl, generation) {
 }
 
 exportDialog.addEventListener("show.bs.modal", async (event) => {
-  const sourceLink = event.relatedTarget.closest(".upload-row").querySelector('a[target="_blank"]');
-  document.getElementById("export-source-filename").textContent = sourceLink.textContent;
-  exportUrl = event.relatedTarget.dataset.exportUrl;
-  exportStatusUrl = event.relatedTarget.dataset.exportStatusUrl;
   const generation = ++exportGeneration;
-  exportForm.reset();
-  exportFeedback.replaceChildren();
-  exportFeedback.className = "mt-3";
-  setExportBusy(true);
+  exportUrl = undefined;
+  exportStatusUrl = undefined;
   try {
+    exportForm.reset();
+    exportFeedback.replaceChildren();
+    exportFeedback.className = "mt-3";
+    document.getElementById("export-source-filename").textContent = "";
+    setExportBusy(true);
+    const trigger = event.relatedTarget;
+    const sourceLink = trigger instanceof Element
+      ? trigger.closest(".upload-row")?.querySelector('a[target="_blank"]') : null;
+    if (!sourceLink || !trigger.dataset.exportUrl || !trigger.dataset.exportStatusUrl) {
+      throw new Error(exportDialog.dataset.error);
+    }
+    document.getElementById("export-source-filename").textContent = sourceLink.textContent;
+    exportUrl = trigger.dataset.exportUrl;
+    exportStatusUrl = trigger.dataset.exportStatusUrl;
     await checkExport(exportStatusUrl, generation);
   } catch (error) {
     if (generation === exportGeneration) showExportError(error.message);
   } finally {
-    if (generation === exportGeneration) setExportBusy(false);
+    if (generation === exportGeneration) setExportBusy(!exportUrl);
   }
 });
 
@@ -67,6 +75,7 @@ exportDialog.addEventListener("hidden.bs.modal", () => {
 
 exportForm.addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (!exportUrl) return;
   const generation = exportGeneration;
   const options = {
     no_pdf_out: exportForm.elements.no_pdf_out.checked,

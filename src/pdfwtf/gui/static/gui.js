@@ -12,9 +12,9 @@ if (app) {
   const reviewData = plan || analysis;
   const messages = JSON.parse(document.querySelector("#gui-messages").textContent);
   const unitTypes = JSON.parse(document.querySelector("#unit-types").textContent);
-  const unitTypeLabels = JSON.parse(
+  const unitTypeLabels = new Map(Object.entries(JSON.parse(
     document.querySelector("#unit-type-labels").textContent,
-  );
+  )));
   const state = {
     document: null,
     currentPage: 1,
@@ -224,7 +224,7 @@ if (app) {
   function option(value, selected) {
     const item = document.createElement("option");
     item.value = value;
-    item.textContent = unitTypeLabels[value] || value;
+    item.textContent = unitTypeLabels.get(value) ?? value;
     item.selected = value === selected;
     return item;
   }
@@ -468,6 +468,11 @@ if (app) {
     const selected = [...document.querySelectorAll(".merge-unit:checked")]
       .map((control) => Number(control.closest(".unit-card").dataset.index))
       .sort((first, second) => first - second);
+    if (!selected.every((index) => Number.isInteger(index)
+      && index >= 0 && index < state.units.length)) {
+      showMessage(messages.invalid_merge);
+      return;
+    }
     const units = selected.map((index) => state.units[index]);
     const ordered = [...units].sort(
       (first, second) => first.input_pages.start - second.input_pages.start,
