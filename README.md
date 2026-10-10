@@ -93,9 +93,10 @@ For persistent environment setup and path overrides, see the
 
 ## Docker
 
-> If You do not want to install anything just spin up the Docker
+> If You do not want to install anything just spin up (or rebuild) the Docker
 
 ```text
+docker buildx bake -f compose-pdf-wtf-gui.yaml --allow=fs.read=.Dockerfile-pdf-wtf-gui --load
 docker compose -f compose-pdf-wtf-gui.yaml up -d
 ```
 
