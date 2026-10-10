@@ -17,11 +17,8 @@ services:
       - /tmp
     volumes:
       - type: bind
-        source: "${PDFWTF_HOME:?PDFWTF_HOME is required}/instance/_data"
-        target: /app/instance/_data
-      - type: bind
-        source: "${PDFWTF_HOME:?PDFWTF_HOME is required}/instance/logs"
-        target: /app/instance/logs
+        source: "${PDFWTF_HOME:?PDFWTF_HOME is required}/instance"
+        target: /app/instance
     healthcheck:
       test:
         - CMD
