@@ -2,7 +2,10 @@
 
 PDF-WTF processes PDF files and extracts document data. It supports existing
 PDF text, scanned pages, and mixed text and image content.
-The project is in development.
+
+This project uses LLM-AI coding tools.
+
+The current project status is: in development
 
 [![CodeQL](https://github.com/filak/pdf-wtf/actions/workflows/codeql.yml/badge.svg)](https://github.com/filak/pdf-wtf/security/code-scanning)
 
