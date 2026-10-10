@@ -71,6 +71,8 @@ def test_index_uses_namespaced_local_assets_and_language(gui_app):
     assert b"/assets/vendor/bootstrap/bootstrap.min.css" in response.data
     assert b"/assets/vendor/htmx/htmx.min.js" in response.data
     assert b'name="lang"' in response.data
+    assert b'href="https://github.com/filak/pdf-wtf"' in response.data
+    assert b'class="bi bi-github"' in response.data
     assert "Vybrat soubor".encode() in response.data
     assert "Není vybrán žádný soubor".encode() in response.data
     assert b"/assets/upload.js" in response.data

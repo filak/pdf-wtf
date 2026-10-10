@@ -22,38 +22,44 @@
         <div class="d-flex align-items-center">
           <a class="navbar-brand" href="{{ url_for('pdfwtf_gui.index') }}">
             <span class="fw-lighter">PDF-WTF</span>
-  <small>
-    <span class="badge rounded-pill text-bg-info">
-    {{ config.PDFWTF_GUI_VERSION }}
-  </span>
-  </small>
-  <small class="fw-light">[demo]</small>
+            <small>
+              <span class="badge rounded-pill text-bg-info">
+                {{ config.PDFWTF_GUI_VERSION }}
+              </span>
+            </small>
+            <small class="fw-light">[demo]</small>
           </a>
-
         </div>
+
         <div class="d-flex align-items-center gap-3">
-        <form action="{{ request.path }}" method="get" class="d-flex align-items-center gap-2">
-          <label class="text-light" for="language">
-            {{ _('Language') }}</label>
-          <select id="language" name="lang" class="form-select form-select-sm shadow-sm" onchange="this.form.submit()">
-            <option value="en"{% if get_locale()|string == 'en' %} selected{% endif %}>EN</option>
-            <option value="cs"{% if get_locale()|string == 'cs' %} selected{% endif %}>CS</option>
-          </select>
-        </form>
-        <details id="theme-picker" class="dropdown">
-          <summary id="bd-theme" class="btn btn-link nav-link text-light px-1" data-label="{{ _('Toggle theme') }}" aria-label="{{ _('Toggle theme') }}" aria-controls="bd-theme-menu">
-            <svg class="theme-icon" aria-hidden="true"><use href="#theme-auto"></use></svg>
-            <span class="visually-hidden">{{ _('Toggle theme') }}</span>
-          </summary>
-          <div id="bd-theme-menu" class="dropdown-menu dropdown-menu-end" aria-labelledby="bd-theme">
-            {% for value, label in [('light', _('Light')), ('dark', _('Dark')), ('auto', _('Auto'))] %}
-            <button type="button" class="dropdown-item d-flex align-items-center gap-2" data-bs-theme-value="{{ value }}" data-label="{{ label }}" aria-pressed="false">
-              <svg class="theme-icon opacity-50" aria-hidden="true"><use href="#theme-{{ value }}"></use></svg>
-              {{ label }}<span class="theme-check ms-auto d-none" aria-hidden="true">✓</span>
-            </button>
-            {% endfor %}
-          </div>
-        </details>
+          <form action="{{ request.path }}" method="get" class="d-flex align-items-center gap-2">
+            <label class="text-light visually-hidden" for="language">
+              {{ _('Language') }}</label>
+            <select id="language" name="lang" class="form-select form-select-sm shadow-sm" onchange="this.form.submit()">
+              <option value="en"{% if get_locale()|string == 'en' %} selected{% endif %}>EN</option>
+              <option value="cs"{% if get_locale()|string == 'cs' %} selected{% endif %}>CS</option>
+            </select>
+          </form>
+          <details id="theme-picker" class="dropdown">
+            <summary id="bd-theme" class="btn btn-link nav-link text-light px-1" data-label="{{ _('Toggle theme') }}" aria-label="{{ _('Toggle theme') }}" aria-controls="bd-theme-menu">
+              <svg class="theme-icon" aria-hidden="true"><use href="#theme-auto"></use></svg>
+              <span class="visually-hidden">{{ _('Toggle theme') }}</span>
+            </summary>
+            <div id="bd-theme-menu" class="dropdown-menu dropdown-menu-end" aria-labelledby="bd-theme">
+              {% for value, label in [('light', _('Light')), ('dark', _('Dark')), ('auto', _('Auto'))] %}
+              <button type="button" class="dropdown-item d-flex align-items-center gap-2" data-bs-theme-value="{{ value }}" data-label="{{ label }}" aria-pressed="false">
+                <svg class="theme-icon opacity-50" aria-hidden="true"><use href="#theme-{{ value }}"></use></svg>
+                {{ label }}<span class="theme-check ms-auto d-none" aria-hidden="true">✓</span>
+              </button>
+              {% endfor %}
+            </div>
+          </details>
+          <a class="btn btn-link nav-link text-light px-1"
+             href="https://github.com/filak/pdf-wtf"
+             target="_blank" rel="noopener noreferrer"
+             aria-label="GitHub repository" title="GitHub repository">
+            <i class="bi bi-github" aria-hidden="true"></i>
+          </a>
         </div>
       </div>
     </nav>

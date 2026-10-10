@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-09 15:15+0200\n"
+"POT-Creation-Date: 2026-10-10 18:06+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,104 +17,235 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: src/pdfwtf/gui/blueprint.py:59
-msgid "Automatic"
+#: src/pdfwtf/gui/blueprint.py:97
+msgid "Select a valid PDF type."
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:60
-msgid "Single unit"
-msgstr ""
-
-#: src/pdfwtf/gui/blueprint.py:61
-msgid "Journal issue"
-msgstr ""
-
-#: src/pdfwtf/gui/blueprint.py:62
-msgid "Book"
-msgstr ""
-
-#: src/pdfwtf/gui/blueprint.py:63
-msgid "Proceedings"
-msgstr ""
-
-#: src/pdfwtf/gui/blueprint.py:90
+#: src/pdfwtf/gui/blueprint.py:117
 msgid "Select a valid PDF document."
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:102
-msgid "Analysis could not start. Try again."
+#: src/pdfwtf/gui/blueprint.py:141
+msgid "Upload could not be saved. Try again."
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:119
-msgid "Analysis failed. Upload the document again or contact support."
-msgstr ""
-
-#: src/pdfwtf/gui/blueprint.py:160
-msgid "Preface"
-msgstr ""
-
-#: src/pdfwtf/gui/blueprint.py:161
-msgid "Editorial"
-msgstr ""
-
-#: src/pdfwtf/gui/blueprint.py:162
-msgid "Table of contents"
+#: src/pdfwtf/gui/blueprint.py:155 src/pdfwtf/gui/blueprint.py:204
+#: src/pdfwtf/gui/blueprint.py:398 src/pdfwtf/gui/blueprint.py:402
+#: src/pdfwtf/gui/blueprint.py:462 src/pdfwtf/gui/blueprint.py:507
+msgid "Wait for the active operation to finish."
 msgstr ""
 
 #: src/pdfwtf/gui/blueprint.py:163
+msgid "Wait for analysis to finish before deleting the file."
+msgstr ""
+
+#: src/pdfwtf/gui/blueprint.py:192
+msgid "The file could not be deleted. Try again."
+msgstr ""
+
+#: src/pdfwtf/gui/blueprint.py:216
+msgid "Select a valid document type."
+msgstr ""
+
+#: src/pdfwtf/gui/blueprint.py:233
+msgid "Analysis could not start. Try again."
+msgstr ""
+
+#: src/pdfwtf/gui/blueprint.py:251
+msgid "Analysis failed. Upload the document again or contact support."
+msgstr ""
+
+#: src/pdfwtf/gui/blueprint.py:328
+msgid "Preface"
+msgstr ""
+
+#: src/pdfwtf/gui/blueprint.py:329
+msgid "Editorial"
+msgstr ""
+
+#: src/pdfwtf/gui/blueprint.py:330
+msgid "Table of contents"
+msgstr ""
+
+#: src/pdfwtf/gui/blueprint.py:331
 msgid "Programme"
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:164
+#: src/pdfwtf/gui/blueprint.py:332
 msgid "Article"
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:165
+#: src/pdfwtf/gui/blueprint.py:333
 msgid "Chapter"
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:166
+#: src/pdfwtf/gui/blueprint.py:334
 msgid "Abstract"
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py
+#: src/pdfwtf/gui/blueprint.py:335
 msgid "Poster"
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:167
+#: src/pdfwtf/gui/blueprint.py:336
 msgid "Book review"
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:168
+#: src/pdfwtf/gui/blueprint.py:337
+msgid "Full-page advertisement"
+msgstr ""
+
+#: src/pdfwtf/gui/blueprint.py:338
+msgid "Cover"
+msgstr ""
+
+#: src/pdfwtf/gui/blueprint.py:339
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:18
 msgid "Unknown"
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:197
+#: src/pdfwtf/gui/blueprint.py:382
+msgid "Select valid export options."
+msgstr ""
+
+#: src/pdfwtf/gui/blueprint.py:388
+msgid "The saved plan could not be read."
+msgstr ""
+
+#: src/pdfwtf/gui/blueprint.py:405
+msgid "Export could not start. Try again."
+msgstr ""
+
+#: src/pdfwtf/gui/blueprint.py:428
+msgid "Export failed. Check the host logs."
+msgstr ""
+
+#: src/pdfwtf/gui/blueprint.py:465
 msgid "The plan must be a JSON object."
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:204
+#: src/pdfwtf/gui/blueprint.py:472
 msgid "The plan is not valid."
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:213
+#: src/pdfwtf/gui/blueprint.py:498
 msgid "The approved plan was saved."
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:239
+#: src/pdfwtf/gui/blueprint.py:516
+msgid "The plan was deleted."
+msgstr ""
+
+#: src/pdfwtf/gui/blueprint.py:544
 msgid "The PDF is larger than the configured upload limit."
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:278
+#: src/pdfwtf/gui/blueprint.py:719
 msgid "Select a PDF document."
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:280
+#: src/pdfwtf/gui/blueprint.py:721
 msgid "The selected file must have a .pdf extension."
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:282
-msgid "Select a valid document type."
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_analysis_actions.html:3
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_job_complete.html:4
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:2
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:10
+msgid "Review"
+msgstr ""
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_analysis_actions.html:9
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:41
+msgid "Export"
+msgstr ""
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_delete_confirmation.html:5
+msgid "Confirm deletion"
+msgstr ""
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_delete_confirmation.html:9
+msgid "Cancel"
+msgstr ""
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_delete_confirmation.html:10
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_uploads.html:20
+msgid "Delete"
+msgstr ""
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_document_type.html:2
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:12
+msgid "Automatic"
+msgstr ""
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_document_type.html:3
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:13
+msgid "Single unit"
+msgstr ""
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_document_type.html:4
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:14
+msgid "Journal issue"
+msgstr ""
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_document_type.html:5
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:15
+msgid "Magazine issue"
+msgstr ""
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_document_type.html:6
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:16
+msgid "Book"
+msgstr ""
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_document_type.html:7
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:17
+msgid "Proceedings"
+msgstr ""
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:2
+msgid "Export is running…"
+msgstr ""
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:2
+msgid "Export is complete."
+msgstr ""
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:3
+msgid "Export could not be completed. Try again."
+msgstr ""
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:3
+msgid "Download export"
+msgstr ""
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:7
+msgid "Export options"
+msgstr ""
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:8
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:40
+msgid "Close"
+msgstr ""
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:15
+msgid "Write HTML for included units."
+msgstr ""
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:20
+msgid "Include unit metadata JSON files in the ZIP."
+msgstr ""
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:25
+msgid "Include the original source PDF in the ZIP."
+msgstr ""
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:30
+msgid "Do not write PDF for units."
+msgstr ""
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:35
+msgid "Include the saved plan and analysis JSON in the ZIP."
 msgstr ""
 
 #: src/pdfwtf/gui/templates/pdfwtf_gui/_job_complete.html:2
@@ -125,8 +256,8 @@ msgstr ""
 msgid "This result was created by the local demo adapter."
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/_job_complete.html:4
-msgid "Review"
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_job_complete.html:5
+msgid "Download analysis"
 msgstr ""
 
 #: src/pdfwtf/gui/templates/pdfwtf_gui/_job_status.html:10
@@ -137,32 +268,62 @@ msgstr ""
 msgid "Waiting for analysis…"
 msgstr ""
 
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_uploads.html:2
+msgid "Process files"
+msgstr ""
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_uploads.html:10
+#: src/pdfwtf/gui/templates/pdfwtf_gui/input.html:29
+msgid "Scanned"
+msgstr ""
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_uploads.html:12
+#: src/pdfwtf/gui/templates/pdfwtf_gui/input.html:28
+msgid "Born-digital"
+msgstr ""
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_uploads.html:17
+msgid "Delete this file and its saved analysis and plan?"
+msgstr ""
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_uploads.html:21
+msgid "Document type"
+msgstr ""
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_uploads.html:25
+msgid "Analyze"
+msgstr ""
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_uploads.html:33
+msgid "No uploaded files."
+msgstr ""
+
 #: src/pdfwtf/gui/templates/pdfwtf_gui/input.html:2
+msgid "Upload & Process"
+msgstr ""
+
 #: src/pdfwtf/gui/templates/pdfwtf_gui/input.html:8
-msgid "Analyze a PDF"
-msgstr ""
-
-#: src/pdfwtf/gui/templates/pdfwtf_gui/input.html:2
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:2
-#: src/pdfwtf/gui/templates/pdfwtf_gui/standalone_base.html:7
-#: src/pdfwtf/gui/templates/pdfwtf_gui/standalone_base.html:15
-msgid "PDF-WTF-GUI"
-msgstr ""
-
-#: src/pdfwtf/gui/templates/pdfwtf_gui/input.html:9
-msgid "Upload a born-digital PDF and review proposed whole-page units."
+msgid "Upload PDF"
 msgstr ""
 
 #: src/pdfwtf/gui/templates/pdfwtf_gui/input.html:20
 msgid "PDF document"
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/input.html:24
-msgid "Document type"
+#: src/pdfwtf/gui/templates/pdfwtf_gui/input.html:22
+msgid "Choose file"
+msgstr ""
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/input.html:25
+msgid "No file selected"
+msgstr ""
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/input.html:26
+msgid "PDF type"
 msgstr ""
 
 #: src/pdfwtf/gui/templates/pdfwtf_gui/input.html:31
-msgid "Analyze"
+msgid "Upload"
 msgstr ""
 
 #: src/pdfwtf/gui/templates/pdfwtf_gui/input.html:32
@@ -170,305 +331,196 @@ msgid "Uploading…"
 msgstr ""
 
 #: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:2
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:9
-msgid "Review plan"
+#: src/pdfwtf/gui/templates/pdfwtf_gui/standalone_base.html:7
+msgid "PDF-WTF-GUI"
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:10
-msgid "Page indices use the 1-based input PDF order."
-msgstr ""
-
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:13
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:35
 msgid "Add unit"
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:14
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:36
 msgid "Merge selected"
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:15
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:37
 msgid "Save plan"
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:20
-msgid "Demo result: replace the demo adapter before production use."
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:39
+msgid "More"
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:24
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:41
+msgid "Exports"
+msgstr ""
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:42
+msgid "Show analysis"
+msgstr ""
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:45
+msgid "Delete the approved plan?"
+msgstr ""
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:47
+msgid "Delete plan"
+msgstr ""
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:56
 msgid "Possible unit boundaries within a page were detected."
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:25
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:57
 msgid "Check the listed pages. This warning does not prevent saving the plan."
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:28
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:60
 #, python-format
 msgid "Input page %(page)s"
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:36
-msgid "Page thumbnails"
-msgstr ""
-
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:41
-msgid "Previous"
-msgstr ""
-
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:42
-msgid "Preview page"
-msgstr ""
-
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:45
-msgid "Next"
-msgstr ""
-
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:46
-msgid "Zoom out"
-msgstr ""
-
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:48
-msgid "Zoom in"
-msgstr ""
-
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:51
-msgid "PDF page preview"
-msgstr ""
-
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:55
-msgid "Units"
-msgstr ""
-
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:63
-msgid "New unit"
-msgstr ""
-
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:64
-msgid "Remove this unit?"
-msgstr ""
-
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:65
-msgid "Excluded"
-msgstr ""
-
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:66
-msgid "Included"
-msgstr ""
-
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:67
-msgid "Select at least two adjacent units to merge."
-msgstr ""
-
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:68
-msgid "The PDF preview could not load."
-msgstr ""
-
 #: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:69
-msgid "Merged unit"
-msgstr ""
-
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:70
-msgid "Remove"
-msgstr ""
-
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:71
-msgid "Select for merge"
-msgstr ""
-
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:72
-msgid "Title"
-msgstr ""
-
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:73
-msgid "Type"
+msgid "Pages"
 msgstr ""
 
 #: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:74
-msgid "Start page"
+msgid "Previous"
 msgstr ""
 
 #: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:75
-msgid "End page"
-msgstr ""
-
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:76
-msgid "Unit ID"
-msgstr ""
-
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:77
-msgid "The plan could not be saved."
+msgid "Preview page"
 msgstr ""
 
 #: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:78
-msgid "Saving…"
+msgid "Next"
 msgstr ""
 
 #: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:79
+msgid "Zoom out"
+msgstr ""
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:81
+msgid "Zoom in"
+msgstr ""
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:85
+msgid "PDF page preview"
+msgstr ""
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:92
+msgid "Units"
+msgstr ""
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:93
+msgid "Apply to units"
+msgstr ""
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:95
+msgid "All"
+msgstr ""
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:96
+msgid "Selected"
+msgstr ""
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:97
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:103
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:116
+msgid "Included"
+msgstr ""
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:98
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:120
+msgid "Removed"
+msgstr ""
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:99
+msgid "Clear selection"
+msgstr ""
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:102
+msgid "Include or exclude units"
+msgstr ""
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:115
+msgid "New unit"
+msgstr ""
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:117
+msgid "Select at least two adjacent units to merge."
+msgstr ""
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:118
+msgid "The PDF preview could not load."
+msgstr ""
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:119
+msgid "Merged unit"
+msgstr ""
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:121
+msgid "Select unit"
+msgstr ""
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:122
+msgid "Mixed"
+msgstr ""
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:123
+msgid "Title"
+msgstr ""
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:124
+msgid "Type"
+msgstr ""
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:125
+msgid "Start page"
+msgstr ""
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:126
+msgid "End page"
+msgstr ""
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:127
+msgid "The plan could not be saved."
+msgstr ""
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:128
+msgid "Saving…"
+msgstr ""
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:129
+msgid "The plan could not be deleted."
+msgstr ""
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:130
 msgid "Include or exclude unit"
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:80
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:131
 #, python-format
 msgid "View input page %(page)s"
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/standalone_base.html:17
+#: src/pdfwtf/gui/templates/pdfwtf_gui/standalone_base.html:37
 msgid "Language"
 msgstr ""
 
-
-msgid "Upload"
+#: src/pdfwtf/gui/templates/pdfwtf_gui/standalone_base.html:44
+#: src/pdfwtf/gui/templates/pdfwtf_gui/standalone_base.html:46
+msgid "Toggle theme"
 msgstr ""
 
-msgid "Uploaded files"
+#: src/pdfwtf/gui/templates/pdfwtf_gui/standalone_base.html:49
+msgid "Light"
 msgstr ""
 
-msgid "No uploaded files."
+#: src/pdfwtf/gui/templates/pdfwtf_gui/standalone_base.html:49
+msgid "Dark"
 msgstr ""
 
-msgid "Upload could not be saved. Try again."
-msgstr ""
-
-msgid "Delete"
-msgstr ""
-
-msgid "Wait for analysis to finish before deleting the file."
-msgstr ""
-
-msgid "The file could not be deleted. Try again."
-msgstr ""
-
-msgid "Download analysis"
-msgstr ""
-
-msgid "Download"
-msgstr ""
-
-msgid "Removed"
-msgstr ""
-
-#: src/pdfwtf/gui/blueprint.py
-msgid "Full-page advertisement"
-msgstr ""
-
-#: src/pdfwtf/gui/blueprint.py
-msgid "Cover"
-msgstr ""
-
-msgid "More"
-msgstr ""
-
-msgid "Show analysis"
-msgstr ""
-
-msgid "Delete plan"
-msgstr ""
-
-msgid "The plan could not be deleted."
-msgstr ""
-
-msgid "The plan was deleted."
-msgstr ""
-
-msgid "Magazine issue"
-msgstr ""
-
-
-#: src/pdfwtf/gui/blueprint.py src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html
-msgid "Export"
-msgstr ""
-
-
-#: src/pdfwtf/gui/blueprint.py src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html
-msgid "Export options"
-msgstr ""
-
-
-#: src/pdfwtf/gui/blueprint.py src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html
-msgid "Close"
-msgstr ""
-
-
-#: src/pdfwtf/gui/blueprint.py src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html
-msgid "Export is running…"
-msgstr ""
-
-
-#: src/pdfwtf/gui/blueprint.py src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html
-msgid "Export is complete."
-msgstr ""
-
-
-#: src/pdfwtf/gui/blueprint.py src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html
-msgid "Export could not be completed. Try again."
-msgstr ""
-
-
-#: src/pdfwtf/gui/blueprint.py src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html
-msgid "Download export"
-msgstr ""
-
-
-#: src/pdfwtf/gui/blueprint.py src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html
-msgid "Do not write unit PDFs."
-msgstr ""
-
-
-#: src/pdfwtf/gui/blueprint.py src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html
-msgid "Write HTML for included units."
-msgstr ""
-
-
-#: src/pdfwtf/gui/blueprint.py src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html
-msgid "Select valid export options."
-msgstr ""
-
-
-#: src/pdfwtf/gui/blueprint.py src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html
-msgid "The saved plan could not be read."
-msgstr ""
-
-
-#: src/pdfwtf/gui/blueprint.py src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html
-msgid "Wait for the active operation to finish."
-msgstr ""
-
-
-#: src/pdfwtf/gui/blueprint.py src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html
-msgid "Export could not start. Try again."
-msgstr ""
-
-
-#: src/pdfwtf/gui/blueprint.py src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html
-msgid "Export failed. Check the host logs."
-msgstr ""
-
-
-#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html
-msgid "Include the original source PDF in the ZIP."
-msgstr ""
-
-
-#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html
-msgid "Include the saved plan and analysis JSON in the ZIP."
-msgstr ""
-
-
-#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html
-msgid "Include unit metadata JSON files in the ZIP."
-msgstr ""
-
-
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html
-msgid "Exports"
-msgstr ""
-
-
-#: src/pdfwtf/gui/templates/pdfwtf_gui/input.html src/pdfwtf/gui/templates/pdfwtf_gui/_uploads.html
-msgid "Born-digital"
-msgstr ""
-
-
-#: src/pdfwtf/gui/templates/pdfwtf_gui/input.html src/pdfwtf/gui/templates/pdfwtf_gui/_uploads.html
-msgid "Scanned"
+#: src/pdfwtf/gui/templates/pdfwtf_gui/standalone_base.html:49
+msgid "Auto"
 msgstr ""

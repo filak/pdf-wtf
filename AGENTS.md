@@ -67,14 +67,11 @@ Before you plan, review, or modify this project, read these files in order:
 - Do not create or maintain `requirements.txt` unless deployment requires it.
 - Keep development dependencies separate from production dependencies.
 
-The approved shared supporting Python libraries are:
-
-- Arrow;
-- mmh3;
-- PyUCA;
-- tqdm.
-
 Use the versions defined in `pyproject.toml` and `uv.lock`.
+
+## Localization
+
+If Babel is a required dependency, keep English as the default language - do not override English - no LC_MESSAGES for English.
 
 ## Runtime and deployment context
 
