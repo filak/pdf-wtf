@@ -54,11 +54,16 @@ The current project status is: in development
 
 Use Python 3.12, Git, and uv.
 
-Clone the repository:
+Download or clone the repository:
 
 ```text
 git clone https://github.com/filak/pdf-wtf.git
 cd pdf-wtf
+```
+
+To update the repo run:
+```text
+git pull
 ```
 
 Run the following commands from the repository root.
