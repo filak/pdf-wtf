@@ -93,7 +93,7 @@ For persistent environment setup and path overrides, see the
 
 ## Docker
 
-> If You do not want to install anything just spin up (or rebuild) the Docker
+> If You do not want to install anything just spin up the Docker
 
 ```text
 docker buildx bake -f compose-pdf-wtf-gui.yaml --allow=fs.read=.Dockerfile-pdf-wtf-gui --load
@@ -106,6 +106,13 @@ To try the PDF-WTF client - run
 
 ```text
 docker compose -f compose-pdf-wtf-gui.yaml exec pdf-wtf-gui pdfwtf --help
+```
+
+To update the Docker use:
+
+```text
+git pull --ff-only
+docker compose -f compose-pdf-wtf-gui.yaml up -d --build
 ```
 
 ## Development
