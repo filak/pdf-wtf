@@ -52,6 +52,12 @@
   align-self: start;
   max-height: calc(100dvh - var(--review-toolbar-height, 0px) - 2rem);
 }
+.units-panel {
+  position: sticky;
+  top: calc(var(--review-toolbar-height, 0px) + 1rem);
+  align-self: start;
+  max-height: calc(100dvh - var(--review-toolbar-height, 0px) - 2rem);
+}
 #thumbnails { min-height: 0; }
 
 .preview-panel {
