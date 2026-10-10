@@ -120,7 +120,6 @@ The CLI does not search the working directory.
 
 The default output directory is `PDFWTF_HOME/instance/_data/out`.
 Use `--outdir` to select another output directory.
-The output PDF must differ from the input PDF.
 
 ### Process a PDF
 
@@ -160,11 +159,13 @@ Select the required exports:
 
 | Option | Output |
 | --- | --- |
-| `--get-text` | Per-page text and combined text |
-| `--get-img` | PNG page images |
-| `--get-thumb` | Page images and JPEG thumbnails |
-| `--get-meta` | JSON metadata |
 | `--get-doi` | DOI candidates from the first derivative page and JSON metadata |
+| `--get-format` | Page image format. The only supported format is PNG. |
+| `--get-html` | UTF-8 HTML fragments for selected units. |
+| `--get-img` | PNG page images |
+| `--get-meta` | JSON metadata |
+| `--get-text` | Per-page text and combined text |
+| `--get-thumb` | Page images and JPEG thumbnails |
 
 DOI candidates are not externally verified.
 If you also need text files, use `--get-text`.
