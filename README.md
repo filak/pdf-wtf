@@ -102,7 +102,7 @@ docker compose -f compose-pdf-wtf-gui.yaml up -d
 
 and open PDF-WTF-GUI in a browser http://127.0.0.1:5001
 
-Try the client - run
+To try the PDF-WTF client - run
 
 ```text
 docker compose -f compose-pdf-wtf-gui.yaml exec pdf-wtf-gui pdfwtf --help
