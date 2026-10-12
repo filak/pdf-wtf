@@ -54,6 +54,32 @@ Before you plan, review, or modify this project, read these files in order:
 - When approval is needed, prefer an existing reusable command prefix
   over proposing approval for a whole script.
 
+## Agent resource and token discipline
+
+This section limits token usage and tool execution.
+
+### Context minimization
+
+- Read at most 5 files before acting. Read more only when the task requires it.
+- Do not run `rg` without a path filter for initial exploration. Use `specs/PROJECT.md` and this file for project structure.
+- Do not read `uv.lock`, build output, `.venv/`, `dist/`, or Docker volumes.
+- Do not re-read a file already read in this session.
+
+### Execution limits
+
+- Keep tool calls small and focused. Do not combine verification, linting, and Git inspection in one call.
+- Limit exploration to 15 tool invocations. If the task is not clear after 15 invocations, stop and report findings.
+- Run only relevant tests: `uv run --locked pytest tests/unit/<affected_module>`. Do not run full test suite unless the task requires it.
+- Run one verification command per invocation: Black, then Flake8, then pytest. Do not batch them.
+- If a command fails twice with the same error, stop and report. Do not loop.
+
+### Chat efficiency
+
+- Use Ask mode before Agent mode. Escalate to Agent mode only when Ask mode cannot complete the task.
+- Start a new chat for a new task. Do not reuse long chat history.
+- Prefer `#file` or file path reference to `@workspace`.
+- Autocomplete is disabled by user preference. Do not attempt to enable inline suggestions. Act only when invoked via chat or explicit command.
+
 ## Dependency management
 
 - `uv`
@@ -147,6 +173,14 @@ Use Simplified Technical English style for documentation, interface text, and op
 - Put conditions before actions.
 - Preserve exact identifiers, commands, API names, and error messages.
 - Describe text as `STE-style` unless formal ASD-STE100 compliance was verified.
+
+## Agent response style
+
+- Keep final reports under 10 lines.
+- List changed files, verification result, and important decisions.
+- Do not paste full file contents. Refer to file path and line number.
+- Do not repeat product scope or configuration that is already in `specs/`.
+- Preserve exact identifiers and commands.
 
 ## Repository policy
 
