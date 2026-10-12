@@ -123,7 +123,7 @@ Run the following commands from the repository root.
 Install the locked Python dependencies:
 
 ```bash
-uv sync --locked
+uv sync --locked --all-extras
 ```
 
 Testing:
