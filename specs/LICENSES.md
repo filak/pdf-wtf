@@ -2,8 +2,7 @@
 
 **pdf-wtf** is licensed under the **GNU Affero General Public License v3.0 (AGPL-3.0)**.
 
-See [LICENSE](LICENSE) for the full text.
-
+See [LICENSE] (https://github.com/filak/pdf-wtf?tab=AGPL-3.0-1-ov-file) for the full text.
 
 ## Python Dependencies and Their Licenses
 
