@@ -50,6 +50,10 @@ The current project status is: in development
 - required by OCRmyPDF with optimize > 0
 - https://pngquant.org/
 
+## Licenses
+
+See [Licenses](specs/LICENSES.md).
+
 ## Installation
 
 Use Python 3.12, Git, and uv.
