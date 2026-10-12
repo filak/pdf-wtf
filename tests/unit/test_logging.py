@@ -2,6 +2,8 @@ import importlib
 import logging
 import os
 
+import pytest
+
 from pdfwtf import pipeline
 from pdfwtf.logging_utils import configure_logging
 
@@ -52,6 +54,7 @@ def test_file_logging_appends_without_duplicate_records(tmp_path):
 
 
 def test_gui_host_logs_requests(configured_home):
+    pytest.importorskip("flask")
     from pdfwtf.gui.app import create_app
 
     app = create_app({"TESTING": True})

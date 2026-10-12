@@ -56,18 +56,18 @@ See [Licenses](specs/LICENSES.md).
 
 ## Installation
 
-Use Python 3.12, Git, and uv.
+Use Python 3.12, Git, and [uv](https://docs.astral.sh/uv/).
 
 Download or clone the repository:
 
-```text
+```bash
 git clone https://github.com/filak/pdf-wtf.git
 cd pdf-wtf
 ```
 
 To update the repo run:
 
-```text
+```bash
 git pull
 ```
 
@@ -97,7 +97,7 @@ Review `instance/conf/pdf-wtf.ini`.
 
 > If You do not want to install anything just spin up the Docker
 
-```text
+```bash
 docker buildx bake -f compose-pdf-wtf-gui.yaml --allow=fs.read=.Dockerfile-pdf-wtf-gui --load
 docker compose -f compose-pdf-wtf-gui.yaml up -d
 ```
@@ -106,13 +106,13 @@ and open PDF-WTF-GUI in a browser http://127.0.0.1:5001
 
 To try the PDF-WTF client - run
 
-```text
+```bash
 docker compose -f compose-pdf-wtf-gui.yaml exec pdf-wtf-gui pdfwtf --help
 ```
 
 To update the Docker use:
 
-```text
+```bash
 git pull --ff-only
 docker compose -f compose-pdf-wtf-gui.yaml up -d --build
 ```
@@ -122,8 +122,14 @@ docker compose -f compose-pdf-wtf-gui.yaml up -d --build
 Run the following commands from the repository root.
 Install the locked Python dependencies:
 
-```text
+```bash
 uv sync --locked
+```
+
+Testing:
+
+```bash
+uv run pytest
 ```
 
 For the Windows unpaper wrapper, see the
@@ -142,7 +148,7 @@ Both arguments are required.
 
 List the actions and their options:
 
-```text
+```bash
 uv run --locked pdfwtf --help
 uv run --locked pdfwtf enhance --help
 uv run --locked pdfwtf analyze --help
@@ -161,7 +167,7 @@ Use `--outdir` to select another output directory.
 
 Process a PDF and export its text:
 
-```text
+```bash
 uv run --locked pdfwtf enhance input.pdf --outdir output --get-text
 ```
 
@@ -171,7 +177,7 @@ Use `--pdf_type scanned` to force scan preparation and OCR.
 If the PDF has existing text, use `--pdf_type born-digital` to bypass scan
 preparation and OCR:
 
-```text
+```bash
 uv run --locked pdfwtf enhance input.pdf --pdf_type born-digital --get-text
 ```
 
@@ -187,7 +193,7 @@ Both options use absolute input page indices starting at 1.
 If a page occurs in both lists, removal takes precedence.
 These options do not filter page exports.
 
-```text
+```bash
 uv run --locked pdfwtf enhance input.pdf --extract 1-5 --remove 2
 ```
 
@@ -208,14 +214,14 @@ If you also need text files, use `--get-text`.
 
 To export existing PDF content without OCR, use `export`:
 
-```text
+```bash
 uv run --locked pdfwtf export input.pdf --get-text
 uv run --locked pdfwtf export input.pdf --get-meta --get-img --get-thumb
 ```
 
 For OCR before export without a final PDF, use `enhance --no-pdf-out`:
 
-```text
+```bash
 uv run --locked pdfwtf enhance input.pdf --no-pdf-out --get-text
 ```
 
@@ -224,7 +230,7 @@ uv run --locked pdfwtf enhance input.pdf --no-pdf-out --get-text
 The container workflow uses existing PDF text and whole-page unit boundaries.
 Write analysis proposals:
 
-```text
+```bash
 uv run --locked pdfwtf analyze issue.pdf --doc_type journal-issue
 ```
 
@@ -232,13 +238,13 @@ Review the proposals in a consuming application, such as the demo GUI.
 Save the confirmed page ranges, unit types, and selections in a separate plan.
 Export the reviewed units as metadata and HTML:
 
-```text
+```bash
 uv run --locked pdfwtf export issue.pdf --plan issue.plan.json --get-html
 ```
 
 To select specific reviewed unit types, add `--unit_type`:
 
-```text
+```bash
 uv run --locked pdfwtf export issue.pdf --plan issue.plan.json --get-html --unit_type article
 ```
 
@@ -274,7 +280,7 @@ Do not run `pdfwtf-gui` directly on the host.
 
 Stop the demo from the repository root:
 
-```text
+```bash
 docker compose -f compose-pdf-wtf-gui.yaml down
 ```
 

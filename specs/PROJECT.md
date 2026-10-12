@@ -375,31 +375,31 @@ Run each verification command separately.
 
 For GUI development, install the optional dependencies:
 
-```text
+```bash
 uv sync --locked --extra gui
 ```
 
 Run the unit tests without external services:
 
-```text
+```bash
 uv run --locked pytest tests/unit
 ```
 
 Check Python formatting:
 
-```text
+```bash
 uv run --locked black --check src tests
 ```
 
 Check Python code:
 
-```text
+```bash
 uv run --locked flake8 src tests
 ```
 
 Check dependency vulnerabilities:
 
-```text
+```bash
 uv run --locked pip-audit
 ```
 
@@ -409,13 +409,13 @@ Use Docker Desktop with the WSL 2 backend.
 Start Docker Desktop before using the wrapper.
 Build the unpaper image:
 
-```text
+```bash
 docker build -t unpaper-alpine -f .Dockerfile-unpaper .
 ```
 
 Check the image:
 
-```text
+```bash
 docker run --rm unpaper-alpine --version
 ```
 
@@ -429,13 +429,13 @@ optional unpaper cleaning.
 
 Check the container state and health:
 
-```text
+```bash
 docker compose -f compose-pdf-wtf-gui.yaml ps
 ```
 
 Read the application logs:
 
-```text
+```bash
 docker compose -f compose-pdf-wtf-gui.yaml logs -f pdf-wtf-gui
 ```
 
@@ -444,7 +444,7 @@ To run the CLI inside the container, place the PDF in
 `PDFWTF_HOME/instance/_data/in`.
 Run this command:
 
-```text
+```bash
 docker compose -f compose-pdf-wtf-gui.yaml exec pdf-wtf-gui pdfwtf enhance input.pdf --layout single --outdir /app/instance/_data/out
 ```
 
@@ -457,18 +457,18 @@ Rebuild the GUI image after a source, dependency, or configuration change.
 
 Extract English and Czech messages:
 
-```text
+```bash
 uv run --locked --extra gui pybabel extract -F babel.cfg -o messages.pot .
 ```
 
 Update the translation catalogs:
 
-```text
+```bash
 uv run --locked --extra gui pybabel update -i messages.pot -d src/pdfwtf/gui/translations
 ```
 
 Compile the translation catalogs:
 
-```text
+```bash
 uv run --locked --extra gui pybabel compile -d src/pdfwtf/gui/translations
 ```
