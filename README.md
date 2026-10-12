@@ -88,8 +88,6 @@ export PDFWTF_HOME="$(pwd -P)"
 ```
 
 Review `instance/conf/pdf-wtf.ini`.
-For persistent environment setup and path overrides, see the
-[configuration specification](specs/CONFIGURATION.md).
 
 ## Docker
 
