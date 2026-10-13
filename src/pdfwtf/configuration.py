@@ -250,6 +250,9 @@ def load_config() -> AppConfig:
     # Environment variables and .env overrides
     for source in (dotenv, os.environ):
         for key, value in source.items():
+            if key == "GEMINI_API_KEY" and value is not None and value.strip():
+                values["gemini_api_key"] = value.strip()
+                continue
             if (
                 key.upper().startswith("PDFWTF_")
                 and key.upper() != "PDFWTF_HOME"
