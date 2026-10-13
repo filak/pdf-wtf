@@ -1,4 +1,4 @@
-# pdf-wtf agent contributor instructions
+# pdf-wtf - agent contributor instructions
 
 ## Purpose and document hierarchy
 
