@@ -1,10 +1,8 @@
 import os
-
 import pytest
 
-from pdfwtf.configuration import ConfigurationError, load_config, parse_value
+from pdfwtf.configuration import AppConfig, ConfigurationError, LLMTaskConfig, load_config, parse_value, validate_llm_tasks
 from pdfwtf.utils.common import get_output_dir, get_temp_dir
-
 
 @pytest.mark.parametrize(
     "raw, expected",
@@ -124,3 +122,49 @@ def test_input_directory_cannot_be_a_file(configured_home, monkeypatch):
     monkeypatch.setenv("PDFWTF_INPUT_DIR", str(file))
     with pytest.raises(ConfigurationError, match="PDFWTF_INPUT_DIR"):
         load_config().input_dir
+
+
+def test_valid_llm_task(tmp_path, monkeypatch):
+    raw_tasks = {
+        "clean_html": {
+            "context": "export",
+            "description": {"en": "Clean HTML output", "cs": "Vyčistir HTML výstup"},
+            "document_types": ["unit"],
+            "pipeline": "export_html_flag",
+            "template": "wp_html",
+        }
+    }
+    validated = validate_llm_tasks(raw_tasks)
+    assert "clean_html" in validated
+    task = validated["clean_html"]
+    assert task.context == "export"
+    assert "html" in task.prompt.lower()
+    assert "html" in task.system.lower()
+
+
+def test_invalid_context():
+    raw_tasks = {
+        "clean_html": {
+            "context": "invalid_context",
+            "description": {"en": "Clean"},
+            "document_types": ["unit"],
+            "pipeline": "export_html_flag",
+            "template": "wp_html",
+        }
+    }
+    with pytest.raises(ConfigurationError, match=r"invalid context 'invalid_context'"):
+        validate_llm_tasks(raw_tasks)
+
+
+def test_missing_template_file():
+    raw_tasks = {
+        "clean_html": {
+            "context": "export",
+            "description": {"en": "Clean"},
+            "document_types": ["unit"],
+            "pipeline": "export_html_flag",
+            "template": "non_existent_template",
+        }
+    }
+    with pytest.raises(ConfigurationError, match=r"template 'non_existent_template' not found"):
+        validate_llm_tasks(raw_tasks)

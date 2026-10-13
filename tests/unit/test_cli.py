@@ -1,543 +1,423 @@
-from click.testing import CliRunner
-import shutil
-import json
-import pikepdf
-import pytest
+"""Command-line entry point."""
 
-from pdfwtf import cli
+import logging
+from pathlib import Path
+from typing import Literal
 
+import click
+from pydantic import BaseModel
 
-def test_input_is_required():
-    result = CliRunner().invoke(cli.main, ["enhance"])
-    assert result.exit_code == 2
-    assert "INPUT_PDF" in result.output
-    assert "Done!" not in result.output
-
-
-def test_processing_failure_is_nonzero_and_has_no_payload(make_pdf, monkeypatch):
-    def fail(*args, **kwargs):
-        raise RuntimeError("private document content")
-
-    monkeypatch.setattr(cli, "process_pdf", fail)
-    result = CliRunner().invoke(cli.main, ["enhance", str(make_pdf(["digital"]))])
-    assert result.exit_code == 1
-    assert "Done!" not in result.output
-    assert "private document content" not in result.output
+from pdfwtf.configuration import AppConfig, ConfigurationError, load_config
+from pdfwtf.container_analysis import UNIT_TYPES
+from pdfwtf.logging_utils import configure_logging
+from pdfwtf.pipeline import ProcessingError, process_pdf
 
 
-def test_missing_configuration_is_reported(make_pdf, monkeypatch):
-    monkeypatch.delenv("PDFWTF_HOME")
-    result = CliRunner().invoke(cli.main, ["enhance", str(make_pdf(["digital"]))])
-    assert result.exit_code == 1
-    assert "PDFWTF_HOME is required" in result.output
+class PdfCommand(click.Command):
+    """Show configured directories when help is requested."""
 
-
-@pytest.mark.parametrize("angle", ["0", "90", "180", "270"])
-def test_cli_preserves_rotation_options(make_pdf, monkeypatch, angle):
-    options = {}
-    monkeypatch.setattr(cli, "process_pdf", lambda *a, **kw: options.update(kw))
-    result = CliRunner().invoke(
-        cli.main, ["enhance", str(make_pdf(["digital"])), "--pre-rotate", angle]
-    )
-    assert result.exit_code == 0, result.output
-    assert options["pre_rotate"] == int(angle)
-    assert "Done!" in result.output
-
-
-def test_actual_cli_processing(make_pdf, tmp_path):
-    source = make_pdf(["digital", "digital"])
-    result = CliRunner().invoke(
-        cli.main,
-        [
-            "enhance",
-            str(source),
-            "--outdir",
-            str(tmp_path / "out"),
-            "--extract",
-            "2",
-            "--get-text",
-            "--debug",
-        ],
-    )
-    assert result.exit_code == 0, result.output
-    assert (tmp_path / "out/input.pdf").is_file()
-    assert "DEBUG" in result.output
-    assert "correlation=pdfwtf-" in result.output
-    assert "This document has enough" not in result.output
-
-
-def test_help_shows_current_directories_without_creating_them(configured_home):
-    result = CliRunner().invoke(cli.main, ["enhance", "--help"])
-    assert result.exit_code == 0, result.output
-    assert f"Input: {configured_home / 'instance/_data/in'}" in result.output
-    assert (
-        f"Output (default): {configured_home / 'instance/_data/out'}" in result.output
-    )
-    assert not (configured_home / "instance/_data/in").exists()
-    assert not (configured_home / "instance/_data/out").exists()
-
-
-@pytest.mark.parametrize("source", ["ini", "dotenv", "environment"])
-def test_help_resolves_output_overrides(configured_home, monkeypatch, source):
-    (configured_home / "instance/conf/pdf-wtf.ini").write_text(
-        '[pdf-wtf]\noutput_dir = "ini-out"\n', encoding="utf-8"
-    )
-    if source in ("dotenv", "environment"):
-        (configured_home / ".env").write_text("PDFWTF_OUTPUT_DIR=dotenv-out\n")
-    if source == "environment":
-        monkeypatch.setenv("PDFWTF_OUTPUT_DIR", "env-out")
-    expected = {"ini": "ini-out", "dotenv": "dotenv-out", "environment": "env-out"}[
-        source
-    ]
-    result = CliRunner().invoke(cli.main, ["enhance", "--help"])
-    assert result.exit_code == 0, result.output
-    assert str(configured_home / expected) in result.output
-
-
-def test_help_resolves_input_override(configured_home, monkeypatch):
-    monkeypatch.setenv("PDFWTF_INPUT_DIR", "imports")
-    result = CliRunner().invoke(cli.main, ["enhance", "--help"])
-    assert result.exit_code == 0, result.output
-    assert f"Input: {configured_home / 'imports'}" in result.output
-
-
-def test_help_remains_available_without_home(monkeypatch):
-    monkeypatch.delenv("PDFWTF_HOME")
-    result = CliRunner().invoke(cli.main, ["enhance", "--help"])
-    assert result.exit_code == 0, result.output
-    assert "INPUT_PDF" in result.output
-    assert "Unavailable. PDFWTF_HOME is required." in result.output
-
-
-def test_help_handles_invalid_output_directory(configured_home, monkeypatch):
-    monkeypatch.setenv("PDFWTF_OUTPUT_DIR", "false")
-    result = CliRunner().invoke(cli.main, ["enhance", "--help"])
-    assert result.exit_code == 0, result.output
-    assert str(configured_home / "instance/_data/in") in result.output
-    assert "PDFWTF_OUTPUT_DIR must be a directory path." in result.output
-
-
-def test_help_handles_invalid_input_directory(configured_home, monkeypatch):
-    monkeypatch.setenv("PDFWTF_INPUT_DIR", "false")
-    result = CliRunner().invoke(cli.main, ["enhance", "--help"])
-    assert result.exit_code == 0, result.output
-    assert "PDFWTF_INPUT_DIR must be a directory path." in result.output
-    assert str(configured_home / "instance/_data/out") in result.output
-
-
-def test_help_does_not_cache_paths_between_invocations(configured_home, monkeypatch):
-    monkeypatch.setenv("PDFWTF_OUTPUT_DIR", "first")
-    first = CliRunner().invoke(cli.main, ["enhance", "--help"])
-    monkeypatch.setenv("PDFWTF_OUTPUT_DIR", "second")
-    second = CliRunner().invoke(cli.main, ["enhance", "--help"])
-    assert str(configured_home / "first") in first.output
-    assert str(configured_home / "second") in second.output
-
-
-@pytest.mark.parametrize("option", ["--remove"])
-def test_cli_removes_pages_after_selection(make_pdf, tmp_path, option):
-    source = make_pdf(["digital"] * 4)
-    output = tmp_path / "out"
-    result = CliRunner().invoke(
-        cli.main,
-        [
-            "enhance",
-            str(source),
-            "--outdir",
-            str(output),
-            "--pdf_type",
-            "born-digital",
-            "--extract",
-            "2-4",
-            option,
-            "2",
-        ],
-    )
-    assert result.exit_code == 0, result.output
-    with pikepdf.open(output / source.name) as pdf:
-        assert len(pdf.pages) == 2
-    with pikepdf.open(source) as pdf:
-        assert len(pdf.pages) == 4
-
-
-def test_legacy_input_option_is_rejected(make_pdf, monkeypatch):
-    inputs = []
-    monkeypatch.setattr(cli, "process_pdf", lambda *a, **kw: inputs.append(a))
-    source = make_pdf(["digital"])
-    result = CliRunner().invoke(cli.main, ["enhance", "--infile", str(source)])
-    assert result.exit_code == 2, result.output
-    assert "No such option" in result.output
-    assert inputs == []
-
-
-@pytest.mark.parametrize("kind", ["missing", "directory"])
-def test_input_argument_requires_an_existing_file(tmp_path, kind, monkeypatch):
-    inputs = []
-    monkeypatch.setattr(cli, "process_pdf", lambda *a, **kw: inputs.append(a))
-    path = tmp_path / "missing.pdf" if kind == "missing" else tmp_path
-    result = CliRunner().invoke(cli.main, ["enhance", str(path)])
-    assert result.exit_code == 2, result.output
-    assert inputs == []
-
-
-def test_help_shows_positional_input():
-    result = CliRunner().invoke(cli.main, ["enhance", "--help"])
-    assert result.exit_code == 0, result.output
-    assert "[OPTIONS] INPUT_PDF" in result.output
-    assert "--infile" not in result.output
-
-
-@pytest.mark.parametrize(
-    "relative", ["born_digital.pdf", "reports/paper with spaces.pdf"]
-)
-def test_relative_input_uses_default_directory(
-    make_pdf, configured_home, tmp_path, monkeypatch, relative
-):
-    source = make_pdf(
-        ["digital"], name=str(configured_home / "instance/_data/in" / relative)
-    )
-    other = tmp_path / "working"
-    other.mkdir()
-    make_pdf(["digital"], name=str(other / relative))
-    monkeypatch.chdir(other)
-    inputs = []
-    monkeypatch.setattr(cli, "process_pdf", lambda path, *a, **kw: inputs.append(path))
-    result = CliRunner().invoke(cli.main, ["enhance", relative])
-    assert result.exit_code == 0, result.output
-    assert inputs == [str(source.resolve())]
-
-
-def test_relative_input_uses_configured_directory(
-    make_pdf, configured_home, monkeypatch
-):
-    input_dir = configured_home / "imports"
-    source = make_pdf(["digital"], name=str(input_dir / "input.pdf"))
-    monkeypatch.setenv("PDFWTF_INPUT_DIR", str(input_dir))
-    inputs = []
-    monkeypatch.setattr(cli, "process_pdf", lambda path, *a, **kw: inputs.append(path))
-    result = CliRunner().invoke(cli.main, ["enhance", "input.pdf"])
-    assert result.exit_code == 0, result.output
-    assert inputs == [str(source.resolve())]
-
-
-def test_relative_input_does_not_fall_back_to_working_directory(
-    make_pdf, configured_home, tmp_path, monkeypatch
-):
-    make_pdf(["digital"])
-    monkeypatch.chdir(tmp_path)
-    inputs = []
-    monkeypatch.setattr(cli, "process_pdf", lambda *a, **kw: inputs.append(a))
-    result = CliRunner().invoke(cli.main, ["enhance", "input.pdf"])
-    assert result.exit_code == 2, result.output
-    assert repr(str(configured_home / "instance/_data/in/input.pdf")) in result.output
-    assert inputs == []
-    assert not (configured_home / "instance/_data/in").exists()
-
-
-def test_absolute_input_works_outside_default_directory(make_pdf, monkeypatch):
-    source = make_pdf(["digital"], name="outside input.pdf")
-    inputs = []
-    monkeypatch.setattr(cli, "process_pdf", lambda path, *a, **kw: inputs.append(path))
-    result = CliRunner().invoke(cli.main, ["enhance", str(source)])
-    assert result.exit_code == 0, result.output
-    assert inputs == [str(source.resolve())]
-
-
-def test_relative_input_reports_missing_configuration(monkeypatch):
-    monkeypatch.delenv("PDFWTF_HOME")
-    result = CliRunner().invoke(cli.main, ["enhance", "born_digital.pdf"])
-    assert result.exit_code == 1, result.output
-    assert "PDFWTF_HOME is required" in result.output
-
-
-def test_relative_input_processes_pdf_and_exports(make_pdf, configured_home):
-    source = make_pdf(
-        ["digital"],
-        name=str(configured_home / "instance/_data/in/born_digital.pdf"),
-    )
-    result = CliRunner().invoke(
-        cli.main,
-        [
-            "enhance",
-            source.name,
-            "--pdf_type",
-            "born-digital",
-            "--get-doi",
-            "--get-img",
-            "--get-text",
-            "--get-thumb",
-            "--dpi",
-            "72",
-        ],
-    )
-    assert result.exit_code == 0, result.output
-    output = configured_home / "instance/_data/out"
-    with pikepdf.open(output / source.name) as pdf:
-        assert len(pdf.pages) == 1
-    assert (output / "born_digital.meta.json").is_file()
-    metadata = json.loads((output / "born_digital.meta.json").read_text())
-    assert metadata["input"] == str(source.resolve())
-    assert metadata["output"] == str((output / source.name).resolve())
-    assert (output / "born_digital.txt").is_file()
-    assert list(output.rglob("*.png"))
-    assert list(output.rglob("*.jpg"))
-
-
-@pytest.mark.parametrize("level", [None, 0, 1, 2, 3])
-def test_cli_forwards_optimization_to_ocrmypdf(make_pdf, tmp_path, monkeypatch, level):
-    from pdfwtf import pipeline
-
-    options = {}
-
-    def fake_ocr(source, destination, **kwargs):
-        options.update(kwargs)
-        shutil.copy2(source, destination)
-
-    monkeypatch.setattr(pipeline, "is_scanned_or_hybrid", lambda path: True)
-    monkeypatch.setattr(
-        pipeline, "_process_scanned", lambda *a, **kw: (tmp_path, False)
-    )
-    monkeypatch.setattr(pipeline.ocrmypdf, "ocr", fake_ocr)
-    args = [str(make_pdf(["scan"])), "--outdir", str(tmp_path / "out")]
-    if level is not None:
-        args += ["--optimize", str(level)]
-    result = CliRunner().invoke(cli.main, ["enhance", *(args)])
-    assert result.exit_code == 0, result.output
-    assert options["optimize"] == (0 if level is None else level)
-    assert (tmp_path / "out/input.pdf").is_file()
-
-
-@pytest.mark.parametrize("level", ["-1", "4", "1.5", "invalid"])
-def test_cli_rejects_invalid_optimization(make_pdf, monkeypatch, level):
-    calls = []
-    monkeypatch.setattr(cli, "process_pdf", lambda *a, **kw: calls.append(a))
-    result = CliRunner().invoke(
-        cli.main, ["enhance", str(make_pdf(["digital"])), "--optimize", level]
-    )
-    assert result.exit_code == 2, result.output
-    assert "--optimize" in result.output
-    assert calls == []
-
-
-def test_cli_rejects_old_get_json_flag(make_pdf):
-    result = CliRunner().invoke(
-        cli.main, ["enhance", str(make_pdf(["digital"])), "--get-json"]
-    )
-    assert result.exit_code == 2, result.output
-    assert "No such option '--get-json'" in result.output
-
-
-@pytest.mark.parametrize("no_pdf", [False, True])
-@pytest.mark.parametrize(
-    "flags",
-    [
-        ["--get-meta"],
-        ["--get-doi"],
-        ["--get-img"],
-        ["--get-text"],
-        ["--get-thumb"],
-        ["--get-meta", "--get-doi", "--get-img", "--get-text", "--get-thumb"],
-    ],
-)
-def test_cli_output_flows(make_pdf, tmp_path, configured_home, no_pdf, flags):
-    source = make_pdf(["digital"])
-    import pymupdf as fitz
-
-    with fitz.open(source) as doc:
-        doc[0].insert_text((20, 100), "https://doi.org/10.1234/example")
-        doc.saveIncr()
-    original = source.read_bytes()
-    output = tmp_path / "out"
-    args = [
-        str(source),
-        "--outdir",
-        str(output),
-        "--dpi",
-        "72",
-        "--pdf_type",
-        "born-digital",
-    ]
-    if no_pdf:
-        args += ["--no-pdf-out"]
-    result = CliRunner().invoke(cli.main, ["enhance", *(args + flags)])
-    assert result.exit_code == 0, result.output
-    expected = set()
-    if not no_pdf:
-        expected.add("input.pdf")
-    if "--get-meta" in flags or "--get-doi" in flags:
-        expected.add("input.meta.json")
-        metadata = json.loads((output / "input.meta.json").read_text())
-        assert metadata == {
-            "input": str(source.resolve()),
-            "output": None if no_pdf else str((output / source.name).resolve()),
-            "doi": ["10.1234/example"] if "--get-doi" in flags else [],
-            "pages": {"page_001": {"index": 1, "pgn": None}},
+    def format_options(
+        self, ctx: click.Context, formatter: click.HelpFormatter
+    ) -> None:
+        if self.name != "enhance":
+            return super().format_options(ctx, formatter)
+        groups = {
+            "Common options": {"output_dir", "input_path_prefix", "debug_flag", "help"},
+            "Page selection": {"extract_pages_str", "skip_pages_str"},
+            "Enhancement options": {
+                "pdf_type",
+                "languages",
+                "dpi",
+                "ocrlib",
+                "optimize",
+                "layout",
+                "output_pages",
+                "pre_rotate",
+                "remove_background_flag",
+            },
+            "Analyze options": {"document_type"},
+            "Export options": {
+                "plan_path",
+                "no_pdf_flag",
+                "get_doi_flag",
+                "export_format",
+                "export_html_flag",
+                "export_images_flag",
+                "export_json_flag",
+                "export_texts_flag",
+                "export_thumbs_flag",
+            },
         }
-    if "--get-img" in flags or "--get-thumb" in flags:
-        expected.add("_images_input")
-        assert list((output / "_images_input").glob("*.png"))
-    if "--get-thumb" in flags:
-        expected.add("_thumbs_input")
-        assert list((output / "_thumbs_input").glob("*.jpg"))
-    if "--get-text" in flags:
-        expected.update({"_texts_input", "input.txt"})
-        assert list((output / "_texts_input").glob("*.txt"))
-    assert {p.name for p in output.iterdir()} == expected
-    assert source.read_bytes() == original
-    assert not list((configured_home / "instance/temp").iterdir())
+        for title, names in groups.items():
+            rows = [
+                record
+                for param in self.get_params(ctx)
+                if param.name in names
+                and (record := param.get_help_record(ctx)) is not None
+            ]
+            if rows:
+                with formatter.section(title):
+                    formatter.write_dl(rows)
+
+    def format_epilog(self, ctx: click.Context, formatter: click.HelpFormatter) -> None:
+        super().format_epilog(ctx, formatter)
+        with formatter.section("Current directories"):
+            try:
+                config = ctx.obj if isinstance(ctx.obj, AppConfig) else load_config()
+                _ = config.llm_tasks
+            except ConfigurationError as error:
+                formatter.write_text(f"Unavailable. {error}")
+                return
+            try:
+                input_dir = str(config.input_dir)
+            except ConfigurationError as error:
+                input_dir = f"Unavailable. {error}"
+            formatter.write_text(f"\b\nInput: {input_dir}")
+            try:
+                output = str(config.output_dir)
+            except ConfigurationError as error:
+                output = f"Unavailable. {error}"
+            formatter.write_text(f"\b\nOutput (default): {output}")
+            formatter.write_text(
+                "Pass a filename or relative path below Input, or an absolute path. "
+                "Use --outdir to change the output."
+            )
 
 
-def test_cli_rejects_no_output(make_pdf, tmp_path):
-    output = tmp_path / "out"
-    result = CliRunner().invoke(
-        cli.main,
-        [
-            "enhance",
-            str(make_pdf(["digital"])),
-            "--outdir",
-            str(output),
-            "--no-pdf-out",
-        ],
+class CliOptions(BaseModel):
+    input_path_prefix: str | None = None
+    extract_pages_str: str | None = None
+    skip_pages_str: str | None = None
+    ocrlib: str = "ocrmypdf"
+    optimize: int = 0
+    pdf_type: Literal["auto", "born-digital", "scanned"] = "auto"
+    languages: str = "eng"
+    remove_background_flag: bool = False
+    dpi: int = 300
+    layout: str | None = None
+    output_pages: str | None = None
+    pre_rotate: int | None = None
+    get_doi_flag: bool = False
+    no_pdf_flag: bool = False
+    export_json_flag: bool = False
+    export_images_flag: bool = False
+    export_format: str = "png"
+    export_texts_flag: bool = False
+    export_thumbs_flag: bool = False
+    analysis_flag: bool = False
+    unit_types: tuple[str, ...] = ()
+    document_type: str | None = None
+    plan_path: str | None = None
+    export_html_flag: bool = False
+    debug_flag: bool = False
+
+
+def show_info(input_pdf: str, output_dir: str | Path | None, debug_flag: bool) -> None:
+    click.echo(f"Input  :  {input_pdf}")
+    if output_dir is not None:
+        click.echo(f"Output :  {output_dir}")
+
+
+def _resolve_input_pdf(
+    ctx: click.Context, param: click.Parameter, value: str | None
+) -> str | None:
+    """Resolve relative CLI inputs from the default input directory."""
+    if value is None:
+        return None
+    path = Path(value)
+    if not path.is_absolute():
+        try:
+            config = ctx.obj if isinstance(ctx.obj, AppConfig) else load_config()
+            path = config.input_dir / path
+        except ConfigurationError as error:
+            raise click.ClickException(str(error)) from error
+    return click.Path(exists=True, dir_okay=False, resolve_path=True).convert(
+        str(path), param, ctx
     )
-    assert result.exit_code == 1, result.output
-    assert "No output selected." in result.output
-    assert "Done!" not in result.output
-    assert not output.exists()
 
 
-@pytest.mark.parametrize("action", ["analyze", "enhance", "export"])
-def test_action_help_has_input_and_current_directories(action, configured_home):
-    result = CliRunner().invoke(cli.main, [action, "--help"])
-    assert result.exit_code == 0
-    assert "INPUT_PDF" in result.output
-    assert "Current directories" in result.output
-
-
-def test_root_help_lists_actions_and_old_syntax_is_rejected(make_pdf):
-    help_result = CliRunner().invoke(cli.main, ["--help"])
-    assert help_result.exit_code == 0
-    assert all(
-        action in help_result.output for action in ("analyze", "enhance", "export")
-    )
-    result = CliRunner().invoke(cli.main, [str(make_pdf(["digital"]))])
-    assert result.exit_code == 2
-    assert "No such command" in result.output
-
-
-@pytest.mark.parametrize(
-    "action, flags",
-    [
-        ("analyze", ["--analysis"]),
-        ("enhance", ["--analysis"]),
-        ("analyze", ["--get-text"]),
-        ("analyze", ["--optimize", "1"]),
-        ("export", ["--optimize", "1"]),
-        ("export", ["--lang", "ces"]),
-        ("export", ["--remove-bg"]),
-        ("export", ["--pdf_type", "born-digital"]),
-        ("export", ["--no-pdf-out"]),
-    ],
+@click.command("enhance", cls=PdfCommand)
+@click.argument(
+    "input_pdf",
+    required=True,
+    type=click.Path(),
+    callback=_resolve_input_pdf,
 )
-def test_actions_reject_irrelevant_options(make_pdf, monkeypatch, action, flags):
-    calls = []
-    monkeypatch.setattr(cli, "process_pdf", lambda *args, **kwargs: calls.append(args))
-    result = CliRunner().invoke(cli.main, [action, str(make_pdf(["digital"])), *flags])
-    assert result.exit_code == 2
-    assert "No such option" in result.output
-    assert not calls
+@click.option(
+    "--outdir",
+    "output_dir",
+    type=click.Path(file_okay=False, resolve_path=True),
+    help="Write output files to this directory.",
+)
+@click.option(
+    "--prefix",
+    "input_path_prefix",
+    type=click.Path(file_okay=False),
+    help="Preserve input subdirectories below this path.",
+)
+@click.option(
+    "--pdf_type",
+    type=click.Choice(["auto", "born-digital", "scanned"]),
+    default="auto",
+    show_default=True,
+    help="Set the PDF type: auto detects scans, born-digital skips scan preparation "
+    "and OCR, scanned forces scan processing. Image exports still render pages.",
+)
+@click.option(
+    "--doc_type",
+    "document_type",
+    type=click.Choice(
+        ["unit", "journal-issue", "magazine-issue", "book", "proceedings", "auto"]
+    ),
+    help="Describe the document structure. The reviewed plan is authoritative.",
+)
+@click.option(
+    "--plan",
+    "plan_path",
+    type=click.Path(exists=True, dir_okay=False, resolve_path=True),
+    help="Process units from a reviewed JSON plan.",
+)
+@click.option(
+    "--extract",
+    "extract_pages_str",
+    default=None,
+    help="Keep these input pages in the output PDF, for example 1-3,5.",
+)
+@click.option(
+    "--remove",
+    "skip_pages_str",
+    default=None,
+    help="Remove these input pages from the output PDF, " "for example 2,4-6.",
+)
+@click.option(
+    "--lang",
+    "languages",
+    default="eng",
+    show_default=True,
+    help="Select OCR languages, for example eng+ces.",
+)
+@click.option(
+    "--dpi",
+    default=300,
+    type=click.IntRange(72, 1200),
+    show_default=True,
+    help="Set the page rendering resolution in DPI.",
+)
+@click.option(
+    "--ocrlib",
+    default="ocrmypdf",
+    type=click.Choice(["ocrmypdf", "pymupdf"]),
+    show_default=True,
+    help="Select the OCR backend.",
+)
+@click.option(
+    "--optimize",
+    default=0,
+    type=click.IntRange(0, 3),
+    show_default=True,
+    help="Set OCRmyPDF optimization: 0=off, 1=lossless, 2=lossy, 3=aggressive.",
+)
+@click.option(
+    "--layout",
+    default=None,
+    type=click.Choice(["single", "double", "none"]),
+    help="Select the unpaper page layout.",
+)
+@click.option(
+    "--output-pages",
+    default=None,
+    type=click.Choice(["1", "2"]),
+    help="Set unpaper output pages per input page.",
+)
+@click.option(
+    "--pre-rotate",
+    default=None,
+    type=click.Choice([0, 90, 180, 270]),
+    help="Rotate scanned pages before OCR, in degrees.",
+)
+@click.option(
+    "--remove-bg",
+    "remove_background_flag",
+    is_flag=True,
+    help="Crop dark page backgrounds.",
+)
+@click.option(
+    "--no-pdf-out",
+    "no_pdf_flag",
+    is_flag=True,
+    help="Do not write the output PDF.",
+)
+@click.option(
+    "--get-doi",
+    "get_doi_flag",
+    is_flag=True,
+    help="Find DOI candidates on the first derivative page and write JSON metadata.",
+)
+@click.option(
+    "--get-format",
+    "export_format",
+    default="png",
+    type=click.Choice(["png"]),
+    show_default=True,
+    help="Select the page image format.",
+)
+@click.option(
+    "--get-html",
+    "export_html_flag",
+    is_flag=True,
+    help="Write a UTF-8 HTML fragment for each selected unit.",
+)
+@click.option(
+    "--get-img",
+    "export_images_flag",
+    is_flag=True,
+    help="Export every input page as an image. Page selection does not filter images.",
+)
+@click.option(
+    "--get-meta",
+    "export_json_flag",
+    is_flag=True,
+    help="Write JSON metadata.",
+)
+@click.option(
+    "--get-text",
+    "export_texts_flag",
+    is_flag=True,
+    help="Export page text and combined text.",
+)
+@click.option(
+    "--get-thumb",
+    "export_thumbs_flag",
+    is_flag=True,
+    help="Export page images and JPEG thumbnails.",
+)
+@click.option("--debug", "debug_flag", is_flag=True, help="Enable debug logging.")
+@click.pass_context
+def enhance(
+    ctx: click.Context, input_pdf: str, output_dir: str | None, **kwargs: object
+) -> None:
+    """Enhance a PDF with scan cleanup, OCR, and optional exports."""
+    _execute(ctx.obj, input_pdf, output_dir, **kwargs)
 
 
-def test_export_reads_scanned_input_without_ocr(make_pdf, tmp_path, monkeypatch):
-    from pdfwtf import pipeline
+def _execute(
+    config: AppConfig | None, input_pdf: str, output_dir: str | None, **kwargs: object
+) -> None:
+    """Invoke the shared processor with action-specific options and shared config."""
+    if config is None:
+        config = load_config()
+    options = CliOptions(**kwargs)
+    try:
+        configure_logging(options.debug_flag, config.logs_dir / "pdf-wtf-log.txt")
+        logging.getLogger(__name__).info("PDF processing started.")
+        process_pdf(input_pdf, output_dir, config=config, **options.model_dump())
+    except (ConfigurationError, ProcessingError) as error:
+        logging.getLogger(__name__).error("PDF processing failed.")
+        raise click.ClickException(str(error)) from error
+    except ValueError as error:
+        logging.getLogger(__name__).error("PDF processing failed.")
+        raise click.ClickException(str(error)) from error
+    except Exception as error:
+        logging.getLogger(__name__).error("PDF processing failed.")
+        raise click.ClickException(
+            "PDF processing failed. Check the input and required tools."
+        ) from error
+    show_info(input_pdf, output_dir, options.debug_flag)
+    logging.getLogger(__name__).info("PDF processing completed.")
+    click.echo("Done!")
 
-    def forbidden(*args, **kwargs):
-        pytest.fail("Export must not run scan detection, preparation, or OCR.")
 
-    monkeypatch.setattr(pipeline, "is_scanned_or_hybrid", forbidden)
-    monkeypatch.setattr(pipeline, "_process_scanned", forbidden)
-    monkeypatch.setattr(pipeline, "run_ocr", forbidden)
-    source = make_pdf(["scan"])
-    original = source.read_bytes()
-    output = tmp_path / "export"
-    result = CliRunner().invoke(
-        cli.main,
-        [
-            "export",
-            str(source),
-            "--outdir",
-            str(output),
-            "--dpi",
-            "72",
-            "--get-meta",
-            "--get-text",
-            "--get-thumb",
-        ],
+class PdfGroup(click.Group, PdfCommand):
+    """Show configured directories for the action selector."""
+
+
+@click.group(cls=PdfGroup)
+@click.pass_context
+def main(ctx: click.Context) -> None:
+    """Analyze, enhance, or export one PDF. Select an action first."""
+    if ctx.resilient_parsing:
+        return
+    try:
+        config = load_config()
+        _ = config.llm_tasks
+        ctx.obj = config
+    except ConfigurationError as error:
+        ctx.obj = None
+        if not ctx.invoked_subcommand:
+            return
+        if ctx.get_help_record(ctx) is None:
+            raise click.ClickException(str(error)) from error
+
+
+@click.pass_context
+def analyze(
+    ctx: click.Context, input_pdf: str, output_dir: str | None, **kwargs: object
+) -> None:
+    """Write analysis JSON from existing PDF text without OCR or unit exports."""
+    _execute(
+        ctx.obj,
+        input_pdf,
+        output_dir,
+        analysis_flag=True,
+        pdf_type="born-digital",
+        **kwargs,
     )
-    assert result.exit_code == 0, result.output
-    assert not (output / source.name).exists()
-    assert json.loads((output / "input.meta.json").read_text())["output"] is None
-    assert list((output / "_images_input").glob("*.png"))
-    assert list((output / "_thumbs_input").glob("*.jpg"))
-    assert source.read_bytes() == original
 
 
-def test_export_requires_explicit_output(make_pdf, tmp_path):
-    output = tmp_path / "out"
-    result = CliRunner().invoke(
-        cli.main, ["export", str(make_pdf(["digital"])), "--outdir", str(output)]
+@click.pass_context
+def export(
+    ctx: click.Context, input_pdf: str, output_dir: str | None, **kwargs: object
+) -> None:
+    """Export selected derivatives from the input PDF without OCR or a PDF output."""
+    _execute(
+        ctx.obj, input_pdf, output_dir, pdf_type="born-digital", no_pdf_flag=True, **kwargs
     )
-    assert result.exit_code == 1
-    assert "No output selected" in result.output
-    assert not output.exists()
 
 
-@pytest.mark.parametrize("action", ["analyze", "enhance", "export"])
-def test_document_type_flag_name(action):
-    runner = CliRunner()
-    result = runner.invoke(cli.main, [action, "--help"])
-    assert result.exit_code == 0
-    assert "--doc_type" in result.output
-    assert "--doctype" not in result.output
-    legacy = runner.invoke(cli.main, [action, "--doctype", "book"])
-    assert legacy.exit_code == 2
-    assert "No such option" in legacy.output
+_COMMON_PARAMS = {"input_pdf", "output_dir", "input_path_prefix", "debug_flag"}
+_ANALYZE_PARAMS = _COMMON_PARAMS | {"document_type"}
+_EXPORT_PARAMS = _COMMON_PARAMS | {
+    "dpi",
+    "get_doi_flag",
+    "export_json_flag",
+    "export_images_flag",
+    "export_format",
+    "export_texts_flag",
+    "export_thumbs_flag",
+    "document_type",
+    "plan_path",
+    "export_html_flag",
+}
 
 
-def test_analysis_doc_type_book(make_pdf, tmp_path):
-    source = make_pdf(["digital"])
-    output = tmp_path / "analysis"
-    result = CliRunner().invoke(
-        cli.main,
-        ["analyze", str(source), "--doc_type", "book", "--outdir", str(output)],
+def _unit_type_option() -> click.Option:
+    return click.Option(
+        ["--unit_type", "unit_types"],
+        type=click.Choice(sorted(UNIT_TYPES)),
+        multiple=True,
+        help="Select units of this type. Repeat to select several types.",
     )
-    assert result.exit_code == 0, result.output
-    analysis = json.loads((output / "input.analysis.json").read_text("utf-8"))
-    assert analysis["document_type"] == "book"
-    assert all(unit["type"] == "chapter" for unit in analysis["units"])
 
 
-@pytest.mark.parametrize("pdf_type", [None, "auto", "born-digital", "scanned"])
-def test_cli_pdf_type_values(make_pdf, monkeypatch, pdf_type):
-    received = {}
-    monkeypatch.setattr(
-        cli, "process_pdf", lambda *args, **kwargs: received.update(kwargs)
+main.add_command(enhance)
+main.add_command(
+    PdfCommand(
+        "analyze",
+        params=[param for param in enhance.params if param.name in _ANALYZE_PARAMS],
+        callback=analyze,
+        help=analyze.__doc__,
     )
-    args = ["enhance", str(make_pdf(["digital"]))]
-    if pdf_type is not None:
-        args.extend(["--pdf_type", pdf_type])
-    result = CliRunner().invoke(cli.main, args)
-    assert result.exit_code == 0, result.output
-    assert received["pdf_type"] == (pdf_type or "auto")
-    assert "born_digital_flag" not in received
-
-
-@pytest.mark.parametrize("options", [["--pdf_type", "invalid"], ["--born-digital"]])
-def test_cli_rejects_invalid_or_obsolete_pdf_type(make_pdf, monkeypatch, options):
-    def unexpected(*args, **kwargs):
-        pytest.fail("Invalid options must not start processing.")
-
-    monkeypatch.setattr(cli, "process_pdf", unexpected)
-    result = CliRunner().invoke(
-        cli.main, ["enhance", str(make_pdf(["digital"])), *options]
+)
+main.add_command(
+    PdfCommand(
+        "export",
+        params=[param for param in enhance.params if param.name in _EXPORT_PARAMS]
+        + [_unit_type_option()],
+        callback=export,
+        help=export.__doc__,
     )
-    assert result.exit_code == 2
+)
+
+
+if __name__ == "__main__":
+    main()

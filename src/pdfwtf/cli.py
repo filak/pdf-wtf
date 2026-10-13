@@ -7,7 +7,7 @@ from typing import Literal
 import click
 from pydantic import BaseModel
 
-from pdfwtf.configuration import ConfigurationError, load_config
+from pdfwtf.configuration import AppConfig, ConfigurationError, load_config
 from pdfwtf.container_analysis import UNIT_TYPES
 from pdfwtf.logging_utils import configure_logging
 from pdfwtf.pipeline import ProcessingError, process_pdf
@@ -63,7 +63,8 @@ class PdfCommand(click.Command):
         super().format_epilog(ctx, formatter)
         with formatter.section("Current directories"):
             try:
-                config = load_config()
+                config = ctx.obj if isinstance(ctx.obj, AppConfig) else load_config()
+                _ = config.llm_tasks
             except ConfigurationError as error:
                 formatter.write_text(f"Unavailable. {error}")
                 return
@@ -126,7 +127,8 @@ def _resolve_input_pdf(
     path = Path(value)
     if not path.is_absolute():
         try:
-            path = load_config().input_dir / path
+            config = ctx.obj if isinstance(ctx.obj, AppConfig) else load_config()
+            path = config.input_dir / path
         except ConfigurationError as error:
             raise click.ClickException(str(error)) from error
     return click.Path(exists=True, dir_okay=False, resolve_path=True).convert(
@@ -290,33 +292,38 @@ def _resolve_input_pdf(
     help="Export page images and JPEG thumbnails.",
 )
 @click.option("--debug", "debug_flag", is_flag=True, help="Enable debug logging.")
-def enhance(input_pdf: str, output_dir: str | None, **kwargs: object) -> None:
+@click.pass_context
+def enhance(
+    ctx: click.Context, input_pdf: str, output_dir: str | None, **kwargs: object
+) -> None:
     """Enhance a PDF with scan cleanup, OCR, and optional exports."""
-    _execute(input_pdf, output_dir, **kwargs)
+    _execute(ctx.obj, input_pdf, output_dir, **kwargs)
 
 
-def _execute(input_pdf: str, output_dir: str | None, **kwargs: object) -> None:
-    """Invoke the shared processor with action-specific options."""
+def _execute(
+    config: AppConfig | None, input_pdf: str, output_dir: str | None, **kwargs: object
+) -> None:
+    """Invoke the shared processor with action-specific options and shared config."""
+    if config is None:
+        config = load_config()
     options = CliOptions(**kwargs)
+
+    # 1. Print input/output info FIRST before logging handlers pollute stdout
     show_info(input_pdf, output_dir, options.debug_flag)
+
     try:
-        configure_logging(
-            options.debug_flag, load_config().logs_dir / "pdf-wtf-log.txt"
-        )
+        configure_logging(options.debug_flag, config.logs_dir / "pdf-wtf-log.txt")
         logging.getLogger(__name__).info("PDF processing started.")
-        process_pdf(input_pdf, output_dir, **options.model_dump())
-    except (ConfigurationError, ProcessingError) as error:
-        logging.getLogger(__name__).error("PDF processing failed.")
-        raise click.ClickException(str(error)) from error
-    except ValueError as error:
+        process_pdf(input_pdf, output_dir, config=config, **options.model_dump())
+    except (ConfigurationError, ProcessingError, ValueError) as error:
         logging.getLogger(__name__).error("PDF processing failed.")
         raise click.ClickException(str(error)) from error
     except Exception as error:
-        logging.getLogger(__name__).error("PDF processing failed.")
-        # Tool exceptions can contain document data. Do not print their payloads.
+        logging.getLogger(__name__).exception("PDF processing failed.")
         raise click.ClickException(
             "PDF processing failed. Check the input and required tools."
         ) from error
+
     logging.getLogger(__name__).info("PDF processing completed.")
     click.echo("Done!")
 
@@ -326,20 +333,51 @@ class PdfGroup(click.Group, PdfCommand):
 
 
 @click.group(cls=PdfGroup)
-def main() -> None:
+@click.pass_context
+def main(ctx: click.Context) -> None:
     """Analyze, enhance, or export one PDF. Select an action first."""
+    if ctx.resilient_parsing:
+        return
+    try:
+        config = load_config()
+        _ = config.llm_tasks
+        ctx.obj = config
+    except ConfigurationError as error:
+        ctx.obj = None
+        if not ctx.invoked_subcommand:
+            return
+        if ctx.get_help_record(ctx) is None:
+            raise click.ClickException(str(error)) from error
 
 
-def analyze(input_pdf: str, output_dir: str | None, **kwargs: object) -> None:
+@click.pass_context
+def analyze(
+    ctx: click.Context, input_pdf: str, output_dir: str | None, **kwargs: object
+) -> None:
     """Write analysis JSON from existing PDF text without OCR or unit exports."""
     _execute(
-        input_pdf, output_dir, analysis_flag=True, pdf_type="born-digital", **kwargs
+        ctx.obj,
+        input_pdf,
+        output_dir,
+        analysis_flag=True,
+        pdf_type="born-digital",
+        **kwargs,
     )
 
 
-def export(input_pdf: str, output_dir: str | None, **kwargs: object) -> None:
+@click.pass_context
+def export(
+    ctx: click.Context, input_pdf: str, output_dir: str | None, **kwargs: object
+) -> None:
     """Export selected derivatives from the input PDF without OCR or a PDF output."""
-    _execute(input_pdf, output_dir, pdf_type="born-digital", no_pdf_flag=True, **kwargs)
+    _execute(
+        ctx.obj,
+        input_pdf,
+        output_dir,
+        pdf_type="born-digital",
+        no_pdf_flag=True,
+        **kwargs,
+    )
 
 
 _COMMON_PARAMS = {"input_pdf", "output_dir", "input_path_prefix", "debug_flag"}

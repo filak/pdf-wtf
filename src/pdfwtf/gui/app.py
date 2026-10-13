@@ -39,6 +39,7 @@ def create_app(overrides: Mapping[str, Any] | None = None) -> Flask:
         PDFWTF_GUI_OUTPUT_DIR=output_dir,
         PDFWTF_GUI_BASE_TEMPLATE="pdfwtf_gui/standalone_base.html",
         PDFWTF_GUI_ACCESS_CHECK=lambda _action, _job_id: True,
+        PDFWTF_LLM_TASKS=shared.llm_tasks,
     )
     if overrides:
         app.config.from_mapping(overrides)

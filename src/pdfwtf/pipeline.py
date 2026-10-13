@@ -10,7 +10,7 @@ import ocrmypdf
 from PIL import Image
 import pymupdf as fitz
 
-from .configuration import load_config
+from .configuration import load_config, AppConfig
 from .container_analysis import (
     UNIT_TYPES,
     analyze_container,
@@ -283,6 +283,7 @@ def process_pdf(
     export_html_flag: bool = False,
     pdf_type: str = "auto",
     export_unit_pdfs_flag: bool = False,
+    config: AppConfig | None = None,
 ) -> None:
     """Process one PDF without replacing its source or publishing partial OCR."""
     if pdf_type not in {"auto", "born-digital", "scanned"}:
@@ -340,7 +341,8 @@ def process_pdf(
             "No output selected. Select --get-meta, --get-doi, --get-img, "
             "--get-text, --get-thumb, --plan, or --get-html."
         )
-    config = load_config()
+    if config is None:
+        config = load_config()
     if not input_pdf:
         raise ValueError("An input PDF is required.")
     input_pdf = Path(input_pdf).resolve(strict=True)

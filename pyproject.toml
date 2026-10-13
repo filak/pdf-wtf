@@ -31,6 +31,7 @@ dependencies = [
     "Pillow==12.3.0",
     "img2pdf==0.6.3",
     "python-dotenv==1.2.4",
+    "gemini-call==0.1.0",
 ]
 
 [project.scripts]
@@ -46,6 +47,9 @@ gui = [
 
 [tool.uv-build]
 include = ["src/pdfwtf/**"]
+
+[tool.uv.sources]
+gemini-call = { git = "https://github.com/filak/gemini-call.git" }
 
 [dependency-groups]
 dev = [
