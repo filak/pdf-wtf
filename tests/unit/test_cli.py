@@ -370,7 +370,12 @@ def export(
 ) -> None:
     """Export selected derivatives from the input PDF without OCR or a PDF output."""
     _execute(
-        ctx.obj, input_pdf, output_dir, pdf_type="born-digital", no_pdf_flag=True, **kwargs
+        ctx.obj,
+        input_pdf,
+        output_dir,
+        pdf_type="born-digital",
+        no_pdf_flag=True,
+        **kwargs,
     )
 
 

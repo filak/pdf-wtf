@@ -1,8 +1,14 @@
 import os
 import pytest
 
-from pdfwtf.configuration import AppConfig, ConfigurationError, LLMTaskConfig, load_config, parse_value, validate_llm_tasks
+from pdfwtf.configuration import (
+    ConfigurationError,
+    load_config,
+    parse_value,
+    validate_llm_tasks,
+)
 from pdfwtf.utils.common import get_output_dir, get_temp_dir
+
 
 @pytest.mark.parametrize(
     "raw, expected",
@@ -166,5 +172,7 @@ def test_missing_template_file():
             "template": "non_existent_template",
         }
     }
-    with pytest.raises(ConfigurationError, match=r"template 'non_existent_template' not found"):
+    with pytest.raises(
+        ConfigurationError, match=r"template 'non_existent_template' not found"
+    ):
         validate_llm_tasks(raw_tasks)
