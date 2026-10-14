@@ -17,6 +17,11 @@ confirmationElement.addEventListener("shown.bs.modal", () => {
   document.getElementById("delete-confirmation-cancel").focus();
 });
 
+confirmationElement.addEventListener("hide.bs.modal", () => {
+  // Bootstrap sets aria-hidden on hide; a focused descendant triggers a browser warning.
+  if (confirmationElement.contains(document.activeElement)) document.activeElement.blur();
+});
+
 confirmationElement.addEventListener("hidden.bs.modal", () => {
   pendingConfirmation = null;
   if (confirmationTrigger?.isConnected) confirmationTrigger.focus();

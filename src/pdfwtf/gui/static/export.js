@@ -97,6 +97,11 @@ exportDialog.addEventListener("show.bs.modal", async (event) => {
   }
 });
 
+exportDialog.addEventListener("hide.bs.modal", () => {
+  // Bootstrap sets aria-hidden on hide; a focused descendant triggers a browser warning.
+  if (exportDialog.contains(document.activeElement)) document.activeElement.blur();
+});
+
 exportDialog.addEventListener("hidden.bs.modal", () => {
   exportGeneration += 1;
 });
