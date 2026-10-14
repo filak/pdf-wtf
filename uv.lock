@@ -609,8 +609,8 @@ wheels = [
 
 [[package]]
 name = "gemini-call"
-version = "0.1.0"
-source = { git = "https://github.com/filak/gemini-call.git#af8df908abad87177bae19f7bfdda74ae8eedf3c" }
+version = "0.2.0"
+source = { git = "https://github.com/filak/gemini-call.git#c93ecf8d3f86055fce5fbe9ad675a845889ae7d1" }
 dependencies = [
     { name = "google-genai" },
 ]
@@ -1290,7 +1290,7 @@ wheels = [
 
 [[package]]
 name = "pdfwtf"
-version = "0.1.4"
+version = "0.1.5"
 source = { editable = "." }
 dependencies = [
     { name = "click" },

@@ -24,18 +24,6 @@ PAT_DOI = re.compile(
     re.IGNORECASE | re.VERBOSE,
 )
 
-_DOI_PREFIX_AT_LINE_END = re.compile(
-    r"""
-    (?:
-        https?://[^\s]*/
-        |(?<![A-Za-z0-9.-])(?:dx\.)?doi\.org/
-        |(?<![A-Za-z0-9_])doi\s*:\s*[([{<\"']?\s*
-        |(?<![A-Za-z0-9_./])
-    )
-    10\.\d{4,9}/[^\s]*$
-    """,
-    re.IGNORECASE | re.VERBOSE,
-)
 _WRAPPERS = {"(": ")", "[": "]", "{": "}", "<": ">", '"': '"', "'": "'"}
 _TRAILING_PUNCTUATION = frozenset(".,;:!?")
 _ASCII_LOWER = str.maketrans("ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")
@@ -350,28 +338,6 @@ def crop_dark_background_pillow(image_paths: list[Path]) -> int:
     return cropped_count
 
 
-def _join_doi_continuations(text: str) -> str:
-    """Join a DOI line break only when the next line is one isolated token."""
-    lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
-    result = []
-    index = 0
-    while index < len(lines):
-        line = lines[index]
-        stripped = line.rstrip()
-        if index + 1 < len(lines) and _DOI_PREFIX_AT_LINE_END.search(stripped):
-            continuation = lines[index + 1].strip()
-            if (
-                continuation
-                and re.fullmatch(r"[^\s]+", continuation)
-                and stripped[-1] not in ")]}>\"'.,;:!?"
-            ):
-                line = stripped + continuation
-                index += 1
-        result.append(line)
-        index += 1
-    return "\n".join(result)
-
-
 def _opening_wrapper(text: str, match: re.Match, doi_start: int) -> str | None:
     prefix = text[match.start() : doi_start].rstrip()
     if prefix and prefix[-1] in _WRAPPERS:
@@ -398,7 +364,7 @@ def _extract_doi_candidates(text: str) -> List[str]:
     """Extract unverified DOI candidates in order of first occurrence."""
     text = text.replace("\u00ad", "").replace("\u200b", "")
     text = text.replace("\u2013", "-").replace("\u2014", "-")
-    text = _join_doi_continuations(text)
+    # A DOI is never split across lines, so line breaks always end a candidate.
 
     candidates = []
     seen = set()
@@ -423,9 +389,6 @@ def _extract_doi_candidates(text: str) -> List[str]:
             candidate = representation[relative_doi.start() :]
 
         if not re.fullmatch(r"10\.\d{4,9}/[^\s]+", candidate, re.IGNORECASE):
-            continue
-        at_line_break = match.end() < len(text) and text[match.end()] == "\n"
-        if at_line_break and candidate.endswith("-"):
             continue
 
         key = candidate.translate(_ASCII_LOWER)

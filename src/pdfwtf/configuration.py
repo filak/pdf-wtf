@@ -6,17 +6,25 @@ import importlib
 import io
 import json
 import os
+import re
 import tokenize
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Set
+from typing import Any, Dict, Mapping
 
 from dotenv import dotenv_values
 
-# Extensible validation constants
-ALLOWED_CONTEXTS: Set[str] = {"export"}
-ALLOWED_DOCUMENT_TYPES: Set[str] = {"unit"}
-ALLOWED_PIPELINES: Set[str] = {"export_html_flag"}
+# LLM task stages are defined in code. Each stage lists its supported commands.
+LLM_STAGES: Dict[str, frozenset[str]] = {
+    "after_unit_html": frozenset({"export", "enhance"}),
+}
+# Output suffixes that each stage requires.
+LLM_STAGE_SUFFIXES: Dict[str, str] = {"after_unit_html": ".html"}
+LLM_TASK_KEYS = frozenset({"description", "commands", "stage", "template", "output"})
+_TASK_NAME = re.compile(r"[a-z][a-z0-9_-]{0,63}\Z")
+_TEMPLATE_NAME = re.compile(r"[a-z][a-z0-9_]{0,63}\Z")
+_OUTPUT_SUFFIX = re.compile(r"\.[a-z0-9]+(?:[.-][a-z0-9]+)*\Z")
+_RESERVED_SUFFIXES = (".metadata.json", ".pdf")
 
 
 class ConfigurationError(ValueError):
@@ -28,33 +36,43 @@ class LLMTaskConfig:
     """Validated configuration for a single LLM task."""
 
     name: str
-    context: str
     description: Dict[str, str]
-    document_types: List[str]
-    pipeline: str
+    commands: tuple[str, ...]
+    stage: str
     template: str
+    output_suffix: str
     prompt: str
     system: str
+
+    def label(self, language: str | None) -> str:
+        """Return the description for a language, with English as fallback."""
+        return self.description.get(language or "en") or self.description["en"]
 
     @classmethod
     def from_dict(cls, name: str, data: Dict[str, Any]) -> "LLMTaskConfig":
         """Validate raw task dict and load template attributes."""
+        if not isinstance(name, str) or not _TASK_NAME.match(name):
+            raise ConfigurationError(
+                f"LLM task name '{name}' must use lowercase letters, digits, "
+                "hyphens, or underscores."
+            )
         if not isinstance(data, dict):
             raise ConfigurationError(f"LLM task '{name}' must be a dictionary.")
-
-        # 1. Validate 'context'
-        context = data.get("context")
-        if not isinstance(context, str) or context not in ALLOWED_CONTEXTS:
+        unknown = set(data) - LLM_TASK_KEYS
+        missing = LLM_TASK_KEYS - set(data)
+        if unknown or missing:
             raise ConfigurationError(
-                f"LLM task '{name}': invalid context '{context}'. "
-                f"Allowed values: {sorted(ALLOWED_CONTEXTS)}"
+                f"LLM task '{name}' must define exactly these keys: "
+                f"{sorted(LLM_TASK_KEYS)}. Unknown: {sorted(unknown)}. "
+                f"Missing: {sorted(missing)}."
             )
 
-        # 2. Validate 'description'
-        description = data.get("description")
+        # 1. Validate 'description'
+        description = data["description"]
         if not isinstance(description, dict) or not description:
             raise ConfigurationError(
-                f"LLM task '{name}': 'description' must be a non-empty dictionary mapping language codes to strings."
+                f"LLM task '{name}': 'description' must be a non-empty dictionary "
+                "mapping language codes to strings."
             )
         for lang, text in description.items():
             if (
@@ -65,31 +83,65 @@ class LLMTaskConfig:
                 raise ConfigurationError(
                     f"LLM task '{name}': invalid description entry for '{lang}'."
                 )
-
-        # 3. Validate 'document_types'
-        doc_types = data.get("document_types")
-        if not isinstance(doc_types, list) or not doc_types:
+        if "en" not in description:
             raise ConfigurationError(
-                f"LLM task '{name}': 'document_types' must be a non-empty list."
-            )
-        invalid_types = set(doc_types) - ALLOWED_DOCUMENT_TYPES
-        if invalid_types:
-            raise ConfigurationError(
-                f"LLM task '{name}': unsupported document_types {sorted(invalid_types)}. "
-                f"Allowed values: {sorted(ALLOWED_DOCUMENT_TYPES)}"
+                f"LLM task '{name}': 'description' must contain an 'en' entry."
             )
 
-        # 4. Validate 'pipeline'
-        pipeline = data.get("pipeline")
-        if not isinstance(pipeline, str) or pipeline not in ALLOWED_PIPELINES:
+        # 2. Validate 'stage'
+        stage = data["stage"]
+        if not isinstance(stage, str) or stage not in LLM_STAGES:
             raise ConfigurationError(
-                f"LLM task '{name}': invalid pipeline '{pipeline}'. "
-                f"Allowed values: {sorted(ALLOWED_PIPELINES)}"
+                f"LLM task '{name}': invalid stage '{stage}'. "
+                f"Allowed values: {sorted(LLM_STAGES)}"
+            )
+
+        # 3. Validate 'commands' against the stage
+        commands = data["commands"]
+        if (
+            not isinstance(commands, list)
+            or not commands
+            or not all(isinstance(command, str) for command in commands)
+            or len(set(commands)) != len(commands)
+        ):
+            raise ConfigurationError(
+                f"LLM task '{name}': 'commands' must be a non-empty list of "
+                "unique command names."
+            )
+        unsupported = set(commands) - LLM_STAGES[stage]
+        if unsupported:
+            raise ConfigurationError(
+                f"LLM task '{name}': stage '{stage}' does not support commands "
+                f"{sorted(unsupported)}. Allowed values: {sorted(LLM_STAGES[stage])}"
+            )
+
+        # 4. Validate 'output'
+        output = data["output"]
+        if not isinstance(output, dict) or set(output) != {"suffix"}:
+            raise ConfigurationError(
+                f"LLM task '{name}': 'output' must be a dictionary with only 'suffix'."
+            )
+        suffix = output["suffix"]
+        required_end = LLM_STAGE_SUFFIXES[stage]
+        if (
+            not isinstance(suffix, str)
+            or len(suffix) > 32
+            or not _OUTPUT_SUFFIX.match(suffix)
+            or not suffix.endswith(required_end)
+            or suffix == required_end
+            or suffix.endswith(_RESERVED_SUFFIXES)
+        ):
+            raise ConfigurationError(
+                f"LLM task '{name}': unsafe output suffix '{suffix}'. Use a "
+                f"lowercase suffix such as '.clean{required_end}' that ends with "
+                f"'{required_end}' and differs from '{required_end}'."
             )
 
         # 5. Validate 'template' & load prompt/system strings from module
-        template_name = data.get("template")
-        if not isinstance(template_name, str) or not template_name.strip():
+        template_name = data["template"]
+        if not isinstance(template_name, str) or not _TEMPLATE_NAME.match(
+            template_name
+        ):
             raise ConfigurationError(
                 f"LLM task '{name}': 'template' must be a valid module name string."
             )
@@ -116,11 +168,11 @@ class LLMTaskConfig:
 
         return cls(
             name=name,
-            context=context,
-            description=description,
-            document_types=doc_types,
-            pipeline=pipeline,
+            description=dict(description),
+            commands=tuple(commands),
+            stage=stage,
             template=template_name,
+            output_suffix=suffix,
             prompt=prompt.strip(),
             system=system.strip(),
         )
@@ -132,8 +184,16 @@ def validate_llm_tasks(raw_tasks: Any) -> Dict[str, LLMTaskConfig]:
         raise ConfigurationError("PDFWTF_LLM_TASKS must be a valid JSON dictionary.")
 
     validated_tasks: Dict[str, LLMTaskConfig] = {}
+    suffixes: Dict[str, str] = {}
     for task_name, task_data in raw_tasks.items():
-        validated_tasks[task_name] = LLMTaskConfig.from_dict(task_name, task_data)
+        task = LLMTaskConfig.from_dict(task_name, task_data)
+        if task.output_suffix in suffixes:
+            raise ConfigurationError(
+                f"LLM tasks '{suffixes[task.output_suffix]}' and '{task_name}' "
+                f"use the same output suffix '{task.output_suffix}'."
+            )
+        suffixes[task.output_suffix] = task_name
+        validated_tasks[task_name] = task
 
     return validated_tasks
 
@@ -216,6 +276,23 @@ class AppConfig:
         ):
             return validate_llm_tasks(tasks)
         return tasks
+
+    @property
+    def gemini_api_key_loaded(self) -> bool:
+        """Report whether configuration loading found a Gemini API key."""
+        value = self.values.get("gemini_api_key")
+        return isinstance(value, str) and bool(value.strip())
+
+    @property
+    def gemini_api_key_present(self) -> bool:
+        """Report whether gemini-call can find the key in the process environment.
+
+        gemini-call reads only ``os.environ``. A key only in ``.env`` is not enough.
+        The key value is never returned.
+        """
+        return self.gemini_api_key_loaded and bool(
+            os.environ.get("GEMINI_API_KEY", "").strip()
+        )
 
 
 def load_config() -> AppConfig:

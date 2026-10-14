@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-10 18:27+0200\n"
+"POT-Creation-Date: 2026-10-14 14:57+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,134 +17,142 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: src/pdfwtf/gui/blueprint.py:97
+#: src/pdfwtf/gui/blueprint.py:99
 msgid "Select a valid PDF type."
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:117
+#: src/pdfwtf/gui/blueprint.py:119
 msgid "Select a valid PDF document."
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:141
+#: src/pdfwtf/gui/blueprint.py:143
 msgid "Upload could not be saved. Try again."
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:155 src/pdfwtf/gui/blueprint.py:204
-#: src/pdfwtf/gui/blueprint.py:398 src/pdfwtf/gui/blueprint.py:402
-#: src/pdfwtf/gui/blueprint.py:462 src/pdfwtf/gui/blueprint.py:507
+#: src/pdfwtf/gui/blueprint.py:157 src/pdfwtf/gui/blueprint.py:206
+#: src/pdfwtf/gui/blueprint.py:408 src/pdfwtf/gui/blueprint.py:412
+#: src/pdfwtf/gui/blueprint.py:480 src/pdfwtf/gui/blueprint.py:525
 msgid "Wait for the active operation to finish."
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:163
+#: src/pdfwtf/gui/blueprint.py:165
 msgid "Wait for analysis to finish before deleting the file."
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:192
+#: src/pdfwtf/gui/blueprint.py:194
 msgid "The file could not be deleted. Try again."
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:216
+#: src/pdfwtf/gui/blueprint.py:218
 msgid "Select a valid document type."
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:233
+#: src/pdfwtf/gui/blueprint.py:235
 msgid "Analysis could not start. Try again."
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:251
+#: src/pdfwtf/gui/blueprint.py:253
 msgid "Analysis failed. Upload the document again or contact support."
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:328
+#: src/pdfwtf/gui/blueprint.py:330
 msgid "Preface"
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:329
+#: src/pdfwtf/gui/blueprint.py:331
 msgid "Editorial"
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:330
+#: src/pdfwtf/gui/blueprint.py:332
 msgid "Table of contents"
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:331
+#: src/pdfwtf/gui/blueprint.py:333
 msgid "Programme"
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:332
+#: src/pdfwtf/gui/blueprint.py:334
 msgid "Article"
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:333
+#: src/pdfwtf/gui/blueprint.py:335
 msgid "Chapter"
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:334
+#: src/pdfwtf/gui/blueprint.py:336
 msgid "Abstract"
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:335
+#: src/pdfwtf/gui/blueprint.py:337
 msgid "Poster"
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:336
+#: src/pdfwtf/gui/blueprint.py:338
 msgid "Book review"
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:337
+#: src/pdfwtf/gui/blueprint.py:339
 msgid "Full-page advertisement"
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:338
+#: src/pdfwtf/gui/blueprint.py:340
 msgid "Cover"
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:339
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:18
+#: src/pdfwtf/gui/blueprint.py:341
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:25
 msgid "Unknown"
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:382
+#: src/pdfwtf/gui/blueprint.py:379 src/pdfwtf/gui/blueprint.py:386
 msgid "Select valid export options."
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:388
+#: src/pdfwtf/gui/blueprint.py:390 src/pdfwtf/gui/blueprint.py:415
+msgid "Select valid LLM tasks."
+msgstr ""
+
+#: src/pdfwtf/gui/blueprint.py:398
 msgid "The saved plan could not be read."
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:405
+#: src/pdfwtf/gui/blueprint.py:418
 msgid "Export could not start. Try again."
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:428
+#: src/pdfwtf/gui/blueprint.py:442
+msgid "Export finished, but LLM processing is incomplete. See manifest.json."
+msgstr ""
+
+#: src/pdfwtf/gui/blueprint.py:446
 msgid "Export failed. Check the host logs."
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:465
+#: src/pdfwtf/gui/blueprint.py:483
 msgid "The plan must be a JSON object."
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:472
+#: src/pdfwtf/gui/blueprint.py:490
 msgid "The plan is not valid."
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:498
+#: src/pdfwtf/gui/blueprint.py:516
 msgid "The approved plan was saved."
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:516
+#: src/pdfwtf/gui/blueprint.py:534
 msgid "The plan was deleted."
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:544
+#: src/pdfwtf/gui/blueprint.py:562
 msgid "The PDF is larger than the configured upload limit."
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:719
+#: src/pdfwtf/gui/blueprint.py:748
 msgid "Select a PDF document."
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:721
+#: src/pdfwtf/gui/blueprint.py:750
 msgid "The selected file must have a .pdf extension."
 msgstr ""
 
@@ -156,7 +164,7 @@ msgid "Review"
 msgstr ""
 
 #: src/pdfwtf/gui/templates/pdfwtf_gui/_analysis_actions.html:9
-#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:41
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:53
 msgid "Export"
 msgstr ""
 
@@ -174,32 +182,32 @@ msgid "Delete"
 msgstr ""
 
 #: src/pdfwtf/gui/templates/pdfwtf_gui/_document_type.html:2
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:12
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:19
 msgid "Automatic"
 msgstr ""
 
 #: src/pdfwtf/gui/templates/pdfwtf_gui/_document_type.html:3
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:13
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:20
 msgid "Single unit"
 msgstr ""
 
 #: src/pdfwtf/gui/templates/pdfwtf_gui/_document_type.html:4
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:14
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:21
 msgid "Journal issue"
 msgstr ""
 
 #: src/pdfwtf/gui/templates/pdfwtf_gui/_document_type.html:5
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:15
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:22
 msgid "Magazine issue"
 msgstr ""
 
 #: src/pdfwtf/gui/templates/pdfwtf_gui/_document_type.html:6
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:16
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:23
 msgid "Book"
 msgstr ""
 
 #: src/pdfwtf/gui/templates/pdfwtf_gui/_document_type.html:7
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:17
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:24
 msgid "Proceedings"
 msgstr ""
 
@@ -224,7 +232,7 @@ msgid "Export options"
 msgstr ""
 
 #: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:8
-#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:40
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:52
 msgid "Close"
 msgstr ""
 
@@ -246,6 +254,14 @@ msgstr ""
 
 #: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:35
 msgid "Include the saved plan and analysis JSON in the ZIP."
+msgstr ""
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:39
+msgid "LLM tasks"
+msgstr ""
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:40
+msgid "Selected LLM tasks send unit HTML to Gemini. They require get-html."
 msgstr ""
 
 #: src/pdfwtf/gui/templates/pdfwtf_gui/_job_complete.html:2
@@ -273,12 +289,14 @@ msgid "Process files"
 msgstr ""
 
 #: src/pdfwtf/gui/templates/pdfwtf_gui/_uploads.html:10
-#: src/pdfwtf/gui/templates/pdfwtf_gui/input.html:29
+#: src/pdfwtf/gui/templates/pdfwtf_gui/input.html:32
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:13
 msgid "Scanned"
 msgstr ""
 
 #: src/pdfwtf/gui/templates/pdfwtf_gui/_uploads.html:12
-#: src/pdfwtf/gui/templates/pdfwtf_gui/input.html:28
+#: src/pdfwtf/gui/templates/pdfwtf_gui/input.html:31
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:15
 msgid "Born-digital"
 msgstr ""
 
@@ -310,195 +328,195 @@ msgstr ""
 msgid "PDF document"
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/input.html:22
+#: src/pdfwtf/gui/templates/pdfwtf_gui/input.html:23
 msgid "Choose file"
 msgstr ""
 
 #: src/pdfwtf/gui/templates/pdfwtf_gui/input.html:26
-msgid "or drop a PDF here"
-msgstr ""
-
-#: src/pdfwtf/gui/templates/pdfwtf_gui/input.html:25
 msgid "No file selected"
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/input.html:26
+#: src/pdfwtf/gui/templates/pdfwtf_gui/input.html:27
+msgid "or drop a PDF here"
+msgstr ""
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/input.html:29
 msgid "PDF type"
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/input.html:31
+#: src/pdfwtf/gui/templates/pdfwtf_gui/input.html:34
 msgid "Upload"
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/input.html:32
+#: src/pdfwtf/gui/templates/pdfwtf_gui/input.html:35
 msgid "Uploading…"
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:35
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:42
 msgid "Add unit"
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:36
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:43
 msgid "Merge selected"
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:37
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:44
 msgid "Save plan"
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:39
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:46
 msgid "More"
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:41
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:48
 msgid "Exports"
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:42
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:49
 msgid "Show analysis"
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:45
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:52
 msgid "Delete the approved plan?"
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:47
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:54
 msgid "Delete plan"
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:56
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:63
 msgid "Possible unit boundaries within a page were detected."
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:57
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:64
 msgid "Check the listed pages. This warning does not prevent saving the plan."
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:60
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:67
 #, python-format
 msgid "Input page %(page)s"
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:69
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:76
 msgid "Pages"
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:74
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:81
 msgid "Previous"
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:75
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:82
 msgid "Preview page"
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:78
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:85
 msgid "Next"
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:79
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:86
 msgid "Zoom out"
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:81
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:88
 msgid "Zoom in"
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:85
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:92
 msgid "PDF page preview"
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:92
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:99
 msgid "Units"
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:93
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:100
 msgid "Apply to units"
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:95
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:102
 msgid "All"
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:96
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:103
 msgid "Selected"
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:97
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:103
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:116
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:104
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:110
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:123
 msgid "Included"
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:98
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:120
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:105
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:127
 msgid "Removed"
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:99
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:106
 msgid "Clear selection"
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:102
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:109
 msgid "Include or exclude units"
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:115
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:122
 msgid "New unit"
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:117
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:124
 msgid "Select at least two adjacent units to merge."
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:118
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:125
 msgid "The PDF preview could not load."
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:119
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:126
 msgid "Merged unit"
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:121
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:128
 msgid "Select unit"
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:122
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:129
 msgid "Mixed"
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:123
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:130
 msgid "Title"
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:124
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:131
 msgid "Type"
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:125
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:132
 msgid "Start page"
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:126
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:133
 msgid "End page"
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:127
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:134
 msgid "The plan could not be saved."
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:128
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:135
 msgid "Saving…"
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:129
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:136
 msgid "The plan could not be deleted."
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:130
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:137
 msgid "Include or exclude unit"
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:131
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:138
 #, python-format
 msgid "View input page %(page)s"
 msgstr ""
@@ -523,3 +541,4 @@ msgstr ""
 #: src/pdfwtf/gui/templates/pdfwtf_gui/standalone_base.html:49
 msgid "Auto"
 msgstr ""
+

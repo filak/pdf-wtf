@@ -135,6 +135,59 @@ Empty environment values do not override dotenv or INI values. Console logging
 uses standard error. Debug mode enables debug severity. It does not retain
 temporary document files.
 
+## LLM tasks
+
+`LLM_TASKS` in the `[pdf-wtf]` INI section defines optional LLM tasks.
+`PDFWTF_LLM_TASKS` can override it. The value is a dictionary of task names.
+A task name uses lowercase letters, digits, hyphens, or underscores. Each task
+must have exactly these keys:
+
+```ini
+LLM_TASKS = {
+    "clean_html": {
+        "description": {"en": "Clean HTML output", "cs": "Vyčistit HTML výstup"},
+        "commands": ["export", "enhance"],
+        "stage": "after_unit_html",
+        "template": "wp_html",
+        "output": {"suffix": ".clean.html"}
+    }
+    }
+```
+
+- `description` maps language codes to non-empty labels. It must contain `en`.
+- `stage` must be a stage defined in code. The only stage is
+  `after_unit_html`.
+- `commands` is a non-empty list of unique actions that the stage supports.
+  `after_unit_html` supports `export` and `enhance`.
+- `template` names a module in `src/pdfwtf/templates/llm/`. The module must
+  define non-empty `prompt` and `system` strings.
+- `output` contains only `suffix`. The suffix uses lowercase letters, digits,
+  dots, and hyphens, starts with a dot, and has at most 32 characters. For
+  `after_unit_html`, it must end with `.html` and must differ from `.html`.
+  Two tasks cannot use the same suffix.
+
+Configuration loading rejects unknown keys, including the former `context`,
+`pipeline`, and `document_types` keys. Invalid `LLM_TASKS` stops the process
+with a configuration error.
+
+The Gemini API key is a secret. Do not put it in the INI file. Configuration
+loading reads `GEMINI_API_KEY` from the process environment or from
+`PDFWTF_HOME/.env`. pdf-wtf uses the loaded key only to check that a key
+exists. It does not pass the key to `gemini-call` and does not change the
+process environment.
+
+`gemini-call` gets the key independently. It reads `GEMINI_API_KEY`, or
+`GOOGLE_API_KEY` as a fallback, from the process environment only. It does
+not read `.env`. Because of this, a key that exists only in `PDFWTF_HOME/.env`
+does not make tasks available. Set `GEMINI_API_KEY` in the operating-system
+environment. `GEMINI_MODEL` in the process environment can select the model.
+Otherwise `gemini-call` uses its default model.
+
+A task is available when `LLM_TASKS` is valid and `GEMINI_API_KEY` is set both
+in loaded configuration and in the process environment. Without a key,
+ordinary processing continues, and a selected task is rejected before
+processing.
+
 ## GUI host configuration
 
 The approved Compose container reads `PDFWTF_HOME` from the host environment.
@@ -216,6 +269,17 @@ to `null`. The manifest itself is always included. When on, include unit
 metadata files and their manifest links. The adapter accepts `get_meta=False`
 as an optional keyword argument. Other JSON files selected by `debug` are
 independent of this option. CLI export metadata behavior does not change.
+
+The standalone host passes its loaded `AppConfig` to the demo adapter with the
+`config` keyword argument. The host does not copy the Gemini key into the Flask
+configuration. The export adapter accepts `llm_tasks=()` as an optional keyword
+argument. It raises `ValueError` when the selection cannot run, and the
+blueprint then returns HTTP 400. The export start request accepts
+`llm_tasks` as a JSON list of task names. An adapter can provide an optional
+`llm_tasks()` operation that returns the selectable tasks. Without it, the
+Export modal shows no LLM tasks. The demo adapter passes the configuration,
+the selected task names, and the `export` action to the shared pipeline. When
+a task fails, export status is `complete` and includes a localized `warning`.
 
 ## Application log files
 

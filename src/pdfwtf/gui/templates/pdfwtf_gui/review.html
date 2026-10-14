@@ -43,11 +43,16 @@
         <button id="merge-units" class="btn btn-sm btn-outline-primary shadow-sm" type="button">{{ _('Merge selected') }}</button>
         <button id="save-plan" class="btn btn-sm {{ 'btn-outline-success' if plan else 'btn-success' }} shadow-sm" type="button">{{ _('Save plan') }}</button>
         <details id="review-more" class="position-relative">
-          <summary class="btn btn-sm btn-outline-secondary shadow-sm"><span aria-hidden="true">☰</span> {{ _('More') }}</summary>
-          <div class="dropdown-menu dropdown-menu-end d-block shadow-sm">
-            <a class="dropdown-item text-success" href="{{ url_for('pdfwtf_gui.index') }}">{{ _('Exports') }}</a>
-            <a class="dropdown-item text-primary" href="{{ url_for('pdfwtf_gui.download_analysis', job_id=job_id, inline=1) }}" target="_blank" rel="noopener">{{ _('Show analysis') }}</a>
-            <button id="delete-plan" class="dropdown-item text-danger" type="button"
+          <summary class="btn btn-sm btn-outline-secondary shadow-sm">{{ _('More') }}</summary>
+          <div class="btn-group-vertical position-absolute end-0 mt-1 bg-body shadow-sm" role="group" aria-label="{{ _('More') }}">
+            <button id="export-units" class="btn btn-sm btn-success" type="button"
+                    data-bs-toggle="modal" data-bs-target="#export-options"
+                    data-export-url="{{ url_for('pdfwtf_gui.start_export', job_id=job_id) }}"
+                    data-export-status-url="{{ url_for('pdfwtf_gui.export_status', job_id=job_id) }}"
+                    data-source-filename="{{ source_filename }}"{% if not plan %} disabled{% endif %}>{{ _('Export') }}</button>
+            <a id="show-analysis" class="btn btn-sm btn-outline-primary" href="{{ url_for('pdfwtf_gui.download_analysis', job_id=job_id, inline=1) }}" target="_blank" rel="noopener">{{ _('Show analysis') }}</a>
+            <a id="show-plan" class="btn btn-sm btn-outline-secondary{% if not plan %} disabled{% endif %}" href="{{ url_for('pdfwtf_gui.download_plan', job_id=job_id, inline=1) }}" target="_blank" rel="noopener"{% if not plan %} aria-disabled="true"{% endif %}>{{ _('Show plan') }}</a>
+            <button id="delete-plan" class="btn btn-sm btn-danger" type="button"
                     hx-delete="{{ url_for('pdfwtf_gui.delete_plan', job_id=job_id) }}"
                     hx-confirm="{{ _('Delete the approved plan?') }}"
                     hx-headers='{{ {"X-CSRFToken": csrf_token()} | tojson }}'
@@ -116,6 +121,7 @@
 </div>
 
 {% include "pdfwtf_gui/_delete_confirmation.html" %}
+{% include "pdfwtf_gui/_export_options.html" %}
 <script id="analysis-data" type="application/json">{{ analysis|tojson }}</script>
 <script id="plan-data" type="application/json">{{ plan|tojson }}</script>
 <script id="gui-messages" type="application/json">{{ {

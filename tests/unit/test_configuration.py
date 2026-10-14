@@ -130,49 +130,81 @@ def test_input_directory_cannot_be_a_file(configured_home, monkeypatch):
         load_config().input_dir
 
 
-def test_valid_llm_task(tmp_path, monkeypatch):
-    raw_tasks = {
-        "clean_html": {
-            "context": "export",
-            "description": {"en": "Clean HTML output", "cs": "Vyčistir HTML výstup"},
-            "document_types": ["unit"],
-            "pipeline": "export_html_flag",
-            "template": "wp_html",
-        }
+def _task(**changes):
+    task = {
+        "description": {"en": "Clean HTML output", "cs": "Vyčistit HTML výstup"},
+        "commands": ["export", "enhance"],
+        "stage": "after_unit_html",
+        "template": "wp_html",
+        "output": {"suffix": ".clean.html"},
     }
-    validated = validate_llm_tasks(raw_tasks)
-    assert "clean_html" in validated
+    task.update(changes)
+    return task
+
+
+def test_valid_llm_task():
+    validated = validate_llm_tasks({"clean_html": _task()})
     task = validated["clean_html"]
-    assert task.context == "export"
+    assert task.commands == ("export", "enhance")
+    assert task.stage == "after_unit_html"
+    assert task.output_suffix == ".clean.html"
+    assert task.label("cs") == "Vyčistit HTML výstup"
+    assert task.label("de") == "Clean HTML output"
     assert "html" in task.prompt.lower()
     assert "html" in task.system.lower()
 
 
-def test_invalid_context():
-    raw_tasks = {
-        "clean_html": {
-            "context": "invalid_context",
-            "description": {"en": "Clean"},
-            "document_types": ["unit"],
-            "pipeline": "export_html_flag",
-            "template": "wp_html",
-        }
-    }
-    with pytest.raises(ConfigurationError, match=r"invalid context 'invalid_context'"):
-        validate_llm_tasks(raw_tasks)
+@pytest.mark.parametrize(
+    "changes, message",
+    [
+        ({"stage": "before_ocr"}, r"invalid stage 'before_ocr'"),
+        ({"commands": ["analyze"]}, r"does not support commands \['analyze'\]"),
+        ({"commands": []}, r"'commands' must be a non-empty list"),
+        ({"commands": ["export", "export"]}, r"'commands' must be a non-empty list"),
+        ({"output": {"suffix": ".html"}}, "unsafe output suffix"),
+        ({"output": {"suffix": "../x.html"}}, "unsafe output suffix"),
+        ({"output": {"suffix": ".clean/x.html"}}, "unsafe output suffix"),
+        ({"output": {"suffix": ".CLEAN.html"}}, "unsafe output suffix"),
+        ({"output": {"suffix": ".clean.txt"}}, "unsafe output suffix"),
+        ({"output": {"suffix": ".metadata.json"}}, "unsafe output suffix"),
+        ({"output": {"suffix": ".clean.html", "dir": "x"}}, "only 'suffix'"),
+        ({"description": {"cs": "Jen česky"}}, "must contain an 'en' entry"),
+        ({"template": "../wp_html"}, "valid module name"),
+        ({"template": "non_existent_template"}, "not found"),
+    ],
+)
+def test_invalid_llm_task(changes, message):
+    with pytest.raises(ConfigurationError, match=message):
+        validate_llm_tasks({"clean_html": _task(**changes)})
 
 
-def test_missing_template_file():
-    raw_tasks = {
-        "clean_html": {
-            "context": "export",
-            "description": {"en": "Clean"},
-            "document_types": ["unit"],
-            "pipeline": "export_html_flag",
-            "template": "non_existent_template",
-        }
-    }
-    with pytest.raises(
-        ConfigurationError, match=r"template 'non_existent_template' not found"
-    ):
-        validate_llm_tasks(raw_tasks)
+def test_former_llm_task_keys_are_rejected():
+    raw = _task(context="export", pipeline="export_html_flag", document_types=["unit"])
+    with pytest.raises(ConfigurationError, match=r"Unknown: \['context'"):
+        validate_llm_tasks({"clean_html": raw})
+
+
+def test_llm_task_output_suffixes_must_be_unique():
+    with pytest.raises(ConfigurationError, match="same output suffix"):
+        validate_llm_tasks({"clean_html": _task(), "other": _task()})
+
+
+def test_invalid_llm_task_name_is_rejected():
+    with pytest.raises(ConfigurationError, match="LLM task name"):
+        validate_llm_tasks({"Clean HTML": _task()})
+
+
+def test_gemini_key_presence_uses_process_environment(llm_home, monkeypatch):
+    config = load_config()
+    assert config.gemini_api_key_loaded and config.gemini_api_key_present
+
+    monkeypatch.delenv("GEMINI_API_KEY")
+    (llm_home / ".env").write_text("GEMINI_API_KEY=dotenv-only\n", encoding="utf-8")
+    config = load_config()
+    assert config.gemini_api_key_loaded
+    assert not config.gemini_api_key_present
+    assert "GEMINI_API_KEY" not in os.environ
+
+    (llm_home / ".env").unlink()
+    config = load_config()
+    assert not config.gemini_api_key_loaded and not config.gemini_api_key_present

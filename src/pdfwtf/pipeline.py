@@ -21,6 +21,7 @@ from .container_analysis import (
     validate_plan,
     write_json_document,
 )
+from .llm_tasks import LLMReport, run_after_unit_html, validate_task_selection
 from .page_metadata import build_page_metadata
 from .unpaper_run import get_unpaper_args, get_unpaper_version, run_unpaper_simple
 from .utils.analyze import is_scanned_or_hybrid
@@ -283,9 +284,15 @@ def process_pdf(
     export_html_flag: bool = False,
     pdf_type: str = "auto",
     export_unit_pdfs_flag: bool = False,
+    unit_doi_flag: bool = False,
     config: AppConfig | None = None,
-) -> None:
-    """Process one PDF without replacing its source or publishing partial OCR."""
+    llm_tasks: tuple[str, ...] = (),
+    command: str = "enhance",
+) -> LLMReport | None:
+    """Process one PDF without replacing its source or publishing partial OCR.
+
+    Return the LLM task report when tasks were selected, otherwise None.
+    """
     if pdf_type not in {"auto", "born-digital", "scanned"}:
         raise ValueError("PDF type must be auto, born-digital, or scanned.")
     if born_digital_flag and pdf_type == "scanned":
@@ -343,6 +350,9 @@ def process_pdf(
         )
     if config is None:
         config = load_config()
+    selected_tasks = validate_task_selection(
+        config, llm_tasks, command, get_html=export_html_flag
+    )
     if not input_pdf:
         raise ValueError("An input PDF is required.")
     input_pdf = Path(input_pdf).resolve(strict=True)
@@ -440,7 +450,13 @@ def process_pdf(
                 staged_units,
                 include_html=export_html_flag,
                 include_pdf=export_unit_pdfs_flag,
+                extract_doi=unit_doi_flag or get_doi_flag,
             )
+        llm_report = None
+        if selected_tasks and staged_units is not None:
+            llm_report = run_after_unit_html(selected_tasks, staged_units)
+            if not llm_report.complete:
+                job_log.warning("LLM processing incomplete.")
         pages_to_keep = (
             [page["input_page"] for page in unit_plan["pages"] if page["selected"]]
             if unit_plan is not None
@@ -585,3 +601,4 @@ def process_pdf(
         if not no_pdf_flag:
             _publish_pdf(pdf_result, output_pdf)
         job_log.info("PDF processing completed.")
+        return llm_report

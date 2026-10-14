@@ -166,7 +166,7 @@
 
 #review-more > summary { list-style: none; }
 #review-more > summary::-webkit-details-marker { display: none; }
-#review-more .dropdown-menu { right: 0; }
+#review-more .btn-group-vertical { min-width: 10rem; z-index: 1000; }
 
 #theme-picker > summary { list-style: none; }
 #theme-picker > summary::-webkit-details-marker { display: none; }

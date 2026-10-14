@@ -13,8 +13,13 @@ from tempfile import TemporaryDirectory
 from zipfile import ZipFile, ZIP_DEFLATED
 from typing import Any, Literal, Protocol
 
+from pdfwtf.configuration import AppConfig, LLMTaskConfig
 from pdfwtf.container_analysis import analyze_container, write_json_document
+from pdfwtf.llm_tasks import available_tasks, validate_task_selection
 from pdfwtf.pipeline import process_pdf
+
+# Export status message for a finished export with failed LLM tasks.
+LLM_INCOMPLETE = "llm_incomplete"
 
 JobState = Literal["queued", "processing", "complete", "failed"]
 
@@ -44,6 +49,7 @@ class JobStatus:
     state: JobState
     message: str | None = None
     demo: bool = False
+    details: tuple[str, ...] = ()
 
 
 class ExportAdapter(Protocol):
@@ -60,14 +66,20 @@ class ExportAdapter(Protocol):
         get_meta: bool = False,
         include_source: bool = False,
         debug: bool = False,
+        llm_tasks: tuple[str, ...] = (),
     ) -> None:
-        """Schedule export from a snapshot of the saved plan."""
+        """Schedule export from a snapshot of the saved plan.
+
+        Raise ValueError when the selected LLM tasks cannot run.
+        """
 
     def export_status(self, job_id: str) -> JobStatus:
         """Return the current export state."""
 
     def export_path(self, job_id: str) -> Path:
         """Return the completed export archive."""
+
+    # Optional: ``llm_tasks() -> list[LLMTaskConfig]`` lists selectable tasks.
 
 
 class AnalysisAdapter(Protocol):
@@ -98,11 +110,18 @@ class _DemoJob:
 class DemoAnalysisAdapter:
     """In-process demo adapter for local scaffolding, not a durable job queue."""
 
-    def __init__(self, max_workers: int = 2, *, output_dir: Path | None = None) -> None:
+    def __init__(
+        self,
+        max_workers: int = 2,
+        *,
+        output_dir: Path | None = None,
+        config: AppConfig | None = None,
+    ) -> None:
         self._executor = ThreadPoolExecutor(
             max_workers=max_workers, thread_name_prefix="pdfwtf-gui-demo"
         )
         self._output_dir = output_dir.resolve() if output_dir is not None else None
+        self._config = config
         self._jobs: dict[str, _DemoJob] = {}
         self._lock = Lock()
         self._exports: dict[str, JobStatus] = {}
@@ -207,10 +226,18 @@ class DemoAnalysisAdapter:
         get_meta: bool = False,
         include_source: bool = False,
         debug: bool = False,
+        llm_tasks: tuple[str, ...] = (),
     ) -> None:
         """Schedule saved-plan export without processing inside an HTTP request."""
         if self._output_dir is None:
             raise RuntimeError("Export output directory is not configured.")
+        llm_tasks = tuple(llm_tasks)
+        if llm_tasks:
+            if self._config is None:
+                raise ValueError("LLM tasks require the application configuration.")
+            validate_task_selection(
+                self._config, llm_tasks, "export", get_html=get_html
+            )
         snapshot = deepcopy(plan)
         with self._lock:
             analysis = self._jobs.get(job_id)
@@ -231,11 +258,18 @@ class DemoAnalysisAdapter:
                 include_source,
                 debug,
                 get_meta,
+                llm_tasks,
             )
         except Exception:
             with self._lock:
                 self._exports[job_id] = JobStatus("failed", demo=True)
             raise
+
+    def llm_tasks(self) -> list[LLMTaskConfig]:
+        """Return LLM tasks that the Export modal can offer."""
+        if self._config is None:
+            return []
+        return available_tasks(self._config, "export")
 
     def export_status(self, job_id: str) -> JobStatus:
         """Return the state of an export job."""
@@ -259,9 +293,11 @@ class DemoAnalysisAdapter:
         include_source: bool,
         debug: bool,
         get_meta: bool,
+        llm_tasks: tuple[str, ...] = (),
     ) -> None:
         with self._lock:
             self._exports[job_id] = JobStatus("processing", demo=True)
+        llm_report = None
         try:
             assert self._output_dir is not None
             upload_path = source.parent / "upload.json"
@@ -289,7 +325,7 @@ class DemoAnalysisAdapter:
                         copied.write_bytes(original.read_bytes())
                         debug_files.append(copied)
                 results = workspace / "results"
-                process_pdf(
+                llm_report = process_pdf(
                     source,
                     results,
                     plan_path=plan_path,
@@ -297,6 +333,10 @@ class DemoAnalysisAdapter:
                     no_pdf_flag=True,
                     export_unit_pdfs_flag=not no_pdf_out,
                     export_html_flag=get_html,
+                    unit_doi_flag=True,
+                    config=self._config,
+                    llm_tasks=llm_tasks,
+                    command="export",
                 )
                 units = results / f"_units_{source.stem}"
                 manifest_path = units / "manifest.json"
@@ -330,8 +370,20 @@ class DemoAnalysisAdapter:
             with self._lock:
                 self._exports[job_id] = JobStatus("failed", demo=True)
             return
+        message = None
+        details: tuple[str, ...] = ()
+        if llm_report is not None and not llm_report.complete:
+            logging.getLogger(__name__).warning(
+                "GUI export LLM processing incomplete", extra={"job_id": job_id}
+            )
+            message = LLM_INCOMPLETE
+            details = tuple(
+                f"{task} / {unit}: {error}" for task, unit, error in llm_report.errors
+            )
         with self._lock:
-            self._exports[job_id] = JobStatus("complete", demo=True)
+            self._exports[job_id] = JobStatus(
+                "complete", message, demo=True, details=details
+            )
 
     def close(self) -> None:
         """Stop accepting work and release worker threads."""

@@ -20,7 +20,7 @@ import pymupdf as fitz
 from .page_metadata import build_page_metadata
 from .utils.common import _extract_doi_candidates
 
-SCHEMA_VERSION = "1.2"
+SCHEMA_VERSION = "1.3"
 DOCUMENT_TYPES = {
     "unit",
     "journal-issue",
@@ -1702,8 +1702,13 @@ def export_units(
     destination: Path,
     include_html: bool,
     include_pdf: bool = False,
+    extract_doi: bool = False,
 ) -> None:
-    """Write selected units and a manifest into a separate export directory."""
+    """Write selected units and a manifest into a separate export directory.
+
+    With extract_doi, DOI candidates come from the text of the selected pages of
+    each unit. Otherwise they come from the plan.
+    """
     destination.mkdir(parents=True, exist_ok=True)
     manifest_units = []
     reviewed_pages = {page["input_page"]: page for page in plan["pages"]}
@@ -1719,6 +1724,14 @@ def export_units(
                 )
                 if reviewed_pages[page]["selected"]
             ]
+            if extract_doi:
+                doi = _extract_doi_candidates(
+                    "\n\n".join(
+                        document[page - 1].get_text() for page in selected_input_pages
+                    )
+                )
+            else:
+                doi = unit.get("doi", [])
             pdf_name = f"{unit['id']}.pdf" if include_pdf else None
             if include_pdf:
                 with fitz.open() as unit_pdf:
@@ -1739,6 +1752,7 @@ def export_units(
                     "title": unit["title"],
                     "type": unit["type"],
                     "input_pages": unit["input_pages"],
+                    "doi": doi,
                     "selected_input_pages": selected_input_pages,
                 },
                 "figures": figures,
@@ -1756,6 +1770,7 @@ def export_units(
                     "title": unit["title"],
                     "type": unit["type"],
                     "input_pages": unit["input_pages"],
+                    "doi": doi,
                     "selected_input_pages": selected_input_pages,
                     "html": html_name,
                     "metadata": metadata_name,

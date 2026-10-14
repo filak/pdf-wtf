@@ -9,6 +9,7 @@ from pydantic import BaseModel
 
 from pdfwtf.configuration import AppConfig, ConfigurationError, load_config
 from pdfwtf.container_analysis import UNIT_TYPES
+from pdfwtf.llm_tasks import unavailable_reason
 from pdfwtf.logging_utils import configure_logging
 from pdfwtf.pipeline import ProcessingError, process_pdf
 
@@ -47,6 +48,7 @@ class PdfCommand(click.Command):
                 "export_texts_flag",
                 "export_thumbs_flag",
             },
+            "LLM options": {"llm_tasks", "list_llm_tasks"},
         }
         for title, names in groups.items():
             rows = [
@@ -109,7 +111,33 @@ class CliOptions(BaseModel):
     document_type: str | None = None
     plan_path: str | None = None
     export_html_flag: bool = False
+    llm_tasks: tuple[str, ...] = ()
     debug_flag: bool = False
+
+
+def _list_llm_tasks(ctx: click.Context, param: click.Parameter, value: bool) -> None:
+    """Print configured LLM tasks for the current command and exit."""
+    if not value or ctx.resilient_parsing:
+        return
+    try:
+        config = ctx.obj if isinstance(ctx.obj, AppConfig) else load_config()
+        tasks = [
+            task for task in config.llm_tasks.values() if ctx.info_name in task.commands
+        ]
+    except ConfigurationError as error:
+        raise click.ClickException(str(error)) from error
+    reason = unavailable_reason(config)
+    if not tasks:
+        click.echo(f"No LLM tasks are configured for '{ctx.info_name}'.")
+    for task in tasks:
+        state = "available" if reason is None else f"unavailable: {reason}"
+        click.echo(f"{task.name}  ({state})")
+        click.echo(f"  {task.label('en')}")
+        click.echo(
+            f"  stage={task.stage} commands={','.join(task.commands)} "
+            f"output=<unit-id>{task.output_suffix}"
+        )
+    ctx.exit(0)
 
 
 def show_info(input_pdf: str, output_dir: str | Path | None, debug_flag: bool) -> None:
@@ -291,17 +319,36 @@ def _resolve_input_pdf(
     is_flag=True,
     help="Export page images and JPEG thumbnails.",
 )
+@click.option(
+    "--llm-task",
+    "llm_tasks",
+    multiple=True,
+    metavar="NAME",
+    help="Run a configured LLM task. Repeat to select several tasks.",
+)
+@click.option(
+    "--list-llm-tasks",
+    is_flag=True,
+    is_eager=True,
+    expose_value=False,
+    callback=_list_llm_tasks,
+    help="List configured LLM tasks for this action and exit.",
+)
 @click.option("--debug", "debug_flag", is_flag=True, help="Enable debug logging.")
 @click.pass_context
 def enhance(
     ctx: click.Context, input_pdf: str, output_dir: str | None, **kwargs: object
 ) -> None:
     """Enhance a PDF with scan cleanup, OCR, and optional exports."""
-    _execute(ctx.obj, input_pdf, output_dir, **kwargs)
+    _execute(ctx.obj, input_pdf, output_dir, command="enhance", **kwargs)
 
 
 def _execute(
-    config: AppConfig | None, input_pdf: str, output_dir: str | None, **kwargs: object
+    config: AppConfig | None,
+    input_pdf: str,
+    output_dir: str | None,
+    command: str = "enhance",
+    **kwargs: object,
 ) -> None:
     """Invoke the shared processor with action-specific options and shared config."""
     if config is None:
@@ -314,7 +361,13 @@ def _execute(
     try:
         configure_logging(options.debug_flag, config.logs_dir / "pdf-wtf-log.txt")
         logging.getLogger(__name__).info("PDF processing started.")
-        process_pdf(input_pdf, output_dir, config=config, **options.model_dump())
+        llm_report = process_pdf(
+            input_pdf,
+            output_dir,
+            config=config,
+            command=command,
+            **options.model_dump(),
+        )
     except (ConfigurationError, ProcessingError, ValueError) as error:
         logging.getLogger(__name__).error("PDF processing failed.")
         raise click.ClickException(str(error)) from error
@@ -324,6 +377,12 @@ def _execute(
             "PDF processing failed. Check the input and required tools."
         ) from error
 
+    if llm_report is not None and not llm_report.complete:
+        logging.getLogger(__name__).error("LLM processing incomplete.")
+        raise click.ClickException(
+            f"{llm_report.summary()} Ordinary exports were written. "
+            "See manifest.json for details."
+        )
     logging.getLogger(__name__).info("PDF processing completed.")
     click.echo("Done!")
 
@@ -374,6 +433,7 @@ def export(
         ctx.obj,
         input_pdf,
         output_dir,
+        command="export",
         pdf_type="born-digital",
         no_pdf_flag=True,
         **kwargs,
@@ -393,6 +453,8 @@ _EXPORT_PARAMS = _COMMON_PARAMS | {
     "document_type",
     "plan_path",
     "export_html_flag",
+    "llm_tasks",
+    "list_llm_tasks",
 }
 
 

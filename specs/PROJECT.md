@@ -81,15 +81,12 @@ Plain DOI names are not URL-decoded. The option does not write text exports
 unless `--get-text` is selected.
 
 DOI extraction removes soft hyphens and zero-width spaces inside candidates.
-It joins a line continuation only when the next physical line contains one
-isolated token. At a physical line break, it rejects a candidate fragment that
-ends with a slash or hyphen when that continuation is not available. It does
-not join general text lines. Clear surrounding brackets and quotation marks are
+A DOI is never split across lines. A line break always ends a candidate, and
+DOI extraction does not join lines. Clear surrounding brackets and quotation marks are
 removed. Ambiguous trailing punctuation remains part of the candidate.
 
 Extracted DOI candidates are not externally verified. Extraction can produce
-false positives or omit DOI names with ambiguous multi-token line wrapping or
-complex page layouts. A candidate does not establish that its DOI is registered
+false positives or omit DOI names in complex page layouts. A candidate does not establish that its DOI is registered
 or that it identifies the processed document.
 
 `input` is the absolute input PDF path. `output` is the absolute final output
@@ -146,9 +143,48 @@ whole-document derivatives. See
 A reusable Flask blueprint provides the PDF-WTF-GUI review interface. A small
 standalone Flask host supports local use. The blueprint does not own host
 authentication, sessions, logging, secrets, global extensions, URL prefixes,
-or processing infrastructure. A database, durable job queue, HTTP API, and LLM
-integration are not established components. Adding these components requires
-an approved scope and architecture change.
+or processing infrastructure. A database, durable job queue, and HTTP API
+are not established components. Adding these components requires an approved
+scope and architecture change.
+
+### LLM tasks
+
+Configured LLM tasks are optional post-processing steps. They send unit HTML
+to Gemini through the `gemini-call` dependency. `specs/CONFIGURATION.md`
+defines the `LLM_TASKS` configuration and the API key requirements.
+
+A task runs only when it is explicitly selected. Select a task with the
+repeatable `--llm-task NAME` option of `export` or `enhance`. Use
+`--list-llm-tasks` to list the tasks and their availability for an action.
+`analyze` does not accept LLM tasks. Ordinary processing does not require an
+API key.
+
+Stages are defined in code. The `after_unit_html` stage supports `export` and
+`enhance` and requires `--get-html`. Before processing starts, the pipeline
+rejects unknown tasks, unsupported actions, a missing key, and unmet stage
+prerequisites.
+
+The shared runner in `src/pdfwtf/llm_tasks.py` runs the selected tasks one
+after another. It runs after ordinary unit HTML generation and before export
+publication or ZIP creation. It makes one call for each exported unit and task.
+It does not split input, retry calls, or run calls concurrently. Unit HTML
+larger than 500 000 bytes is rejected for that unit.
+
+The runner calls `gemini-call` with `response_format="json"`. It reads the
+response text and the token usage separately. A response must contain
+non-empty HTML with at least one element and no Markdown fence. The runner
+rejects other responses. It writes `<unit-id><suffix>`, for example
+`<unit-id>.clean.html`, next to the original HTML. The original HTML does not
+change.
+
+The manifest records each task result for each unit under `llm_tasks` with
+`status`, `output`, `usage`, and `error`. The top-level `llm` object records
+`status` (`complete` or `incomplete`), `tasks`, and `failed_units`. These
+fields occur only when tasks were selected. A failed call does not stop other
+units. Ordinary exports are still published. The CLI then exits with status 1
+and reports the failed units. The GUI export completes with a warning. Logs
+contain the task name, the unit identifier, and the error class. Logs do not
+contain prompts, HTML, or responses.
 
 The standalone GUI stores uploaded source PDFs below the default input directory,
 independent of the configured CLI input directory. It stores approved plans below
@@ -202,6 +238,12 @@ The GUI-only `include-source` switch adds the original uploaded `source.pdf`
 at the ZIP root. This switch is independent of `no-pdf-out`.
 The `_units/manifest.json` file always includes the complete `upload.json`
 object under `upload`, immediately after `kind`.
+When LLM tasks are available, the modal also shows one switch for each task.
+The switch label uses the task description in the current language, or
+English when no translation exists. All task switches start off. Selecting a
+task turns on `get-html`. Turning off `get-html` clears the selected tasks.
+Task results such as `<unit-id>.clean.html` are added to `_units`. If a task
+fails for a unit, the export completes and shows a warning.
 The GUI-only `debug` switch copies `approved.plan.json` and
 `source.analysis.json` to the ZIP root. Both files must exist when debug
 export starts. This switch does not enable diagnostic logging.
@@ -227,6 +269,8 @@ An older plan without `created` receives both timestamps when it is next saved.
 | `src/pdfwtf/utils/analyze.py` | Identify scanned or hybrid PDF content. |
 | `src/pdfwtf/utils/common.py` | Provide page operations, paths, image preparation, text extraction, thumbnails, and metadata helpers. |
 | `src/pdfwtf/container_analysis.py` | Extract born-digital page structure, propose container partitions, validate reviewed plans, reconstruct units, and export unit results. |
+| `src/pdfwtf/llm_tasks.py` | Check LLM task selection and availability, run selected tasks, and record results in the manifest. |
+| `src/pdfwtf/templates/llm/` | Provide `prompt` and `system` text for LLM task templates. |
 | `src/pdfwtf/gui/` | Provide the optional PDF-WTF-GUI blueprint, local host, browser PDF review, and analysis adapter boundary. |
 | `src/pdfwtf/unpaper_run.py` | Build arguments and execute unpaper. Select the Windows wrapper when required. |
 | `src/tools/unpaper_wrap.py` and `unpaper.cmd` | Support Docker-based unpaper execution on Windows. |
@@ -255,8 +299,8 @@ packaging. Use versions defined in `pyproject.toml` and `uv.lock`.
 
 The established PDF libraries are pikepdf, PyMuPDF, and OCRmyPDF. Processing
 code also uses pytesseract, Pillow, img2pdf, and cv3. Click provides the CLI.
-Pydantic defines CLI settings. An existing import does not approve a new
-production dependency. Follow the dependency rules in `AGENTS.md`.
+Pydantic defines CLI settings. `gemini-call` provides optional Gemini calls
+for LLM tasks. An existing import does not approve a new production dependency. Follow the dependency rules in `AGENTS.md`.
 
 Flask, Flask-Babel, and Flask-WTF are optional `gui` dependencies. Bootstrap 5,
 HTMX, and PDF.js are browser assets in the GUI package. The PDF.js library and

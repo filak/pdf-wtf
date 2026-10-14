@@ -21,12 +21,13 @@ from flask import (
     send_file,
     url_for,
 )
-from flask_babel import gettext as _
+from flask_babel import get_locale, gettext as _
 from werkzeug.datastructures import FileStorage
 from werkzeug.exceptions import RequestEntityTooLarge
 
 from pdfwtf.container_analysis import PlanValidationError, validate_plan
 from pdfwtf.gui.adapter import (
+    LLM_INCOMPLETE,
     AnalysisAdapter,
     ExportAdapter,
     document_with_pdf_type,
@@ -41,6 +42,7 @@ _DOCUMENT_TYPES = (
     "book",
     "proceedings",
 )
+_MAX_WARNING_DETAILS = 10
 AccessCheck = Callable[[str, str | None], bool]
 
 
@@ -79,6 +81,7 @@ def create_gui_blueprint() -> Blueprint:
         return render_template(
             "pdfwtf_gui/input.html",
             uploads=_uploaded_files(),
+            llm_tasks=_llm_task_choices(),
         )
 
     @blueprint.post("/uploads")
@@ -304,6 +307,11 @@ def create_gui_blueprint() -> Blueprint:
                 validate_plan(plan, _document_path(job_id))
             except (OSError, ValueError, PlanValidationError):
                 abort(400, description="The saved plan is not valid.")
+        source_filename = _upload_metadata(_document_path(job_id)).get(
+            "filename", "source.pdf"
+        )
+        if not isinstance(source_filename, str):
+            source_filename = "source.pdf"
         return render_template(
             "pdfwtf_gui/review.html",
             job_id=job_id,
@@ -338,6 +346,8 @@ def create_gui_blueprint() -> Blueprint:
                 "cover": _("Cover"),
                 "unknown": _("Unknown"),
             },
+            llm_tasks=_llm_task_choices(),
+            source_filename=source_filename,
         )
 
     @blueprint.get("/jobs/<job_id>/document")
@@ -373,13 +383,23 @@ def create_gui_blueprint() -> Blueprint:
         ):
             abort(404)
         options = request.get_json(silent=True)
-        if (
-            not isinstance(options, dict)
-            or set(options)
-            - {"no_pdf_out", "get_html", "get_meta", "include_source", "debug"}
-            or any(not isinstance(value, bool) for value in options.values())
-        ):
+        if not isinstance(options, dict):
             return jsonify(error=_("Select valid export options.")), 400
+        llm_tasks = options.pop("llm_tasks", [])
+        if set(options) - {
+            "no_pdf_out",
+            "get_html",
+            "get_meta",
+            "include_source",
+            "debug",
+        } or any(not isinstance(value, bool) for value in options.values()):
+            return jsonify(error=_("Select valid export options.")), 400
+        if not isinstance(llm_tasks, list) or any(
+            not isinstance(name, str) for name in llm_tasks
+        ):
+            return jsonify(error=_("Select valid LLM tasks.")), 400
+        if llm_tasks:
+            options["llm_tasks"] = tuple(llm_tasks)
         try:
             plan = json.loads(plan_path.read_text(encoding="utf-8"))
             if not isinstance(plan, dict):
@@ -400,6 +420,9 @@ def create_gui_blueprint() -> Blueprint:
             adapter.start_export(job_id, source, plan, **options)
         except LookupError:
             return jsonify(error=_("Wait for the active operation to finish.")), 409
+        except ValueError as error:
+            current_app.logger.warning("GUI export rejected: %s", error)
+            return jsonify(error=_("Select valid LLM tasks.")), 400
         except Exception:
             current_app.logger.exception("Cannot start GUI export")
             return jsonify(error=_("Export could not start. Try again.")), 500
@@ -424,6 +447,18 @@ def create_gui_blueprint() -> Blueprint:
             payload["download_url"] = url_for(
                 "pdfwtf_gui.download_export", job_id=job_id
             )
+            if status.message == LLM_INCOMPLETE:
+                payload["warning"] = _(
+                    "Export finished, but LLM processing is incomplete. "
+                    "See manifest.json."
+                )
+                details = list(status.details[:_MAX_WARNING_DETAILS])
+                hidden = len(status.details) - len(details)
+                if hidden > 0:
+                    details.append(
+                        _("%(count)s more errors. See manifest.json.", count=hidden)
+                    )
+                payload["warning_details"] = details
         elif status.state == "failed":
             payload["error"] = _("Export failed. Check the host logs.")
         response = jsonify(payload)
@@ -532,7 +567,7 @@ def create_gui_blueprint() -> Blueprint:
         return send_file(
             destination,
             mimetype="application/json",
-            as_attachment=True,
+            as_attachment=request.args.get("inline") != "1",
             download_name="approved.plan.json",
         )
 
@@ -561,6 +596,17 @@ def _export_adapter() -> ExportAdapter:
     if adapter is None:
         abort(503, description="The host has not configured export processing.")
     return adapter
+
+
+def _llm_task_choices() -> list[dict[str, str]]:
+    """Return localized LLM task choices that the export adapter offers."""
+    adapter = current_app.config.get("PDFWTF_GUI_EXPORT_ADAPTER")
+    list_tasks = getattr(adapter, "llm_tasks", None)
+    if not callable(list_tasks):
+        return []
+    locale = get_locale()
+    language = locale.language if locale is not None else "en"
+    return [{"name": task.name, "label": task.label(language)} for task in list_tasks()]
 
 
 def _export_active(job_id: str) -> bool:

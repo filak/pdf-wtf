@@ -114,25 +114,23 @@ def test_doi_url_decoding(text, expected):
     [
         ("10.1234/exam\u00adple", ["10.1234/example"]),
         ("10.1234/exam\u200bple", ["10.1234/example"]),
-        ("10.1234/example-\npart", ["10.1234/example-part"]),
-        ("10.1234/\nexample", ["10.1234/example"]),
-        ("10.1234/exam\nple", ["10.1234/example"]),
-        ("10.1234/example-\r\npart", ["10.1234/example-part"]),
     ],
 )
-def test_doi_ocr_artifacts_and_line_continuations(text, expected):
+def test_doi_ocr_artifacts(text, expected):
     assert _extract_doi_candidates(text) == expected
 
 
 @pytest.mark.parametrize(
-    "text",
+    "text, expected",
     [
-        "DOI: 10.1234/\nThis line is ordinary prose.",
-        "DOI: 10.1234/example-\nThis line is ordinary prose.",
+        ("DOI: 10.1002/pbc.29779\nPediatric\nBlood &\nCancer", ["10.1002/pbc.29779"]),
+        ("10.1234/exam\nple", ["10.1234/exam"]),
+        ("10.1234/example\r\npart", ["10.1234/example"]),
+        ("DOI: 10.1234/\nThis line is ordinary prose.", []),
     ],
 )
-def test_doi_rejects_ambiguous_broken_lines(text):
-    assert _extract_doi_candidates(text) == []
+def test_doi_never_joins_lines(text, expected):
+    assert _extract_doi_candidates(text) == expected
 
 
 @pytest.mark.parametrize(

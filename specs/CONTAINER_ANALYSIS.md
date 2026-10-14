@@ -47,7 +47,8 @@ the reviewed plan before export. The `analyze` action does not filter unit types
 
 ## Common JSON fields
 
-All workflow JSON documents use UTF-8 and `schema_version` value `"1.2"`.
+All workflow JSON documents use UTF-8 and `schema_version` value `"1.3"`.
+Plan validation rejects plans with another version.
 The `source` object has these fields:
 
 ```json
@@ -104,7 +105,7 @@ The analysis filename is `<source-stem>.analysis.json`. It has this shape:
 
 ```json
 {
-  "schema_version": "1.2",
+  "schema_version": "1.3",
   "kind": "analysis",
   "source": {
     "sha256": "...",
@@ -225,7 +226,7 @@ A reviewed plan has this shape:
 
 ```json
 {
-  "schema_version": "1.2",
+  "schema_version": "1.3",
   "kind": "plan",
   "source": {
     "sha256": "...",
@@ -305,7 +306,9 @@ format ending in `Z`. Each export writes a new creation timestamp.
 `manifest.json` has `schema_version`, `kind`, `created`, `source`, `document_type`, and a
 `units` array. Each unit entry repeats its ID, title, type, input range, and
 selected input pages. It links the unit metadata filename and the optional HTML
-filename.
+filename. Version `"1.3"` adds optional LLM task fields to the manifest: a
+top-level `llm` object and a per-unit `llm_tasks` object. These fields occur only when
+LLM tasks were selected. `specs/PROJECT.md` defines them.
 
 GUI plan export can also write `<unit-id>.pdf` for each selected unit.
 The PDF contains only selected source pages inside that unit's reviewed range,

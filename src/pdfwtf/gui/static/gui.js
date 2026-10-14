@@ -562,6 +562,10 @@ if (app) {
       renderUnits();
       button.classList.replace("btn-success", "btn-outline-success");
       document.querySelector("#delete-plan").disabled = false;
+      document.querySelector("#export-units").disabled = false;
+      const showPlan = document.querySelector("#show-plan");
+      showPlan.classList.remove("disabled");
+      showPlan.removeAttribute("aria-disabled");
       const target = document.querySelector("#plan-message");
       target.replaceChildren();
       const alert = document.createElement("div");
@@ -588,6 +592,9 @@ if (app) {
     } else {
       showMessage(messages.delete_plan_error);
     }
+  });
+  document.querySelector("#export-units").addEventListener("click", () => {
+    document.querySelector("#review-more").open = false;
   });
   document.addEventListener("click", (event) => {
     const menu = document.querySelector("#review-more");

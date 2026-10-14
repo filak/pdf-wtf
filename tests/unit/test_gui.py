@@ -130,7 +130,10 @@ def test_upload_review_document_and_approved_plan(gui_app, make_pdf):
     assert b"gui.js" in review.data
     assert b'id="review-more"' in review.data
     assert b'id="delete-plan"' in review.data
+    assert b'id="export-options"' in review.data
+    assert re.search(rb'<button id="export-units"[^>]*\sdisabled>', review.data)
     assert b"Show analysis" in review.data
+    assert b"Show plan" in review.data
 
     document = client.get(f"/jobs/{job_id}/document")
     assert document.status_code == 200
@@ -196,6 +199,8 @@ def test_upload_review_document_and_approved_plan(gui_app, make_pdf):
     assert saved.status_code == 200
     reopened = client.get(f"/jobs/{job_id}/review")
     assert reopened.status_code == 200
+    assert f"/jobs/{job_id}/export".encode() in reopened.data
+    assert not re.search(rb'<button id="export-units"[^>]*\sdisabled>', reopened.data)
     embedded_plan = re.search(
         r'<script id="plan-data" type="application/json">(.*?)</script>',
         reopened.get_data(as_text=True),
@@ -225,12 +230,18 @@ def test_upload_review_document_and_approved_plan(gui_app, make_pdf):
     assert downloaded.status_code == 200
     assert downloaded.json["kind"] == "plan"
     assert "approved.plan.json" in downloaded.headers["Content-Disposition"]
+    assert downloaded.headers["Content-Disposition"].startswith("attachment;")
+    plan_view = client.get(f"/jobs/{job_id}/plan?inline=1")
+    assert plan_view.status_code == 200
+    assert plan_view.json["kind"] == "plan"
+    assert plan_view.headers["Content-Disposition"].startswith("inline;")
     assert (
         configured_home / "instance/_data/out" / job_id / "approved.plan.json"
     ).is_file()
 
     document.close()
     downloaded.close()
+    plan_view.close()
     app.config["PDFWTF_GUI_ACCESS_CHECK"] = (
         lambda action, _job_id: action != "delete_plan"
     )
@@ -1275,3 +1286,190 @@ def test_plan_mutation_is_blocked_only_while_export_is_active(gui_app, make_pdf,
     else:
         assert save.status_code == delete.status_code == 200
         assert not destination.exists()
+
+
+# LLM tasks in GUI export. Gemini calls are always mocked.
+
+
+def _llm_export(gui_app, make_pdf, options, exporter=None):
+    from pdfwtf.configuration import load_config
+
+    app, _analysis_adapter, home = gui_app
+    client, job_id, _plan = _saved_export_job(gui_app, make_pdf)
+    exporter = exporter or DemoAnalysisAdapter(
+        output_dir=home / "instance/_data/out", config=load_config()
+    )
+    app.config["PDFWTF_GUI_EXPORT_ADAPTER"] = exporter
+    response = client.post(f"/jobs/{job_id}/export", json=options)
+    exporter._executor.shutdown(wait=True)
+    return client, job_id, exporter, response
+
+
+def test_export_modal_lists_localized_llm_tasks_unselected(llm_home, gui_app):
+    from pdfwtf.configuration import load_config
+
+    app, _adapter, home = gui_app
+    app.config["PDFWTF_GUI_EXPORT_ADAPTER"] = DemoAnalysisAdapter(
+        output_dir=home / "instance/_data/out", config=load_config()
+    )
+    client = app.test_client()
+    listing = client.get("/").get_data(as_text=True)
+    tag = re.search(r'<input[^>]*id="export-llm-clean_html"[^>]*>', listing).group()
+    assert 'value="clean_html"' in tag
+    assert "checked" not in tag
+    assert "Clean HTML output" in listing
+    assert "Vyčistit HTML výstup" in client.get("/?lang=cs").get_data(as_text=True)
+
+
+def test_export_modal_hides_llm_tasks_without_key(llm_home, gui_app, monkeypatch):
+    from pdfwtf.configuration import load_config
+
+    monkeypatch.delenv("GEMINI_API_KEY")
+    app, _adapter, home = gui_app
+    app.config["PDFWTF_GUI_EXPORT_ADAPTER"] = DemoAnalysisAdapter(
+        output_dir=home / "instance/_data/out", config=load_config()
+    )
+    listing = app.test_client().get("/").get_data(as_text=True)
+    assert "export-llm-tasks" not in listing
+
+
+def test_standalone_host_does_not_copy_gemini_key(llm_home, gui_app):
+    app, _adapter, _home = gui_app
+    assert "GEMINI_API_KEY" not in app.config
+    assert "test-dummy-key" not in repr(dict(app.config))
+
+
+def test_gui_export_runs_selected_llm_task(llm_home, gui_app, make_pdf, fake_gemini):
+    from zipfile import ZipFile
+
+    client, _job_id, exporter, response = _llm_export(
+        gui_app, make_pdf, {"get_html": True, "llm_tasks": ["clean_html"]}
+    )
+    try:
+        assert response.status_code == 202
+        status = client.get(response.json["status_url"]).json
+        assert status["state"] == "complete"
+        assert "warning" not in status
+        archive = client.get(status["download_url"])
+        with ZipFile(BytesIO(archive.data)) as bundle:
+            names = bundle.namelist()
+            assert "_units/reviewed.html" in names
+            assert "_units/reviewed.clean.html" in names
+            manifest = json.loads(bundle.read("_units/manifest.json"))
+        assert manifest["llm"]["status"] == "complete"
+        entry = manifest["units"][0]["llm_tasks"]["clean_html"]
+        assert entry["output"] == "reviewed.clean.html"
+        assert entry["usage"]["total_token_count"] == 15
+        assert len(fake_gemini[0]) == 1
+    finally:
+        exporter.close()
+
+
+def test_gui_export_reports_incomplete_llm_processing(
+    llm_home, gui_app, make_pdf, fake_gemini
+):
+    from zipfile import ZipFile
+
+    fake_gemini[1]["fail_units"] = {"reviewed"}
+    client, _job_id, exporter, response = _llm_export(
+        gui_app, make_pdf, {"get_html": True, "llm_tasks": ["clean_html"]}
+    )
+    try:
+        status = client.get(response.json["status_url"]).json
+        assert status["state"] == "complete"
+        assert "LLM processing is incomplete" in status["warning"]
+        assert status["warning_details"] == [
+            "clean_html / reviewed: RuntimeError: Gemini API Error: simulated"
+        ]
+        archive = client.get(status["download_url"])
+        with ZipFile(BytesIO(archive.data)) as bundle:
+            names = bundle.namelist()
+            manifest = json.loads(bundle.read("_units/manifest.json"))
+        assert "_units/reviewed.html" in names
+        assert "_units/reviewed.clean.html" not in names
+        assert manifest["llm"]["failed_units"] == {"clean_html": ["reviewed"]}
+    finally:
+        exporter.close()
+
+
+@pytest.mark.parametrize(
+    "options",
+    [
+        {"get_html": False, "llm_tasks": ["clean_html"]},
+        {"get_html": True, "llm_tasks": ["unknown"]},
+        {"get_html": True, "llm_tasks": "clean_html"},
+        {"get_html": True, "llm_tasks": [1]},
+    ],
+)
+def test_gui_export_rejects_invalid_llm_tasks(
+    llm_home, gui_app, make_pdf, fake_gemini, options
+):
+    client, job_id, exporter, response = _llm_export(gui_app, make_pdf, options)
+    try:
+        assert response.status_code == 400
+        assert response.json["error"] == "Select valid LLM tasks."
+        assert fake_gemini[0] == []
+        status = client.get(f"/jobs/{job_id}/export/status")
+        assert status.status_code == 404
+    finally:
+        exporter.close()
+
+
+def test_gui_export_rejects_llm_tasks_without_key(
+    llm_home, gui_app, make_pdf, fake_gemini, monkeypatch
+):
+    monkeypatch.delenv("GEMINI_API_KEY")
+    _client, _job_id, exporter, response = _llm_export(
+        gui_app, make_pdf, {"get_html": True, "llm_tasks": ["clean_html"]}
+    )
+    try:
+        assert response.status_code == 400
+        assert fake_gemini[0] == []
+    finally:
+        exporter.close()
+
+
+def test_cli_and_gui_llm_results_match(llm_home, gui_app, make_pdf, fake_gemini):
+    from zipfile import ZipFile
+
+    from click.testing import CliRunner
+
+    from pdfwtf import cli
+
+    _app, _adapter, home = gui_app
+    client, job_id, exporter, response = _llm_export(
+        gui_app, make_pdf, {"get_html": True, "llm_tasks": ["clean_html"]}
+    )
+    try:
+        status = client.get(response.json["status_url"]).json
+        archive = client.get(status["download_url"])
+        with ZipFile(BytesIO(archive.data)) as bundle:
+            gui_manifest = json.loads(bundle.read("_units/manifest.json"))
+            gui_html = bundle.read("_units/reviewed.clean.html")
+    finally:
+        exporter.close()
+    source = home / "instance/_data/in" / job_id / "source.pdf"
+    plan = home / "instance/_data/out" / job_id / "approved.plan.json"
+    output = home / "cli-out"
+    result = CliRunner().invoke(
+        cli.main,
+        [
+            "export",
+            str(source),
+            "--outdir",
+            str(output),
+            "--plan",
+            str(plan),
+            "--get-html",
+            "--llm-task",
+            "clean_html",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    units = output / "_units_source"
+    cli_manifest = json.loads((units / "manifest.json").read_text(encoding="utf-8"))
+    assert cli_manifest["llm"] == gui_manifest["llm"]
+    assert (
+        cli_manifest["units"][0]["llm_tasks"] == gui_manifest["units"][0]["llm_tasks"]
+    )
+    assert (units / "reviewed.clean.html").read_bytes() == gui_html

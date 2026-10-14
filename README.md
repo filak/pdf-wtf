@@ -252,6 +252,45 @@ Repeat `--unit_type` to select several types.
 For schemas, output filenames, and analysis limits, see the
 [container analysis specification](specs/CONTAINER_ANALYSIS.md).
 
+### LLM tasks
+
+LLM tasks are optional. They send unit HTML to Gemini. Ordinary processing
+does not need an API key.
+
+`gemini-call` reads `GEMINI_API_KEY` only from the operating-system
+environment. It does not read `.env`. If the key is only in
+`PDFWTF_HOME/.env`, LLM tasks are not available.
+
+On Windows, open CMD and set the key for future processes:
+
+```cmd
+setx GEMINI_API_KEY "your-key"
+```
+
+Restart the terminal or VS Code after you set the key.
+
+List the tasks for an action and their availability:
+
+```bash
+uv run --locked pdfwtf export --list-llm-tasks
+```
+
+Run a task with `--llm-task`. The `clean_html` task requires `--get-html`:
+
+```bash
+uv run --locked pdfwtf export issue.pdf --plan issue.plan.json --get-html --llm-task clean_html
+```
+
+Repeat `--llm-task` to select several tasks. The task writes
+`<unit-id>.clean.html` next to the original `<unit-id>.html`. The manifest
+records the status and token usage of each task. If a task fails for a unit,
+the other exports are still written. The command then exits with an error and
+lists the failed units.
+
+In the demo GUI, select LLM tasks in the Export modal.
+For task configuration, see the
+[configuration specification](specs/CONFIGURATION.md).
+
 ## Demo GUI
 
 PDF-WTF-GUI demonstrates PDF review and unit export.

@@ -77,7 +77,7 @@ def unit(unit_id, start, end, selected=True):
 def test_unit_analysis_has_contract_and_structure(make_pdf):
     source = make_pdf(["digital", "digital"])
     analysis = analyze_container(source, "unit")
-    assert analysis["schema_version"] == "1.2"
+    assert analysis["schema_version"] == "1.3"
     assert analysis["source"]["sha256"] == source_identity(source)["sha256"]
     assert analysis["source"]["page_count"] == 2
     assert analysis["source"]["bibliographic"]["kind"] == "journal"
@@ -217,6 +217,45 @@ def test_plan_allows_gaps_and_exports_only_selected_ranges(tmp_path):
     assert {block["input_page"] for block in third["semantic_blocks"]} == {3}
     assert not (destination / "second.metadata.json").exists()
     assert not (destination / "not-selected.metadata.json").exists()
+
+
+def test_export_writes_unit_doi_to_manifest_and_metadata(tmp_path):
+    source = make_structured_pdf(tmp_path / "source.pdf", 2)
+    first = {**unit("first", 1, 1), "doi": ["10.1234/first"]}
+    plan = reviewed_plan(source, [first, unit("second", 2, 2)])
+    selected = validate_plan(plan, source)
+    destination = tmp_path / "units"
+    export_units(source, plan, selected, destination, include_html=False)
+    manifest = json.loads((destination / "manifest.json").read_text("utf-8"))
+    assert [entry["doi"] for entry in manifest["units"]] == [["10.1234/first"], []]
+    for unit_id, expected in (("first", ["10.1234/first"]), ("second", [])):
+        metadata = json.loads(
+            (destination / f"{unit_id}.metadata.json").read_text("utf-8")
+        )
+        assert metadata["unit"]["doi"] == expected
+
+
+def test_export_extracts_unit_doi_from_selected_pages(tmp_path):
+    source = tmp_path / "articles.pdf"
+    with fitz.open() as document:
+        for doi in ("10.1234/first", "10.5678/second"):
+            page = document.new_page(width=400, height=500)
+            page.insert_text((30, 40), f"DOI: {doi}", fontsize=10)
+        document.save(source)
+    stale = {**unit("first", 1, 1), "doi": ["10.9999/stale"]}
+    plan = reviewed_plan(source, [stale, unit("second", 2, 2)])
+    selected = validate_plan(plan, source)
+    destination = tmp_path / "units"
+    export_units(
+        source, plan, selected, destination, include_html=False, extract_doi=True
+    )
+    manifest = json.loads((destination / "manifest.json").read_text("utf-8"))
+    assert [entry["doi"] for entry in manifest["units"]] == [
+        ["10.1234/first"],
+        ["10.5678/second"],
+    ]
+    second = json.loads((destination / "second.metadata.json").read_text("utf-8"))
+    assert second["unit"]["doi"] == ["10.5678/second"]
 
 
 def test_two_column_reading_order_with_full_width_heading(tmp_path):
@@ -429,6 +468,27 @@ def test_cli_end_to_end_analysis_plan_and_html(make_pdf, tmp_path):
     assert (unit_dir / "manifest.json").is_file()
     assert (unit_dir / "unit-001.html").is_file()
     assert (unit_dir / "unit-001.metadata.json").is_file()
+
+
+def test_cli_export_get_doi_extracts_unit_doi_with_plan(tmp_path):
+    source = tmp_path / "input.pdf"
+    with fitz.open() as document:
+        page = document.new_page(width=400, height=500)
+        page.insert_text((30, 40), "DOI: 10.1234/example", fontsize=10)
+        document.save(source)
+    plan = reviewed_plan(source, [unit("first", 1, 1)], document_type="unit")
+    plan_path = tmp_path / "input.plan.json"
+    plan_path.write_text(json.dumps(plan), encoding="utf-8")
+    output = tmp_path / "out"
+    arguments = ["export", str(source), "--outdir", str(output)]
+    arguments += ["--plan", str(plan_path), "--get-doi"]
+    result = CliRunner().invoke(cli.main, arguments)
+    assert result.exit_code == 0, result.output
+    units = output / "_units_input"
+    manifest = json.loads((units / "manifest.json").read_text("utf-8"))
+    assert manifest["units"][0]["doi"] == ["10.1234/example"]
+    metadata = json.loads((units / "first.metadata.json").read_text("utf-8"))
+    assert metadata["unit"]["doi"] == ["10.1234/example"]
 
 
 def test_plan_rejects_case_colliding_unit_ids(tmp_path):
