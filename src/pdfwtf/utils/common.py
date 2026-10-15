@@ -2,6 +2,8 @@ import json
 import logging
 import re
 import shutil
+import sys
+import time
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
@@ -221,6 +223,25 @@ def find_files(
     if as_string:
         return [str(f) for f in files]
     return files
+
+
+def replace_file(
+    source: Path, destination: Path, *, attempts: int = 10, delay: float = 0.1
+) -> None:
+    """Replace ``destination`` with ``source`` atomically.
+
+    On Windows, an open handle (a file response, antivirus, or the search
+    indexer) can block the replacement briefly. Retry such a
+    ``PermissionError`` before it is raised.
+    """
+    for attempt in range(1, attempts + 1):
+        try:
+            source.replace(destination)
+            return
+        except PermissionError:
+            if sys.platform != "win32" or attempt == attempts:
+                raise
+            time.sleep(delay * attempt)
 
 
 def clear_dir(p: Path) -> bool:

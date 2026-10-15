@@ -13,13 +13,13 @@ import pytest
 pytest.importorskip("flask")
 
 from pdfwtf import __version__  # noqa: E402
-from pdfwtf.container_analysis import analyze_container  # noqa: E402
-from pdfwtf.gui.adapter import DemoAnalysisAdapter, JobStatus  # noqa: E402
+from pdfwtf.container_partition import partition_container  # noqa: E402
+from pdfwtf.gui.adapter import DemoPartitionAdapter, JobStatus  # noqa: E402
 from pdfwtf.gui.app import create_app  # noqa: E402
 
 
 class ImmediateAdapter:
-    """Run analysis immediately to keep route tests deterministic."""
+    """Run partition immediately to keep route tests deterministic."""
 
     def __init__(self) -> None:
         self.jobs: dict[str, tuple[Path, dict[str, Any]]] = {}
@@ -27,7 +27,7 @@ class ImmediateAdapter:
 
     def start(self, job_id: str, source: Path, document_type: str) -> None:
         self.starts += 1
-        self.jobs[job_id] = (source, analyze_container(source, document_type))
+        self.jobs[job_id] = (source, partition_container(source, document_type))
 
     def status(self, job_id: str) -> JobStatus:
         self._get(job_id)
@@ -53,7 +53,7 @@ def gui_app(configured_home: Path):
         {
             "TESTING": True,
             "WTF_CSRF_ENABLED": False,
-            "PDFWTF_GUI_ANALYSIS_ADAPTER": adapter,
+            "PDFWTF_GUI_PARTITION_ADAPTER": adapter,
         }
     )
     return app, adapter, configured_home
@@ -115,8 +115,8 @@ def test_upload_review_document_and_approved_plan(gui_app, make_pdf):
     job_id = next((configured_home / "instance/_data/in").iterdir()).name
     listing = client.get("/")
     assert b"source.pdf" in listing.data
-    assert f"/jobs/{job_id}/analyze".encode() in listing.data
-    response = client.post(f"/jobs/{job_id}/analyze", data={"document_type": "unit"})
+    assert f"/jobs/{job_id}/partition".encode() in listing.data
+    response = client.post(f"/jobs/{job_id}/partition", data={"document_type": "unit"})
     assert response.status_code == 200
     assert adapter.document_path(job_id) == (
         configured_home / "instance/_data/in" / job_id / "source.pdf"
@@ -132,7 +132,7 @@ def test_upload_review_document_and_approved_plan(gui_app, make_pdf):
     assert b'id="delete-plan"' in review.data
     assert b'id="export-options"' in review.data
     assert re.search(rb'<button id="export-units"[^>]*\sdisabled>', review.data)
-    assert b"Show analysis" in review.data
+    assert b"Show partition" in review.data
     assert b"Show plan" in review.data
 
     document = client.get(f"/jobs/{job_id}/document")
@@ -140,23 +140,23 @@ def test_upload_review_document_and_approved_plan(gui_app, make_pdf):
     assert document.mimetype == "application/pdf"
     assert document.headers["Cache-Control"] == "private, no-store"
 
-    analysis = adapter.result(job_id)
-    analysis_download = client.get(f"/jobs/{job_id}/analysis")
-    assert analysis_download.status_code == 200
-    assert analysis_download.json == analysis
-    assert "source.analysis.json" in analysis_download.headers["Content-Disposition"]
-    assert analysis_download.headers["Cache-Control"] == "private, no-store"
-    analysis_view = client.get(f"/jobs/{job_id}/analysis?inline=1")
-    assert analysis_view.status_code == 200
-    assert analysis_view.json == analysis
-    assert analysis_view.headers["Content-Disposition"].startswith("inline;")
-    assert analysis_download.headers["Content-Disposition"].startswith("attachment;")
+    partition = adapter.result(job_id)
+    partition_download = client.get(f"/jobs/{job_id}/partition.json")
+    assert partition_download.status_code == 200
+    assert partition_download.json == partition
+    assert "source.partition.json" in partition_download.headers["Content-Disposition"]
+    assert partition_download.headers["Cache-Control"] == "private, no-store"
+    partition_view = client.get(f"/jobs/{job_id}/partition.json?inline=1")
+    assert partition_view.status_code == 200
+    assert partition_view.json == partition
+    assert partition_view.headers["Content-Disposition"].startswith("inline;")
+    assert partition_download.headers["Content-Disposition"].startswith("attachment;")
     plan = {
-        "schema_version": analysis["schema_version"],
+        "schema_version": partition["schema_version"],
         "kind": "plan",
-        "source": analysis["source"],
-        "document_type": analysis["document_type"],
-        "pages": [{**page, "selected": True} for page in analysis["pages"]],
+        "source": partition["source"],
+        "document_type": partition["document_type"],
+        "pages": [{**page, "selected": True} for page in partition["pages"]],
         "units": [
             {
                 "id": unit["id"],
@@ -166,7 +166,7 @@ def test_upload_review_document_and_approved_plan(gui_app, make_pdf):
                 "boundary_status": "confirmed",
                 "input_pages": unit["input_pages"],
             }
-            for unit in analysis["units"]
+            for unit in partition["units"]
         ],
     }
     plan["units"][0]["title"] = "Reviewed unit title"
@@ -215,7 +215,7 @@ def test_upload_review_document_and_approved_plan(gui_app, make_pdf):
     } == plan
     assert persisted_plan["created"] == persisted_plan["updated"]
     assert datetime.fromisoformat(persisted_plan["created"]).tzinfo == UTC
-    assert adapter.result(job_id) == analysis
+    assert adapter.result(job_id) == partition
     updated_metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
     assert updated_metadata["document_type"] == "book"
     assert updated_metadata["filename"] == "source.pdf"
@@ -253,7 +253,7 @@ def test_upload_review_document_and_approved_plan(gui_app, make_pdf):
         configured_home / "instance/_data/out" / job_id / "approved.plan.json"
     ).exists()
     assert (configured_home / "instance/_data/in" / job_id / "source.pdf").is_file()
-    assert adapter.result(job_id) == analysis
+    assert adapter.result(job_id) == partition
     restored = client.get(f"/jobs/{job_id}/review")
     assert (
         b'<script id="plan-data" type="application/json">null</script>' in restored.data
@@ -264,7 +264,7 @@ def test_upload_review_document_and_approved_plan(gui_app, make_pdf):
     assert deleted.status_code == 200
     assert not (configured_home / "instance/_data/in" / job_id).exists()
     assert not (configured_home / "instance/_data/out" / job_id).exists()
-    for suffix in ("status", "review", "document", "plan", "analysis"):
+    for suffix in ("status", "review", "document", "plan", "partition.json"):
         assert client.get(f"/jobs/{job_id}/{suffix}").status_code == 404
     assert client.post(f"/jobs/{job_id}/plan", json=plan).status_code == 404
 
@@ -282,7 +282,7 @@ def test_standalone_host_keeps_default_input_directory(
     app = create_app(
         {
             "TESTING": True,
-            "PDFWTF_GUI_ANALYSIS_ADAPTER": ImmediateAdapter(),
+            "PDFWTF_GUI_PARTITION_ADAPTER": ImmediateAdapter(),
         }
     )
     assert app.config["PDFWTF_GUI_INPUT_DIR"] == (configured_home / "instance/_data/in")
@@ -292,7 +292,7 @@ def test_standalone_host_enforces_csrf(configured_home: Path):
     app = create_app(
         {
             "TESTING": True,
-            "PDFWTF_GUI_ANALYSIS_ADAPTER": ImmediateAdapter(),
+            "PDFWTF_GUI_PARTITION_ADAPTER": ImmediateAdapter(),
         }
     )
     response = app.test_client().post(
@@ -303,7 +303,7 @@ def test_standalone_host_enforces_csrf(configured_home: Path):
     assert response.status_code == 400
     assert (
         app.test_client()
-        .post("/jobs/" + "a" * 32 + "/analyze", data={"document_type": "unit"})
+        .post("/jobs/" + "a" * 32 + "/partition", data={"document_type": "unit"})
         .status_code
         == 400
     )
@@ -322,7 +322,7 @@ def test_upload_listing_persists_and_filters_access(gui_app, make_pdf):
     assert b"&lt;example&gt;.pdf" in response.data
     assert not adapter.jobs
     job_id = next((home / "instance/_data/in").iterdir()).name
-    app.config["PDFWTF_GUI_ANALYSIS_ADAPTER"] = ImmediateAdapter()
+    app.config["PDFWTF_GUI_PARTITION_ADAPTER"] = ImmediateAdapter()
     assert b"&lt;example&gt;.pdf" in client.get("/").data
     app.config["PDFWTF_GUI_ACCESS_CHECK"] = (
         lambda action, identifier: identifier is None
@@ -330,13 +330,13 @@ def test_upload_listing_persists_and_filters_access(gui_app, make_pdf):
     assert b"&lt;example&gt;.pdf" not in client.get("/").data
     assert (
         client.post(
-            f"/jobs/{job_id}/analyze", data={"document_type": "unit"}
+            f"/jobs/{job_id}/partition", data={"document_type": "unit"}
         ).status_code
         == 403
     )
 
 
-def test_invalid_upload_and_analysis_do_not_start_jobs(gui_app, make_pdf):
+def test_invalid_upload_and_partition_do_not_start_jobs(gui_app, make_pdf):
     app, adapter, home = gui_app
     client = app.test_client()
     assert (
@@ -353,16 +353,16 @@ def test_invalid_upload_and_analysis_do_not_start_jobs(gui_app, make_pdf):
     job_id = next((home / "instance/_data/in").iterdir()).name
     assert (
         client.post(
-            f"/jobs/{job_id}/analyze", data={"document_type": "invalid"}
+            f"/jobs/{job_id}/partition", data={"document_type": "invalid"}
         ).status_code
         == 400
     )
-    assert client.post("/jobs/missing/analyze").status_code == 404
+    assert client.post("/jobs/missing/partition").status_code == 404
     assert not adapter.jobs
     for _ in range(2):
         assert (
             client.post(
-                f"/jobs/{job_id}/analyze", data={"document_type": "unit"}
+                f"/jobs/{job_id}/partition", data={"document_type": "unit"}
             ).status_code
             == 200
         )
@@ -392,7 +392,7 @@ def test_delete_upload_removes_only_selected_file(gui_app, make_pdf):
     assert client.delete("/uploads/invalid").status_code == 404
     assert (
         client.post(
-            f"/jobs/{job_id}/analyze", data={"document_type": "unit"}
+            f"/jobs/{job_id}/partition", data={"document_type": "unit"}
         ).status_code
         == 404
     )
@@ -400,7 +400,7 @@ def test_delete_upload_removes_only_selected_file(gui_app, make_pdf):
 
 
 @pytest.mark.parametrize("state", ["queued", "processing"])
-def test_delete_upload_blocks_active_analysis(gui_app, make_pdf, monkeypatch, state):
+def test_delete_upload_blocks_active_partition(gui_app, make_pdf, monkeypatch, state):
     app, adapter, home = gui_app
     client = app.test_client()
     source = make_pdf(["digital"])
@@ -412,7 +412,7 @@ def test_delete_upload_blocks_active_analysis(gui_app, make_pdf, monkeypatch, st
     response = client.delete(f"/uploads/{directory.name}")
     assert response.status_code == 409
     assert response.headers["HX-Retarget"] == f"#job-state-{directory.name}"
-    assert b"Wait for analysis" in response.data
+    assert b"Wait for partition" in response.data
     assert (directory / "source.pdf").is_file()
     assert (directory / "upload.json").is_file()
 
@@ -504,7 +504,7 @@ def test_gui_scripts_use_javascript_mime_despite_system_mapping(
 
 
 @pytest.mark.parametrize("pdf_type", ["born-digital", "scanned"])
-def test_standalone_analysis_persists_before_completion(
+def test_standalone_partition_persists_before_completion(
     configured_home, make_pdf, pdf_type
 ):
     output_dir = configured_home / "custom-output"
@@ -515,7 +515,7 @@ def test_standalone_analysis_persists_before_completion(
             "PDFWTF_GUI_OUTPUT_DIR": output_dir,
         }
     )
-    adapter = app.config["PDFWTF_GUI_ANALYSIS_ADAPTER"]
+    adapter = app.config["PDFWTF_GUI_PARTITION_ADAPTER"]
     source = make_pdf(["digital"])
     client = app.test_client()
     client.post(
@@ -526,10 +526,10 @@ def test_standalone_analysis_persists_before_completion(
         },
     )
     job_id = next((configured_home / "instance/_data/in").iterdir()).name
-    client.post(f"/jobs/{job_id}/analyze", data={"document_type": "unit"})
+    client.post(f"/jobs/{job_id}/partition", data={"document_type": "unit"})
     adapter._executor.shutdown(wait=True)
     assert adapter.status(job_id).state == "complete"
-    destination = output_dir / job_id / "source.analysis.json"
+    destination = output_dir / job_id / "source.partition.json"
     assert json.loads(destination.read_text(encoding="utf-8")) == adapter.result(job_id)
     persisted = json.loads(destination.read_text(encoding="utf-8"))
     assert persisted["pdf_type"] == pdf_type
@@ -553,18 +553,18 @@ def test_standalone_analysis_persists_before_completion(
     keys = list(saved)
     assert keys[keys.index("document_type") + 1] == "pdf_type"
     assert not destination.with_suffix(".json.tmp").exists()
-    assert b"Download analysis" in client.get(f"/jobs/{job_id}/status").data
-    assert client.get(f"/jobs/{job_id}/analysis").json == adapter.result(job_id)
+    assert b"Download partition" in client.get(f"/jobs/{job_id}/status").data
+    assert client.get(f"/jobs/{job_id}/partition.json").json == adapter.result(job_id)
     assert client.delete(f"/uploads/{job_id}").status_code == 200
     assert not destination.exists()
 
 
-def test_analysis_write_failure_does_not_report_complete(
+def test_partition_write_failure_does_not_report_complete(
     tmp_path, make_pdf, monkeypatch, caplog
 ):
-    adapter = DemoAnalysisAdapter(output_dir=tmp_path / "output")
+    adapter = DemoPartitionAdapter(output_dir=tmp_path / "output")
     source = make_pdf(["digital"])
-    job_id = "analysis-test-" + "a" * 24
+    job_id = "partition-test-" + "a" * 24
 
     def fail_write(_document, path):
         path.write_text("partial", encoding="utf-8")
@@ -583,12 +583,15 @@ def test_analysis_write_failure_does_not_report_complete(
     assert len(records) == 1
     assert records[0].levelname == "ERROR"
     assert records[0].correlation_id == job_id
-    assert records[0].getMessage() == "GUI analysis failed (OSError)."
+    assert re.fullmatch(
+        r"GUI partitioning failed \(OSError, at=test_gui\.py:\d+\)\.",
+        records[0].getMessage(),
+    )
     assert records[0].exc_info is None
     assert "private document payload" not in caplog.text
 
 
-def test_analysis_download_checks_access_and_readiness(gui_app, make_pdf, monkeypatch):
+def test_partition_download_checks_access_and_readiness(gui_app, make_pdf, monkeypatch):
     app, adapter, home = gui_app
     client = app.test_client()
     source = make_pdf(["digital"])
@@ -596,22 +599,22 @@ def test_analysis_download_checks_access_and_readiness(gui_app, make_pdf, monkey
         "/uploads", data={"document": (BytesIO(source.read_bytes()), "file.pdf")}
     )
     job_id = next((home / "instance/_data/in").iterdir()).name
-    assert client.get(f"/jobs/{job_id}/analysis").status_code == 404
-    client.post(f"/jobs/{job_id}/analyze", data={"document_type": "unit"})
+    assert client.get(f"/jobs/{job_id}/partition.json").status_code == 404
+    client.post(f"/jobs/{job_id}/partition", data={"document_type": "unit"})
     app.config["PDFWTF_GUI_ACCESS_CHECK"] = (
-        lambda action, _job_id: action != "download_analysis"
+        lambda action, _job_id: action != "download_partition"
     )
-    assert client.get(f"/jobs/{job_id}/analysis").status_code == 403
+    assert client.get(f"/jobs/{job_id}/partition.json").status_code == 403
     app.config["PDFWTF_GUI_ACCESS_CHECK"] = lambda _action, _job_id: True
 
     def not_ready(_job_id):
         raise LookupError("Not ready.")
 
     monkeypatch.setattr(adapter, "result", not_ready)
-    assert client.get(f"/jobs/{job_id}/analysis").status_code == 409
+    assert client.get(f"/jobs/{job_id}/partition.json").status_code == 409
 
 
-def test_listing_saved_analysis_actions_survive_restart(gui_app, make_pdf):
+def test_listing_saved_partition_actions_survive_restart(gui_app, make_pdf):
     app, adapter, home = gui_app
     client = app.test_client()
     source = make_pdf(["digital"])
@@ -620,34 +623,34 @@ def test_listing_saved_analysis_actions_survive_restart(gui_app, make_pdf):
     )
     job_id = next((home / "instance/_data/in").iterdir()).name
     assert f"/jobs/{job_id}/review".encode() not in client.get("/").data
-    client.post(f"/jobs/{job_id}/analyze", data={"document_type": "unit"})
-    analysis = adapter.result(job_id)
-    destination = home / "instance/_data/out" / job_id / "source.analysis.json"
+    client.post(f"/jobs/{job_id}/partition", data={"document_type": "unit"})
+    partition = adapter.result(job_id)
+    destination = home / "instance/_data/out" / job_id / "source.partition.json"
     destination.parent.mkdir(parents=True)
-    destination.write_text(json.dumps(analysis), encoding="utf-8")
-    app.config["PDFWTF_GUI_ANALYSIS_ADAPTER"] = ImmediateAdapter()
+    destination.write_text(json.dumps(partition), encoding="utf-8")
+    app.config["PDFWTF_GUI_PARTITION_ADAPTER"] = ImmediateAdapter()
     listing = client.get("/").data
     assert f"/jobs/{job_id}/review".encode() in listing
-    assert f"/jobs/{job_id}/analysis".encode() not in listing
-    assert b"Analysis is complete." not in listing
+    assert f"/jobs/{job_id}/partition.json".encode() not in listing
+    assert b"Partition is complete." not in listing
     assert client.get(f"/jobs/{job_id}/review").status_code == 200
     response = client.get(f"/jobs/{job_id}/document")
     assert response.status_code == 200
     response.close()
-    assert client.get(f"/jobs/{job_id}/analysis").json == analysis
-    client.post(f"/jobs/{job_id}/analyze", data={"document_type": "book"})
+    assert client.get(f"/jobs/{job_id}/partition.json").json == partition
+    client.post(f"/jobs/{job_id}/partition", data={"document_type": "book"})
     assert (
-        app.config["PDFWTF_GUI_ANALYSIS_ADAPTER"].result(job_id)["document_type"]
+        app.config["PDFWTF_GUI_PARTITION_ADAPTER"].result(job_id)["document_type"]
         == "book"
     )
     complete = client.get(f"/jobs/{job_id}/status", headers={"HX-Request": "true"})
-    assert b"Analysis is complete." in complete.data
+    assert b"Partition is complete." in complete.data
     assert b'hx-swap-oob="outerHTML"' in complete.data
-    assert f'id="analysis-actions-{job_id}"'.encode() in complete.data
+    assert f'id="partition-actions-{job_id}"'.encode() in complete.data
 
 
 def test_demo_adapter_reruns_finished_job(tmp_path, make_pdf):
-    adapter = DemoAnalysisAdapter(max_workers=1, output_dir=tmp_path / "output")
+    adapter = DemoPartitionAdapter(max_workers=1, output_dir=tmp_path / "output")
     source = make_pdf(["digital"])
     job_id = "rerun-test-" + "a" * 24
     try:
@@ -656,7 +659,7 @@ def test_demo_adapter_reruns_finished_job(tmp_path, make_pdf):
             adapter._executor.submit(lambda: None).result(timeout=10)
             assert adapter.status(job_id).state == "complete"
             assert adapter.result(job_id)["document_type"] == document_type
-            destination = tmp_path / "output" / job_id / "source.analysis.json"
+            destination = tmp_path / "output" / job_id / "source.partition.json"
             assert (
                 json.loads(destination.read_text(encoding="utf-8"))["document_type"]
                 == document_type
@@ -666,7 +669,7 @@ def test_demo_adapter_reruns_finished_job(tmp_path, make_pdf):
 
 
 @pytest.mark.parametrize("state", ["queued", "processing"])
-def test_analyze_does_not_restart_active_job(gui_app, make_pdf, monkeypatch, state):
+def test_partition_does_not_restart_active_job(gui_app, make_pdf, monkeypatch, state):
     app, adapter, home = gui_app
     client = app.test_client()
     source = make_pdf(["digital"])
@@ -677,14 +680,14 @@ def test_analyze_does_not_restart_active_job(gui_app, make_pdf, monkeypatch, sta
     monkeypatch.setattr(adapter, "status", lambda _job_id: JobStatus(state))
     assert (
         client.post(
-            f"/jobs/{job_id}/analyze", data={"document_type": "unit"}
+            f"/jobs/{job_id}/partition", data={"document_type": "unit"}
         ).status_code
         == 200
     )
     assert adapter.starts == 0
 
 
-def test_invalid_saved_analysis_does_not_show_actions(gui_app, make_pdf):
+def test_invalid_saved_partition_does_not_show_actions(gui_app, make_pdf):
     app, _adapter, home = gui_app
     client = app.test_client()
     source = make_pdf(["digital"])
@@ -692,9 +695,9 @@ def test_invalid_saved_analysis_does_not_show_actions(gui_app, make_pdf):
         "/uploads", data={"document": (BytesIO(source.read_bytes()), "file.pdf")}
     )
     job_id = next((home / "instance/_data/in").iterdir()).name
-    destination = home / "instance/_data/out" / job_id / "source.analysis.json"
+    destination = home / "instance/_data/out" / job_id / "source.partition.json"
     destination.parent.mkdir(parents=True)
-    destination.write_text('{"kind": "analysis"}', encoding="utf-8")
+    destination.write_text('{"kind": "partition"}', encoding="utf-8")
     assert f"/jobs/{job_id}/review".encode() not in client.get("/").data
     assert client.get(f"/jobs/{job_id}/review").status_code == 404
 
@@ -719,14 +722,17 @@ def test_file_link_and_document_type_persistence(gui_app, make_pdf):
         "pdf_type": "born-digital",
     }
     listing = client.get("/").data
-    assert f'href="/jobs/{job_id}/document" target="_blank"'.encode() in listing
+    assert (
+        f'href="/jobs/{job_id}/document?variant=source" target="_blank"'.encode()
+        in listing
+    )
     document = client.get(f"/jobs/{job_id}/document")
     assert document.status_code == 200
     assert document.mimetype == "application/pdf"
     document.close()
     for document_type in ("book", "journal-issue"):
         response = client.post(
-            f"/jobs/{job_id}/analyze", data={"document_type": document_type}
+            f"/jobs/{job_id}/partition", data={"document_type": document_type}
         )
         assert response.status_code == 200
         metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
@@ -739,9 +745,9 @@ def test_file_link_and_document_type_persistence(gui_app, make_pdf):
             f'<option value="{document_type}" selected>'.encode()
             in client.get("/").data
         )
-    app.config["PDFWTF_GUI_ANALYSIS_ADAPTER"] = ImmediateAdapter()
+    app.config["PDFWTF_GUI_PARTITION_ADAPTER"] = ImmediateAdapter()
     assert b'<option value="journal-issue" selected>' in client.get("/").data
-    client.post(f"/jobs/{job_id}/analyze", data={"document_type": "invalid"})
+    client.post(f"/jobs/{job_id}/partition", data={"document_type": "invalid"})
     assert (
         json.loads(metadata_path.read_text(encoding="utf-8"))["document_type"]
         == "journal-issue"
@@ -784,7 +790,7 @@ def test_uploaded_files_sorted_oldest_first(gui_app, make_pdf):
         ("auto", "book", True, "auto"),
     ],
 )
-def test_detected_type_updates_only_successful_auto_analysis(
+def test_detected_type_updates_only_successful_auto_partition(
     tmp_path, make_pdf, monkeypatch, requested, detected, failed, expected
 ):
     source = make_pdf(["digital"])
@@ -796,13 +802,13 @@ def test_detected_type_updates_only_successful_auto_analysis(
         encoding="utf-8",
     )
 
-    def analyze(_source, _document_type):
+    def partition(_source, _document_type):
         if failed:
-            raise RuntimeError("Analysis failed.")
+            raise RuntimeError("Partition failed.")
         return {"document_type": detected}
 
-    monkeypatch.setattr("pdfwtf.gui.adapter.analyze_container", analyze)
-    adapter = DemoAnalysisAdapter(output_dir=tmp_path / "output")
+    monkeypatch.setattr("pdfwtf.gui.adapter.partition_container", partition)
+    adapter = DemoPartitionAdapter(output_dir=tmp_path / "output")
     adapter.start("auto-detection-" + "a" * 24, source, requested)
     adapter._executor.shutdown(wait=True)
     assert adapter.status("auto-detection-" + "a" * 24).state == (
@@ -819,21 +825,23 @@ def test_completion_refreshes_document_type_selector(
     configured_home, make_pdf, monkeypatch
 ):
     source = make_pdf(["digital"])
-    analysis = analyze_container(source, "book")
-    monkeypatch.setattr("pdfwtf.gui.adapter.analyze_container", lambda *_args: analysis)
+    partition = partition_container(source, "book")
+    monkeypatch.setattr(
+        "pdfwtf.gui.adapter.partition_container", lambda *_args: partition
+    )
     app = create_app({"TESTING": True, "WTF_CSRF_ENABLED": False})
     client = app.test_client()
-    adapter = app.config["PDFWTF_GUI_ANALYSIS_ADAPTER"]
+    adapter = app.config["PDFWTF_GUI_PARTITION_ADAPTER"]
     client.post(
         "/uploads", data={"document": (BytesIO(source.read_bytes()), "file.pdf")}
     )
     job_id = next((configured_home / "instance/_data/in").iterdir()).name
     assert b'<option value="auto" selected>' in client.get("/").data
-    client.post(f"/jobs/{job_id}/analyze", data={"document_type": "auto"})
+    client.post(f"/jobs/{job_id}/partition", data={"document_type": "auto"})
     adapter._executor.shutdown(wait=True)
     response = client.get(f"/jobs/{job_id}/status", headers={"HX-Request": "true"})
     assert response.status_code == 200
-    assert b"Analysis is complete." in response.data
+    assert b"Partition is complete." in response.data
     assert f'id="document-type-{job_id}"'.encode() in response.data
     assert b'name="document_type" required hx-swap-oob="outerHTML"' in response.data
     assert b'<option value="book" selected>' in response.data
@@ -855,7 +863,7 @@ def test_image_decoder_assets_are_served_as_wasm(gui_app, monkeypatch, filename)
 
 def test_plan_delete_enforces_csrf(configured_home):
     app = create_app(
-        {"TESTING": True, "PDFWTF_GUI_ANALYSIS_ADAPTER": ImmediateAdapter()}
+        {"TESTING": True, "PDFWTF_GUI_PARTITION_ADAPTER": ImmediateAdapter()}
     )
     assert app.test_client().delete(f"/jobs/{'a' * 20}/plan").status_code == 400
 
@@ -909,16 +917,16 @@ def _saved_export_job(gui_app, make_pdf):
         content_type="multipart/form-data",
     )
     job_id = next((home / "instance/_data/in").iterdir()).name
-    client.post(f"/jobs/{job_id}/analyze", data={"document_type": "unit"})
-    analysis = adapter.result(job_id)
+    client.post(f"/jobs/{job_id}/partition", data={"document_type": "unit"})
+    partition = adapter.result(job_id)
     plan = {
-        "schema_version": analysis["schema_version"],
+        "schema_version": partition["schema_version"],
         "kind": "plan",
-        "source": analysis["source"],
-        "document_type": analysis["document_type"],
+        "source": partition["source"],
+        "document_type": partition["document_type"],
         "pages": [
             {**page, "selected": page["input_page"] == 1, "unit_ids": ["reviewed"]}
-            for page in analysis["pages"]
+            for page in partition["pages"]
         ],
         "units": [
             {
@@ -933,8 +941,8 @@ def _saved_export_job(gui_app, make_pdf):
     }
     assert client.post(f"/jobs/{job_id}/plan", json=plan).status_code == 200
     output = home / "instance/_data/out" / job_id
-    (output / "source.analysis.json").write_text(
-        json.dumps(analysis, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    (output / "source.partition.json").write_text(
+        json.dumps(partition, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
     persisted_plan = json.loads(
         (output / "approved.plan.json").read_text(encoding="utf-8")
@@ -942,7 +950,7 @@ def _saved_export_job(gui_app, make_pdf):
     return client, job_id, persisted_plan
 
 
-def test_export_button_requires_saved_plan_and_modal_defaults_off(gui_app, make_pdf):
+def test_export_button_works_without_plan_and_modal_defaults_off(gui_app, make_pdf):
     client, job_id, _plan = _saved_export_job(gui_app, make_pdf)
     listing = client.get("/").get_data(as_text=True)
     assert f'data-export-url="/jobs/{job_id}/export"' in listing
@@ -958,11 +966,12 @@ def test_export_button_requires_saved_plan_and_modal_defaults_off(gui_app, make_
         tag = re.search(rf'<input[^>]*id="{control}"[^>]*>', listing).group()
         assert "checked" not in tag
         assert 'role="switch"' in tag
+    assert "Export the units of the saved plan." in listing
     assert client.delete(f"/jobs/{job_id}/plan").status_code == 200
-    assert f'data-export-url="/jobs/{job_id}/export"' not in client.get("/").get_data(
-        as_text=True
-    )
-    assert client.post(f"/jobs/{job_id}/export", json={}).status_code == 404
+    # Partitioning is optional. Without a plan, export uses the whole PDF.
+    listing = client.get("/").get_data(as_text=True)
+    assert f'data-export-url="/jobs/{job_id}/export"' in listing
+    assert "Export the whole PDF as one unit." in listing
 
 
 @pytest.mark.parametrize("no_pdf_out", [False, True])
@@ -976,13 +985,13 @@ def test_saved_plan_export_downloads_selected_results(
     from zipfile import ZipFile
     import pymupdf
 
-    app, _analysis_adapter, home = gui_app
+    app, _partition_adapter, home = gui_app
     client, job_id, saved_plan = _saved_export_job(gui_app, make_pdf)
     upload_path = home / "instance/_data/in" / job_id / "upload.json"
     upload = json.loads(upload_path.read_text(encoding="utf-8"))
     upload["extra"] = {"unicode": "Žluťoučký", "values": [1, False, None]}
     upload_path.write_text(json.dumps(upload, ensure_ascii=False), encoding="utf-8")
-    exporter = DemoAnalysisAdapter(output_dir=home / "instance/_data/out")
+    exporter = DemoPartitionAdapter(output_dir=home / "instance/_data/out")
     app.config["PDFWTF_GUI_EXPORT_ADAPTER"] = exporter
     try:
         response = client.post(
@@ -1006,7 +1015,7 @@ def test_saved_plan_export_downloads_selected_results(
         with ZipFile(BytesIO(archive.data)) as bundle:
             names = bundle.namelist()
             assert ("source.pdf" in names) is include_source
-            for filename in ("approved.plan.json", "source.analysis.json"):
+            for filename in ("approved.plan.json", "source.partition.json"):
                 assert (filename in names) is debug
                 if debug:
                     saved_file = home / "instance/_data/out" / job_id / filename
@@ -1090,34 +1099,34 @@ def test_export_access_checks_and_csrf(gui_app, make_pdf):
     assert client.post(f"/jobs/{job_id}/export", json={}).status_code == 400
 
 
-def test_active_export_blocks_duplicate_analysis_and_delete(
+def test_active_export_blocks_duplicate_partition_and_delete(
     gui_app, make_pdf, monkeypatch
 ):
     from threading import Event
 
     app, _adapter, home = gui_app
     client, job_id, _plan = _saved_export_job(gui_app, make_pdf)
-    exporter = DemoAnalysisAdapter(output_dir=home / "instance/_data/out")
+    exporter = DemoPartitionAdapter(output_dir=home / "instance/_data/out")
     app.config["PDFWTF_GUI_EXPORT_ADAPTER"] = exporter
     started = Event()
     release = Event()
     from pdfwtf.gui import adapter as adapter_module
 
-    original = adapter_module.process_pdf
+    original = adapter_module.export_pdf
 
     def blocked(*args, **kwargs):
         started.set()
         assert release.wait(10)
         return original(*args, **kwargs)
 
-    monkeypatch.setattr(adapter_module, "process_pdf", blocked)
+    monkeypatch.setattr(adapter_module, "export_pdf", blocked)
     try:
         assert client.post(f"/jobs/{job_id}/export", json={}).status_code == 202
         assert started.wait(5)
         assert client.post(f"/jobs/{job_id}/export", json={}).status_code == 409
         assert (
             client.post(
-                f"/jobs/{job_id}/analyze", data={"document_type": "unit"}
+                f"/jobs/{job_id}/partition", data={"document_type": "unit"}
             ).status_code
             == 409
         )
@@ -1162,7 +1171,7 @@ def test_gui_export_writes_each_included_unit_pdf_from_source(gui_app, make_pdf)
             <= unit["input_pages"]["end"]
         ]
     assert client.post(f"/jobs/{job_id}/plan", json=plan).status_code == 200
-    exporter = DemoAnalysisAdapter(output_dir=home / "instance/_data/out")
+    exporter = DemoPartitionAdapter(output_dir=home / "instance/_data/out")
     app.config["PDFWTF_GUI_EXPORT_ADAPTER"] = exporter
     try:
         response = client.post(f"/jobs/{job_id}/export", json={})
@@ -1229,11 +1238,11 @@ def test_plan_timestamps_are_server_owned_and_creation_is_preserved(
     assert saved["units"][0]["title"] == "Edited title"
 
 
-def test_debug_export_fails_if_saved_analysis_is_missing(gui_app, make_pdf):
+def test_debug_export_fails_if_saved_partition_is_missing(gui_app, make_pdf):
     app, _adapter, home = gui_app
     client, job_id, _plan = _saved_export_job(gui_app, make_pdf)
-    (home / "instance/_data/out" / job_id / "source.analysis.json").unlink()
-    exporter = DemoAnalysisAdapter(output_dir=home / "instance/_data/out")
+    (home / "instance/_data/out" / job_id / "source.partition.json").unlink()
+    exporter = DemoPartitionAdapter(output_dir=home / "instance/_data/out")
     app.config["PDFWTF_GUI_EXPORT_ADAPTER"] = exporter
     try:
         response = client.post(f"/jobs/{job_id}/export", json={"debug": True})
@@ -1294,9 +1303,9 @@ def test_plan_mutation_is_blocked_only_while_export_is_active(gui_app, make_pdf,
 def _llm_export(gui_app, make_pdf, options, exporter=None):
     from pdfwtf.configuration import load_config
 
-    app, _analysis_adapter, home = gui_app
+    app, _partition_adapter, home = gui_app
     client, job_id, _plan = _saved_export_job(gui_app, make_pdf)
-    exporter = exporter or DemoAnalysisAdapter(
+    exporter = exporter or DemoPartitionAdapter(
         output_dir=home / "instance/_data/out", config=load_config()
     )
     app.config["PDFWTF_GUI_EXPORT_ADAPTER"] = exporter
@@ -1309,7 +1318,7 @@ def test_export_modal_lists_localized_llm_tasks_unselected(llm_home, gui_app):
     from pdfwtf.configuration import load_config
 
     app, _adapter, home = gui_app
-    app.config["PDFWTF_GUI_EXPORT_ADAPTER"] = DemoAnalysisAdapter(
+    app.config["PDFWTF_GUI_EXPORT_ADAPTER"] = DemoPartitionAdapter(
         output_dir=home / "instance/_data/out", config=load_config()
     )
     client = app.test_client()
@@ -1326,7 +1335,7 @@ def test_export_modal_hides_llm_tasks_without_key(llm_home, gui_app, monkeypatch
 
     monkeypatch.delenv("GEMINI_API_KEY")
     app, _adapter, home = gui_app
-    app.config["PDFWTF_GUI_EXPORT_ADAPTER"] = DemoAnalysisAdapter(
+    app.config["PDFWTF_GUI_EXPORT_ADAPTER"] = DemoPartitionAdapter(
         output_dir=home / "instance/_data/out", config=load_config()
     )
     listing = app.test_client().get("/").get_data(as_text=True)
@@ -1473,3 +1482,467 @@ def test_cli_and_gui_llm_results_match(llm_home, gui_app, make_pdf, fake_gemini)
         cli_manifest["units"][0]["llm_tasks"] == gui_manifest["units"][0]["llm_tasks"]
     )
     assert (units / "reviewed.clean.html").read_bytes() == gui_html
+
+
+def _upload(client, home, source, name="issue.pdf", pdf_type="born-digital"):
+    uploads = home / "instance/_data/in"
+    before = set(uploads.iterdir()) if uploads.is_dir() else set()
+    client.post(
+        "/uploads",
+        data={"document": (BytesIO(source.read_bytes()), name), "pdf_type": pdf_type},
+        content_type="multipart/form-data",
+    )
+    return (set(uploads.iterdir()) - before).pop().name
+
+
+def test_export_without_partition_exports_whole_pdf(gui_app, make_pdf):
+    from zipfile import ZipFile
+
+    app, adapter, home = gui_app
+    client = app.test_client()
+    job_id = _upload(client, home, make_pdf(["digital", "digital"]))
+    exporter = DemoPartitionAdapter(output_dir=home / "instance/_data/out")
+    app.config["PDFWTF_GUI_EXPORT_ADAPTER"] = exporter
+    try:
+        response = client.post(
+            f"/jobs/{job_id}/export", json={"get_html": True, "debug": True}
+        )
+        assert response.status_code == 202
+        exporter._executor.shutdown(wait=True)
+        status = client.get(response.json["status_url"])
+        assert status.json["state"] == "complete"
+        archive = client.get(status.json["download_url"])
+        with ZipFile(BytesIO(archive.data)) as bundle:
+            names = bundle.namelist()
+            manifest = json.loads(bundle.read("_units/manifest.json"))
+            plan = json.loads(bundle.read("approved.plan.json"))
+        assert [unit["id"] for unit in manifest["units"]] == ["unit-001"]
+        assert "_units/unit-001.html" in names
+        assert "_units/unit-001.pdf" in names
+        assert "source.partition.json" not in names
+        assert plan["document_type"] == "unit"
+        # A direct export does not save a plan or start partitioning.
+        assert not (
+            home / "instance/_data/out" / job_id / "approved.plan.json"
+        ).exists()
+        assert adapter.starts == 0
+    finally:
+        exporter.close()
+
+
+@pytest.fixture
+def scan_tools_mocked(monkeypatch):
+    import shutil
+
+    from pdfwtf import pipeline
+
+    monkeypatch.setattr(pipeline, "get_unpaper_version", lambda: (False, "none"))
+    monkeypatch.setattr(pipeline, "correct_images_orientation", lambda files: False)
+    calls = []
+
+    def ocr(input_pdf, output_pdf, images, **kwargs):
+        calls.append(kwargs)
+        shutil.copy2(input_pdf, output_pdf)
+
+    monkeypatch.setattr(pipeline, "run_ocr", ocr)
+    return calls
+
+
+def test_preparation_failure_logs_locked_file_name(
+    tmp_path, make_pdf, monkeypatch, caplog
+):
+    adapter = DemoPartitionAdapter(output_dir=tmp_path / "output")
+    source = make_pdf(["digital"])
+    job_id = "prepare-test-" + "a" * 24
+
+    def locked(*_args, **_kwargs):
+        raise PermissionError(13, "private document payload", "prepared.pdf")
+
+    monkeypatch.setattr("pdfwtf.gui.adapter.enhance_pdf", locked)
+    adapter.start_prepare(
+        job_id, source, source.parent / "prepared.pdf", options={"pdf_type": "auto"}
+    )
+    adapter._executor.shutdown(wait=True)
+    assert adapter.prepare_status(job_id).state == "failed"
+    records = [
+        record for record in caplog.records if record.name == "pdfwtf.gui.adapter"
+    ]
+    assert len(records) == 1
+    message = records[0].getMessage()
+    assert message.startswith(
+        "GUI preparation failed (PermissionError, file=prepared.pdf, at=test_gui.py:"
+    )
+    assert records[0].exc_info is None
+    assert "private document payload" not in caplog.text
+
+
+def _prepare(app, client, home, job_id, **form):
+    preparer = DemoPartitionAdapter(output_dir=home / "instance/_data/out")
+    app.config["PDFWTF_GUI_PREPARE_ADAPTER"] = preparer
+    response = client.post(f"/jobs/{job_id}/prepare", data=form)
+    preparer._executor.shutdown(wait=True)
+    return preparer, response
+
+
+def test_preparation_changes_active_pdf_and_invalidates_plan(
+    gui_app, make_pdf, scan_tools_mocked
+):
+    app, _adapter, home = gui_app
+    client, job_id, _plan = _saved_export_job(gui_app, make_pdf)
+    source = home / "instance/_data/in" / job_id / "source.pdf"
+    original = source.read_bytes()
+    output = home / "instance/_data/out" / job_id
+    assert (output / "approved.plan.json").is_file()
+    preparer, response = _prepare(
+        app, client, home, job_id, pdf_type="scanned", languages="eng+ces"
+    )
+    try:
+        assert response.status_code == 200
+        assert f'id="prepare-state-{job_id}"' in response.get_data(as_text=True)
+        status = client.get(f"/jobs/{job_id}/prepare/status")
+        assert status.status_code == 200
+        assert status.headers["HX-Refresh"] == "true"
+        assert scan_tools_mocked[0]["lang"] == "eng+ces"
+        prepared = source.parent / "prepared.pdf"
+        assert prepared.is_file()
+        assert prepared.read_bytes() != original
+        assert source.read_bytes() == original
+        assert (output / "enhance.json").is_file()
+        # The plan and partition described the original PDF.
+        assert not (output / "approved.plan.json").exists()
+        assert not (output / "source.partition.json").exists()
+        listing = client.get("/").get_data(as_text=True)
+        assert "Active: prepared PDF" in listing
+        assert f"/jobs/{job_id}/review" not in listing
+        assert "Export the whole PDF as one unit." in listing
+        # The file name opens the original. Delete follows it.
+        assert f"/jobs/{job_id}/document?variant=source" in listing
+        assert f"/jobs/{job_id}/document?variant=prepared" in listing
+        assert ">Prepared PDF<" in listing
+        assert ">Original<" not in listing
+        assert "Download prepared PDF" not in listing
+        assert listing.index(f"/uploads/{job_id}") < listing.index(
+            f'id="active-pdf-{job_id}"'
+        )
+        # Close file responses so Windows can delete the files later.
+        with client.get(f"/jobs/{job_id}/document") as active:
+            assert active.data == prepared.read_bytes()
+        with client.get(f"/jobs/{job_id}/document?variant=source") as first:
+            assert first.data == original
+        with client.get(
+            f"/jobs/{job_id}/document?variant=prepared&download=1"
+        ) as download:
+            assert download.headers["Content-Disposition"].startswith("attachment")
+        # Partitioning now uses the prepared PDF.
+        client.post(f"/jobs/{job_id}/partition", data={"document_type": "unit"})
+        assert _adapter.document_path(job_id) == prepared
+        assert client.get(f"/jobs/{job_id}/review").status_code == 200
+    finally:
+        preparer.close()
+    assert client.delete(f"/uploads/{job_id}").status_code == 200
+    assert not prepared.exists()
+    assert not (output / "enhance.json").exists()
+
+
+def test_stale_plan_is_not_reused_after_active_pdf_changes(gui_app, make_pdf, tmp_path):
+    app, _adapter, home = gui_app
+    client, job_id, _plan = _saved_export_job(gui_app, make_pdf)
+    # A host adapter replaced the active PDF but left the old plan.
+    other = make_pdf(["digital"], "other.pdf")
+    (home / "instance/_data/in" / job_id / "prepared.pdf").write_bytes(
+        other.read_bytes()
+    )
+    exporter = DemoPartitionAdapter(output_dir=home / "instance/_data/out")
+    app.config["PDFWTF_GUI_EXPORT_ADAPTER"] = exporter
+    try:
+        listing = client.get("/").get_data(as_text=True)
+        assert "Export the units of the saved plan." not in listing
+        assert f"/jobs/{job_id}/review" not in listing
+        response = client.post(f"/jobs/{job_id}/export", json={})
+        assert response.status_code == 409
+        assert "does not match the active PDF" in response.json["error"]
+        assert client.get(f"/jobs/{job_id}/partition.json").status_code == 404
+    finally:
+        exporter.close()
+
+
+def test_preparation_controls_require_prepare_adapter(gui_app, make_pdf):
+    app, _adapter, home = gui_app
+    client = app.test_client()
+    job_id = _upload(client, home, make_pdf(["scan"]), pdf_type="scanned")
+    digital_id = _upload(client, home, make_pdf(["digital"], "digital.pdf"))
+    listing = client.get("/").get_data(as_text=True)
+    assert "prepare-form-" not in listing
+    # Only a prepared PDF is marked. Unprepared rows use the original PDF.
+    assert "Active:" not in listing
+    assert client.post(f"/jobs/{job_id}/prepare").status_code == 503
+    app.config["PDFWTF_GUI_PREPARE_ADAPTER"] = DemoPartitionAdapter(
+        output_dir=home / "instance/_data/out"
+    )
+    try:
+        listing = client.get("/").get_data(as_text=True)
+        # Preparation is offered only for scanned uploads.
+        assert f'id="prepare-form-{job_id}"' in listing
+        assert f'id="prepare-form-{digital_id}"' not in listing
+    finally:
+        app.config["PDFWTF_GUI_PREPARE_ADAPTER"].close()
+
+
+@pytest.mark.parametrize(
+    "form", [{"pdf_type": "other"}, {"languages": "eng;rm"}, {"languages": "e"}]
+)
+def test_invalid_preparation_options_are_rejected(gui_app, make_pdf, form):
+    app, _adapter, home = gui_app
+    client = app.test_client()
+    job_id = _upload(client, home, make_pdf(["digital"]))
+    preparer, response = _prepare(app, client, home, job_id, **form)
+    preparer.close()
+    assert response.status_code == 400
+    assert not (home / "instance/_data/in" / job_id / "prepared.pdf").exists()
+
+
+def test_preparation_blocks_while_export_is_active(gui_app, make_pdf, monkeypatch):
+    from threading import Event
+
+    from pdfwtf.gui import adapter as adapter_module
+
+    app, _adapter, home = gui_app
+    client, job_id, _plan = _saved_export_job(gui_app, make_pdf)
+    shared = DemoPartitionAdapter(output_dir=home / "instance/_data/out")
+    app.config["PDFWTF_GUI_EXPORT_ADAPTER"] = shared
+    app.config["PDFWTF_GUI_PREPARE_ADAPTER"] = shared
+    started = Event()
+    release = Event()
+    original = adapter_module.export_pdf
+
+    def blocked(*args, **kwargs):
+        started.set()
+        assert release.wait(10)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(adapter_module, "export_pdf", blocked)
+    try:
+        assert client.post(f"/jobs/{job_id}/export", json={}).status_code == 202
+        assert started.wait(5)
+        response = client.post(f"/jobs/{job_id}/prepare", data={"pdf_type": "auto"})
+        assert response.status_code == 409
+    finally:
+        release.set()
+        shared._executor.shutdown(wait=True)
+        shared.close()
+    assert not (home / "instance/_data/in" / job_id / "prepared.pdf").exists()
+
+
+def test_adapter_rejects_incompatible_tasks_before_scheduling(llm_home, tmp_path):
+    from pdfwtf.configuration import load_config
+
+    adapter = DemoPartitionAdapter(output_dir=tmp_path / "out", config=load_config())
+    source = tmp_path / "source.pdf"
+    try:
+        with pytest.raises(ValueError, match="does not support the 'enhance'"):
+            adapter.start_prepare(
+                "job",
+                source,
+                tmp_path / "prepared.pdf",
+                options={},
+                llm_tasks=("clean_html",),
+            )
+        with pytest.raises(ValueError, match="does not support the 'partition'"):
+            adapter.start("job", source, "unit", llm_tasks=("clean_html",))
+        with pytest.raises(ValueError, match="requires --get-html"):
+            adapter.start_export("job", source, None, llm_tasks=("clean_html",))
+        with pytest.raises(KeyError):
+            adapter.prepare_status("job")
+        assert [task.name for task in adapter.llm_tasks()] == ["clean_html"]
+        assert adapter.llm_tasks("enhance") == []
+        assert adapter.llm_tasks("partition") == []
+    finally:
+        adapter.close()
+
+
+def _analyze(app, client, home, job_id):
+    analyzer = DemoPartitionAdapter(output_dir=home / "instance/_data/out")
+    app.config["PDFWTF_GUI_ANALYZE_ADAPTER"] = analyzer
+    response = client.post(f"/jobs/{job_id}/analyze")
+    analyzer._executor.shutdown(wait=True)
+    return analyzer, response
+
+
+def _analyze_button(listing, job_id):
+    match = re.search(rf'<button id="analyze-button-{job_id}"[^>]*>', listing)
+    assert match is not None
+    return match.group()
+
+
+def test_analyze_button_precedes_document_type_and_requires_adapter(gui_app, make_pdf):
+    app, _adapter, home = gui_app
+    client = app.test_client()
+    job_id = _upload(client, home, make_pdf(["digital"]))
+    listing = client.get("/").get_data(as_text=True)
+    assert f'id="analyze-button-{job_id}"' not in listing
+    assert 'id="analysis-modal"' not in listing
+    assert client.post(f"/jobs/{job_id}/analyze").status_code == 503
+    analyzer = DemoPartitionAdapter(output_dir=home / "instance/_data/out")
+    app.config["PDFWTF_GUI_ANALYZE_ADAPTER"] = analyzer
+    try:
+        listing = client.get("/").get_data(as_text=True)
+        button = _analyze_button(listing, job_id)
+        assert "btn-info" in button
+        assert f'hx-post="/jobs/{job_id}/analyze"' in button
+        assert listing.index(f'id="analyze-button-{job_id}"') < listing.index(
+            f'id="document-type-{job_id}"'
+        )
+        assert 'id="analysis-modal"' in listing
+    finally:
+        analyzer.close()
+
+
+def test_analysis_runs_and_switches_button_to_report_modal(gui_app, make_pdf):
+    app, _adapter, home = gui_app
+    client = app.test_client()
+    job_id = _upload(client, home, make_pdf(["digital", "scan"]), "Žluťoučký.pdf")
+    source = home / "instance/_data/in" / job_id / "source.pdf"
+    original = source.read_bytes()
+    report_path = home / "instance/_data/out" / job_id / "analysis.json"
+    analyzer, response = _analyze(app, client, home, job_id)
+    try:
+        assert response.status_code == 200
+        assert f'id="analysis-state-{job_id}"' in response.get_data(as_text=True)
+        status = client.get(f"/jobs/{job_id}/analyze/status").get_data(as_text=True)
+        assert "Analysis is complete." in status
+        oob = _analyze_button(status, job_id)
+        assert "btn-outline-info" in oob
+        assert 'hx-swap-oob="outerHTML"' in oob
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+        assert report["kind"] == "pdf-analysis"
+        assert report["source"]["filename"] == "source.pdf"
+        assert source.read_bytes() == original
+
+        listing = client.get("/").get_data(as_text=True)
+        button = _analyze_button(listing, job_id)
+        assert "btn-outline-info" in button
+        assert 'data-bs-target="#analysis-modal"' in button
+        assert f'hx-get="/jobs/{job_id}/analysis/summary"' in button
+
+        summary = client.get(f"/jobs/{job_id}/analysis/summary")
+        assert summary.status_code == 200
+        text = summary.get_data(as_text=True)
+        assert "Analyzed PDF: original PDF" in text
+        assert "Different page types" in text
+        assert "Run OCR" in text
+        assert f'href="/jobs/{job_id}/analysis.json"' in text
+        assert f'hx-post="/jobs/{job_id}/analyze"' in text
+        assert 'name="csrf_token"' in text
+
+        download = client.get(f"/jobs/{job_id}/analysis.json")
+        assert download.status_code == 200
+        assert download.json == report
+        assert download.headers["Cache-Control"] == "private, no-store"
+        disposition = download.headers["Content-Disposition"]
+        assert disposition.startswith("attachment")
+        assert ".analysis.json" in disposition
+
+        # Run again replaces the report.
+        report_path.write_text(
+            json.dumps({**report, "created_at": "old"}), encoding="utf-8"
+        )
+        analyzer.close()
+        analyzer, _rerun = _analyze(app, client, home, job_id)
+        rerun = json.loads(report_path.read_text(encoding="utf-8"))
+        assert rerun["created_at"] != "old"
+    finally:
+        analyzer.close()
+    assert client.delete(f"/uploads/{job_id}").status_code == 200
+    assert not report_path.exists()
+
+
+def test_analysis_of_other_pdf_is_stale(gui_app, make_pdf):
+    app, _adapter, home = gui_app
+    client = app.test_client()
+    job_id = _upload(client, home, make_pdf(["digital"]))
+    analyzer, _response = _analyze(app, client, home, job_id)
+    try:
+        assert client.get(f"/jobs/{job_id}/analysis/summary").status_code == 200
+        # The active PDF changes, for example after preparation by a host.
+        (home / "instance/_data/in" / job_id / "prepared.pdf").write_bytes(
+            make_pdf(["scan"], "other.pdf").read_bytes()
+        )
+        listing = client.get("/").get_data(as_text=True)
+        assert "btn-info" in _analyze_button(listing, job_id)
+        assert client.get(f"/jobs/{job_id}/analysis/summary").status_code == 404
+        assert client.get(f"/jobs/{job_id}/analysis.json").status_code == 404
+        analyzer.close()
+        analyzer, _response = _analyze(app, client, home, job_id)
+        summary = client.get(f"/jobs/{job_id}/analysis/summary")
+        assert "Analyzed PDF: prepared PDF" in summary.get_data(as_text=True)
+    finally:
+        analyzer.close()
+
+
+def test_legacy_analysis_file_is_not_a_report(gui_app, make_pdf):
+    app, _adapter, home = gui_app
+    client = app.test_client()
+    job_id = _upload(client, home, make_pdf(["digital"]))
+    output = home / "instance/_data/out" / job_id
+    output.mkdir(parents=True)
+    (output / "analysis.json").write_text('{"kind": "analysis"}', encoding="utf-8")
+    analyzer = DemoPartitionAdapter(output_dir=home / "instance/_data/out")
+    app.config["PDFWTF_GUI_ANALYZE_ADAPTER"] = analyzer
+    try:
+        listing = client.get("/").get_data(as_text=True)
+        assert "btn-info" in _analyze_button(listing, job_id)
+        assert client.get(f"/jobs/{job_id}/analysis/summary").status_code == 404
+    finally:
+        analyzer.close()
+
+
+def test_failed_analysis_shows_error(gui_app):
+    app, _adapter, home = gui_app
+    client = app.test_client()
+    client.post(
+        "/uploads",
+        data={"document": (BytesIO(b"%PDF-1.7 broken"), "broken.pdf")},
+        content_type="multipart/form-data",
+    )
+    job_id = next((home / "instance/_data/in").iterdir()).name
+    analyzer, _response = _analyze(app, client, home, job_id)
+    try:
+        status = client.get(f"/jobs/{job_id}/analyze/status").get_data(as_text=True)
+        assert "Analysis failed. Check the host logs." in status
+        assert not (home / "instance/_data/out" / job_id / "analysis.json").exists()
+    finally:
+        analyzer.close()
+
+
+class _BusyPreparation:
+    def prepare_status(self, job_id):
+        return JobStatus("processing", demo=True)
+
+
+def test_analysis_waits_for_preparation(gui_app, make_pdf):
+    app, _adapter, home = gui_app
+    client = app.test_client()
+    job_id = _upload(client, home, make_pdf(["digital"]))
+    app.config["PDFWTF_GUI_PREPARE_ADAPTER"] = _BusyPreparation()
+    analyzer = DemoPartitionAdapter(output_dir=home / "instance/_data/out")
+    app.config["PDFWTF_GUI_ANALYZE_ADAPTER"] = analyzer
+    try:
+        assert client.post(f"/jobs/{job_id}/analyze").status_code == 409
+    finally:
+        analyzer.close()
+
+
+def test_adapter_rejects_llm_tasks_for_analysis(llm_home, tmp_path):
+    from pdfwtf.configuration import load_config
+
+    adapter = DemoPartitionAdapter(output_dir=tmp_path / "out", config=load_config())
+    try:
+        with pytest.raises(ValueError, match="does not support the 'analyze'"):
+            adapter.start_analysis(
+                "job", tmp_path / "source.pdf", llm_tasks=("clean_html",)
+            )
+        with pytest.raises(KeyError):
+            adapter.analysis_status("job")
+        assert adapter.llm_tasks("analyze") == []
+    finally:
+        adapter.close()

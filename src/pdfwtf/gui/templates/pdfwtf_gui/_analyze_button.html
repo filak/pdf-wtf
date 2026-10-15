@@ -1,0 +1,13 @@
+{# Analyze runs a read-only diagnostic. With a current report, the button opens its summary. #}
+{% if has_analysis %}
+<button id="analyze-button-{{ job_id }}" type="button" class="btn btn-sm btn-outline-info shadow-sm"
+        data-bs-toggle="modal" data-bs-target="#analysis-modal"
+        hx-get="{{ url_for('pdfwtf_gui.analysis_summary', job_id=job_id) }}"
+        hx-target="#analysis-modal-content" hx-swap="innerHTML"
+        title="{{ _('Show the analysis report.') }}"{% if update_actions %} hx-swap-oob="outerHTML"{% endif %}>{{ _('Analyze') }}</button>
+{% else %}
+<button id="analyze-button-{{ job_id }}" type="button" class="btn btn-sm btn-info shadow-sm"
+        hx-post="{{ url_for('pdfwtf_gui.start_analysis', job_id=job_id) }}"
+        hx-target="#job-state-{{ job_id }}" hx-swap="innerHTML"
+        title="{{ _('Diagnose the PDF without changing it.') }}"{% if update_actions %} hx-swap-oob="outerHTML"{% endif %}>{{ _('Analyze') }}</button>
+{% endif %}

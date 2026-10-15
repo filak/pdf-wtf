@@ -35,8 +35,8 @@ def test_override_skips_detection_and_processing(
     source = make_pdf([kind])
     original = source.read_bytes()
     output = tmp_path / "out"
-    pipeline.process_pdf(source, output, born_digital_flag=True, ocrlib="ocrmypdf")
-    assert (output / source.name).read_bytes() == original
+    pipeline.enhance_pdf(source, output, pdf_type="born-digital", ocrlib="ocrmypdf")
+    assert (output / "input.prepared.pdf").read_bytes() == original
     assert source.read_bytes() == original
 
 
@@ -44,14 +44,13 @@ def test_vector_only_pdf_has_empty_text_exports_without_ocr(
     vector_pdf, tmp_path, forbid_scan_processing
 ):
     output = tmp_path / "out"
-    pipeline.process_pdf(
+    pipeline.export_pdf(
         vector_pdf,
         output,
-        born_digital_flag=True,
         export_texts_flag=True,
         get_doi_flag=True,
     )
-    assert (output / vector_pdf.name).read_bytes() == vector_pdf.read_bytes()
+    assert not (output / vector_pdf.name).exists()
     texts = sorted((output / "_texts_graphics").glob("*.txt"))
     assert len(texts) == 3
     assert all(path.read_text(encoding="utf-8") == "" for path in texts)
@@ -62,7 +61,7 @@ def test_vector_only_pdf_has_empty_text_exports_without_ocr(
     )
     assert json.loads((output / "graphics.meta.json").read_text()) == {
         "input": str(vector_pdf.resolve()),
-        "output": str((output / vector_pdf.name).resolve()),
+        "output": None,
         "doi": [],
         "pages": {
             f"page_{index:03d}": {"index": index, "pgn": None} for index in range(1, 4)
@@ -74,14 +73,14 @@ def test_page_selection_and_removal_preserve_vector_content(
     vector_pdf, tmp_path, forbid_scan_processing
 ):
     output = tmp_path / "out"
-    pipeline.process_pdf(
+    pipeline.enhance_pdf(
         vector_pdf,
         output,
-        born_digital_flag=True,
+        pdf_type="born-digital",
         extract_pages_str="2-3",
         skip_pages_str="2",
     )
-    with fitz.open(output / vector_pdf.name) as document:
+    with fitz.open(output / "graphics.prepared.pdf") as document:
         assert len(document) == 1
         assert document[0].get_images() == []
         assert document[0].get_text() == ""
@@ -101,10 +100,7 @@ def test_optional_exports_render_without_changing_pdf(
     monkeypatch.setattr(pipeline, "_process_scanned", unexpected)
     monkeypatch.setattr(pipeline, "run_ocr", unexpected)
     output = tmp_path / "out"
-    pipeline.process_pdf(
-        vector_pdf, output, born_digital_flag=True, dpi=72, **export_options
-    )
-    assert (output / vector_pdf.name).read_bytes() == vector_pdf.read_bytes()
+    pipeline.export_pdf(vector_pdf, output, dpi=72, **export_options)
     assert len(list((output / "_images_graphics").glob("*.png"))) == 3
     if export_options.get("export_thumbs_flag"):
         assert len(list((output / "_thumbs_graphics").glob("*.jpg"))) == 3
@@ -127,21 +123,28 @@ def test_scan_options_are_rejected(
 ):
     output = tmp_path / "out"
     with pytest.raises(ValueError, match="--pdf_type born-digital cannot be combined"):
-        pipeline.process_pdf(vector_pdf, output, born_digital_flag=True, **options)
+        pipeline.enhance_pdf(vector_pdf, output, pdf_type="born-digital", **options)
     assert not output.exists()
 
 
 def test_layout_none_is_allowed(vector_pdf, tmp_path, forbid_scan_processing):
-    pipeline.process_pdf(
-        vector_pdf, tmp_path / "out", born_digital_flag=True, layout="none"
+    pipeline.enhance_pdf(
+        vector_pdf, tmp_path / "out", pdf_type="born-digital", layout="none"
     )
+
+
+def test_legacy_born_digital_flag_maps_to_pdf_type(
+    vector_pdf, tmp_path, forbid_scan_processing
+):
+    result = pipeline.process_pdf(vector_pdf, tmp_path / "out", born_digital_flag=True)
+    assert result.pdf.read_bytes() == vector_pdf.read_bytes()
 
 
 @pytest.mark.parametrize("enabled", [False, True])
 def test_cli_passes_explicit_flag(make_pdf, monkeypatch, enabled):
     received = {}
     monkeypatch.setattr(
-        cli, "process_pdf", lambda *args, **kwargs: received.update(kwargs)
+        cli, "enhance_pdf", lambda *args, **kwargs: received.update(kwargs)
     )
     args = [str(make_pdf(["digital"]))]
     if enabled:
@@ -163,15 +166,19 @@ def test_cli_processes_vector_only_pdf(vector_pdf, tmp_path, forbid_scan_process
             str(output),
             "--pdf_type",
             "born-digital",
-            "--get-text",
-            "--get-doi",
         ],
     )
     assert result.exit_code == 0, result.output
-    assert (output / vector_pdf.name).read_bytes() == vector_pdf.read_bytes()
-    assert json.loads((output / "graphics.meta.json").read_text()) == {
-        "input": str(vector_pdf.resolve()),
-        "output": str((output / vector_pdf.name).resolve()),
+    prepared = output / "graphics.prepared.pdf"
+    assert prepared.read_bytes() == vector_pdf.read_bytes()
+    result = CliRunner().invoke(
+        cli.main,
+        ["export", str(prepared), "--outdir", str(output), "--get-text", "--get-doi"],
+    )
+    assert result.exit_code == 0, result.output
+    assert json.loads((output / "graphics.prepared.meta.json").read_text()) == {
+        "input": str(prepared.resolve()),
+        "output": None,
         "doi": [],
         "pages": {
             f"page_{index:03d}": {"index": index, "pgn": None} for index in range(1, 4)
@@ -201,4 +208,4 @@ def test_help_explains_override():
     result = CliRunner().invoke(cli.main, ["enhance", "--help"])
     assert result.exit_code == 0
     assert "--pdf_type" in result.output
-    assert "Image exports still" in " ".join(result.output.split())
+    assert "skips scan preparation and OCR" in " ".join(result.output.split())

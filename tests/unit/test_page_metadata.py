@@ -4,7 +4,8 @@ import pymupdf as fitz
 import pytest
 
 from pdfwtf.page_metadata import build_page_metadata
-from pdfwtf.pipeline import process_pdf
+from pdfwtf.container_partition import direct_unit_plan, write_json_document
+from pdfwtf.pipeline import enhance_pdf, export_pdf
 
 
 def make_numbered_pdf(path, labels):
@@ -58,34 +59,29 @@ def test_conflicting_candidates_require_neighbor_support(tmp_path):
     assert build_page_metadata(single, [], [])["page_001"]["pgn"] is None
 
 
-@pytest.mark.parametrize("no_pdf", [False, True])
-def test_derivatives_keep_all_input_pages_and_mark_selection(tmp_path, no_pdf):
+def test_derivatives_keep_all_input_pages(tmp_path):
     source = make_numbered_pdf(tmp_path / "input.pdf", ["105", "106", None, "108"])
     original = source.read_bytes()
     output = tmp_path / "out"
-    process_pdf(
+    export_pdf(
         source,
         output,
-        born_digital_flag=True,
-        no_pdf_flag=no_pdf,
         export_json_flag=True,
         export_texts_flag=True,
         export_images_flag=True,
         export_thumbs_flag=True,
-        extract_pages_str="2,4",
-        skip_pages_str="2",
         dpi=72,
     )
     metadata = json.loads((output / "input.meta.json").read_text())
     assert metadata == {
         "input": str(source.resolve()),
-        "output": None if no_pdf else str((output / source.name).resolve()),
+        "output": None,
         "doi": [],
         "pages": {
             "page_001": {"index": 1, "pgn": "105"},
-            "page_002": {"index": 2, "pgn": "106", "skip": True, "keep": True},
+            "page_002": {"index": 2, "pgn": "106"},
             "page_003": {"index": 3, "pgn": None},
-            "page_004": {"index": 4, "pgn": "108", "keep": True},
+            "page_004": {"index": 4, "pgn": "108"},
         },
     }
     for folder, ext in (
@@ -99,26 +95,37 @@ def test_derivatives_keep_all_input_pages_and_mark_selection(tmp_path, no_pdf):
             "page_003",
             "page_004",
         }
-    if no_pdf:
-        assert not (output / source.name).exists()
-    else:
-        with fitz.open(output / source.name) as doc:
-            assert len(doc) == 1
-            assert "108" in doc[0].get_text()
+    assert not list(output.glob("*.pdf"))
     assert source.read_bytes() == original
 
 
-def test_metadata_can_mark_all_pages_skipped_without_pdf(tmp_path):
-    source = make_numbered_pdf(tmp_path / "input.pdf", [None])
+def test_enhancement_selects_pages_and_export_uses_prepared_indices(tmp_path):
+    source = make_numbered_pdf(tmp_path / "input.pdf", ["105", "106", None, "108"])
     output = tmp_path / "out"
-    process_pdf(
+    prepared = enhance_pdf(
         source,
         output,
-        born_digital_flag=True,
-        no_pdf_flag=True,
-        export_json_flag=True,
-        skip_pages_str="1",
-    )
+        pdf_type="born-digital",
+        extract_pages_str="2,4",
+        skip_pages_str="2",
+    ).pdf
+    with fitz.open(prepared) as doc:
+        assert len(doc) == 1
+        assert "108" in doc[0].get_text()
+    export_pdf(prepared, output, export_json_flag=True)
+    metadata = json.loads((output / "input.prepared.meta.json").read_text())
+    assert metadata["pages"] == {"page_001": {"index": 1, "pgn": "108"}}
+
+
+def test_plan_selection_marks_kept_pages(tmp_path):
+    source = make_numbered_pdf(tmp_path / "input.pdf", ["105", "106"])
+    plan = direct_unit_plan(source)
+    plan["pages"][1]["selected"] = False
+    plan_path = tmp_path / "plan.json"
+    write_json_document(plan, plan_path)
+    output = tmp_path / "out"
+    export_pdf(source, output, plan_path=plan_path, export_json_flag=True)
     assert json.loads((output / "input.meta.json").read_text())["pages"] == {
-        "page_001": {"index": 1, "pgn": None, "skip": True}
+        "page_001": {"index": 1, "pgn": "105", "keep": True},
+        "page_002": {"index": 2, "pgn": "106"},
     }

@@ -1,8 +1,8 @@
-# Container analysis and unit export
+# Container partitioning and unit export
 
 ## Purpose and scope
 
-This specification defines born-digital container analysis, reviewed unit plans,
+This specification defines born-digital container partitioning, reviewed unit plans,
 and per-unit HTML export. `specs/PROJECT.md` owns the general processing and
 security rules. This specification owns only the container workflow and its JSON
 contracts.
@@ -16,22 +16,42 @@ review and editing.
 
 Use this sequence:
 
-1. Run `pdfwtf analyze INPUT_PDF` to write machine proposals and evidence.
-2. Review the analysis in the consuming application.
-3. Write a plan with confirmed whole-page boundaries.
-4. Run `--plan PATH` to process selected units.
-5. Add `--get-html` to write one HTML fragment for each selected unit.
+1. Optional: run `pdfwtf enhance INPUT_PDF` to write `<stem>.prepared.pdf`.
+   Use this step when the PDF needs cleanup, page selection, or OCR.
+2. Run `pdfwtf partition PDF` on the PDF that you will export, normally the
+   prepared PDF. This writes machine proposals and evidence.
+3. Review the partition in the consuming application.
+4. Write a plan with confirmed whole-page boundaries.
+5. Run `pdfwtf export PDF --plan PATH` on the same PDF to process selected units.
+6. Add `--get-html` to write one HTML fragment for each selected unit. Add
+   `--get-unit-pdf` to write one PDF for each selected unit.
 
-An analysis proposes units and extracts DOI candidates for each proposed unit.
-It does not generate unit result files. Plan processing never repeats partition
-analysis. `--doc_type unit --get-html` can process the complete PDF without a
+Partitioning is optional. `pdfwtf export PDF --doc_type unit --get-html`
+exports the complete PDF as one unit without a plan. Repeat export as
+necessary. It does not repeat enhancement or partitioning.
+
+A partition proposes units and extracts DOI candidates for each proposed unit.
+It does not generate unit result files. Plan processing never repeats
+partitioning. `--doc_type unit --get-html` can process the complete PDF without a
 plan.
 
 The source PDF is always the required positional argument. `--doc_type`
 describes document structure. It does not describe whether the PDF is scanned.
-The `analyze` and `export` actions use existing PDF text and do not run OCR.
-When `enhance` processes a reviewed plan or exports unit HTML, use
-`--pdf_type born-digital`. Image-only pages have no extracted text in these workflows.
+The `partition` and `export` actions use existing PDF text and do not run OCR.
+Image-only pages have no extracted text in these workflows. To get text from
+scanned pages, enhance the PDF first, then partition and export the prepared PDF.
+
+## Source and plan compatibility
+
+A plan is valid only for the exact PDF that was partitioned. Plan validation
+compares `source.sha256` and `source.page_count` with the exported PDF.
+A mismatch fails with this first error: "The plan was created for a different
+PDF. Partition the PDF that you export, normally the prepared PDF."
+The identity uses file content, not paths. A moved or renamed copy of an
+unchanged PDF is accepted. A new enhancement can change the content and the
+page structure. Partition the new prepared PDF again before export.
+Physical page splitting during enhancement changes the page count. It is
+separate from logical unit partitioning.
 
 The `export` action accepts repeatable `--unit_type TYPE` filters.
 Without a filter, selection is unchanged. Export filters the selected units from
@@ -39,15 +59,15 @@ Without a filter, selection is unchanged. Export filters the selected units from
 or filter page derivatives. A filter requires one of these unit export options.
 If no types match, export writes an empty unit manifest.
 
-Analysis type detection uses title keywords and document-type defaults. These
+Type detection during partitioning uses title keywords and document-type defaults. These
 are proposals for operator review. Journal and magazine units default to
 `article` when no type keyword matches. Book units default to `chapter` when
 no type keyword matches. Operators assign the correct types in
-the reviewed plan before export. The `analyze` action does not filter unit types.
+the reviewed plan before export. The `partition` action does not filter unit types.
 
 ## Common JSON fields
 
-All workflow JSON documents use UTF-8 and `schema_version` value `"1.3"`.
+All workflow JSON documents use UTF-8 and `schema_version` value `"1.4"`.
 Plan validation rejects plans with another version.
 The `source` object has these fields:
 
@@ -99,14 +119,20 @@ page selection. This can duplicate content from another article.
 The plan does not split or crop content within a page.
 A shared page lists every containing unit in `pages[].unit_ids`, in unit order.
 
-## Analysis contract
+## Partition contract
 
-The analysis filename is `<source-stem>.analysis.json`. It has this shape:
+The partition filename is `<source-stem>.partition.json`. Version `"1.4"`
+renamed this document from `<source-stem>.analysis.json` with `kind` value
+`analysis`. Version `"1.4"` does not read files from earlier versions.
+The current `<stem>.analysis.json` is the read-only diagnostic report of
+`pdfwtf analyze`, with `kind` `pdf-analysis`. It is not a partition and
+not a plan. See `specs/ANALYSIS.md`.
+It has this shape:
 
 ```json
 {
-  "schema_version": "1.3",
-  "kind": "analysis",
+  "schema_version": "1.4",
+  "kind": "partition",
   "source": {
     "sha256": "...",
     "page_count": 1,
@@ -197,28 +223,28 @@ section has a title, heading level from 1 through 6, and bounding box. Each
 raster figure has a page-stable ID, bounding box, image metadata, optional
 caption, and optional caption bounding box. `unit_ids` links the page to every
 proposed unit whose range contains it. `warnings` contains page-specific review
-notices. The analysis does not persist full page text, text spans, bookmarks,
+notices. The partition does not persist full page text, text spans, bookmarks,
 or links.
 
-Extracted strings use Unicode compatibility normalization. The analyzer
+Extracted strings use Unicode compatibility normalization. The partitioner
 converts compatibility ligatures and spaces, removes soft hyphens and format
 characters, replaces invalid or private-use characters, and collapses
 whitespace. It preserves valid letters and diacritics.
 
-The analyzer excludes small raster decorations from `figures`. A raster
+The partitioner excludes small raster decorations from `figures`. A raster
 occurrence must cover at least 0.5 percent of the page, have displayed width
 and height of at least 18 PDF points, and have source width and height of at
-least 40 pixels. The analyzer retains the full internal structure only while it
-classifies the document and builds the compact analysis.
+least 40 pixels. The partitioner retains the full internal structure only while it
+classifies the document and builds the compact partition.
 
-The analyzer combines evidence. A heading or DOI alone does not create a unit.
+The partitioner combines evidence. A heading or DOI alone does not create a unit.
 A possible start below the top region of a page is written to
 `suspected_shared_page_boundaries`. It is not converted to a proposed boundary.
 
 Each `units[].doi` value is an array of unverified DOI candidates from that
 unit's proposed page range. The array is empty when no candidate is found. DOI
 identification uses the same candidate rules as `--get-doi`. Unlike
-`--get-doi`, analysis checks all pages in each proposed unit.
+`--get-doi`, partitioning checks all pages in each proposed unit.
 
 ## Reviewed plan contract
 
@@ -226,7 +252,7 @@ A reviewed plan has this shape:
 
 ```json
 {
-  "schema_version": "1.3",
+  "schema_version": "1.4",
   "kind": "plan",
   "source": {
     "sha256": "...",
@@ -284,7 +310,7 @@ It rejects `start_offset`, `end_offset`, `start_bbox`, `end_bbox`, and
 
 The plan contains one reviewed record for each input page. The GUI can correct
 the printed page number, page type, main title, sections, figures, captions,
-warnings, and unit links. The analysis file remains unchanged.
+warnings, and unit links. The partition file remains unchanged.
 
 `pages[].selected` is the authority for page inclusion. At least one page must
 be selected. A generated PDF contains the selected pages in input order. A
@@ -306,7 +332,7 @@ format ending in `Z`. Each export writes a new creation timestamp.
 `manifest.json` has `schema_version`, `kind`, `created`, `source`, `document_type`, and a
 `units` array. Each unit entry repeats its ID, title, type, input range, and
 selected input pages. It links the unit metadata filename and the optional HTML
-filename. Version `"1.3"` adds optional LLM task fields to the manifest: a
+filename. Version `"1.3"` added optional LLM task fields to the manifest: a
 top-level `llm` object and a per-unit `llm_tasks` object. These fields occur only when
 LLM tasks were selected. `specs/PROJECT.md` defines them.
 

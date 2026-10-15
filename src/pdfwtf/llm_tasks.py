@@ -7,8 +7,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable
 
-from .configuration import LLMTaskConfig, AppConfig
-from .container_analysis import write_json_document
+from .configuration import COMMANDS, LLM_STAGES, LLMTaskConfig, AppConfig
+from .container_partition import write_json_document
 
 log = logging.getLogger(__name__)
 
@@ -81,7 +81,12 @@ def validate_task_selection(
     *,
     get_html: bool,
 ) -> tuple[LLMTaskConfig, ...]:
-    """Check explicitly selected tasks before processing starts."""
+    """Check explicitly selected tasks before processing starts.
+
+    A selected task is never ignored. It runs, or the selection is rejected.
+    """
+    if command not in COMMANDS:
+        raise LLMTaskError(f"Unknown command '{command}'.")
     names = tuple(dict.fromkeys(names))
     if not names:
         return ()
@@ -91,7 +96,9 @@ def validate_task_selection(
         task = configured.get(name)
         if task is None:
             raise LLMTaskError(f"Unknown LLM task '{name}'.")
-        if command not in task.commands:
+        if command not in task.commands or command not in LLM_STAGES.get(
+            task.stage, frozenset()
+        ):
             raise LLMTaskError(
                 f"LLM task '{name}' does not support the '{command}' command."
             )

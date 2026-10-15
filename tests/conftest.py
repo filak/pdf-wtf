@@ -11,7 +11,7 @@ LLM_TASKS_INI = """[pdf-wtf]
 LLM_TASKS = {
     "clean_html": {
         "description": {"en": "Clean HTML output", "cs": "Vyčistit HTML výstup"},
-        "commands": ["export", "enhance"],
+        "commands": ["export"],
         "stage": "after_unit_html",
         "template": "wp_html",
         "output": {"suffix": ".clean.html"}

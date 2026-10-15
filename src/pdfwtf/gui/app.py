@@ -13,7 +13,7 @@ from flask_wtf.csrf import CSRFProtect
 
 from pdfwtf import __version__
 from pdfwtf.configuration import load_config
-from pdfwtf.gui.adapter import DemoAnalysisAdapter
+from pdfwtf.gui.adapter import DemoPartitionAdapter
 from pdfwtf.gui.blueprint import create_gui_blueprint
 from pdfwtf.logging_utils import configure_logging
 
@@ -57,13 +57,15 @@ def create_app(overrides: Mapping[str, Any] | None = None) -> Flask:
         )
         return response
 
-    adapter = app.config.get("PDFWTF_GUI_ANALYSIS_ADAPTER")
+    adapter = app.config.get("PDFWTF_GUI_PARTITION_ADAPTER")
     if adapter is None:
-        adapter = DemoAnalysisAdapter(
+        adapter = DemoPartitionAdapter(
             output_dir=Path(app.config["PDFWTF_GUI_OUTPUT_DIR"]), config=shared
         )
-        app.config["PDFWTF_GUI_ANALYSIS_ADAPTER"] = adapter
+        app.config["PDFWTF_GUI_PARTITION_ADAPTER"] = adapter
         app.config.setdefault("PDFWTF_GUI_EXPORT_ADAPTER", adapter)
+        app.config.setdefault("PDFWTF_GUI_PREPARE_ADAPTER", adapter)
+        app.config.setdefault("PDFWTF_GUI_ANALYZE_ADAPTER", adapter)
         atexit.register(adapter.close)
 
     Babel(app, locale_selector=_select_locale)

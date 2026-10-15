@@ -69,5 +69,5 @@ def test_gui_host_logs_requests(configured_home):
         assert "status=200" in text
         assert "hidden-value" not in text
     finally:
-        app.config["PDFWTF_GUI_ANALYSIS_ADAPTER"].close()
+        app.config["PDFWTF_GUI_PARTITION_ADAPTER"].close()
         configure_logging()

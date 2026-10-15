@@ -138,20 +138,28 @@ For the Windows unpaper wrapper, see the
 ## Command-line interface
 
 Select an action before the input PDF: `pdfwtf ACTION INPUT_PDF`.
-Both arguments are required.
+Both arguments are required. Each action is a separate step.
 
-| Action | Result |
-| --- | --- |
-| `enhance` | Process a PDF with optional scan cleanup, OCR, and exports. |
-| `analyze` | Write analysis proposals from existing PDF text without OCR. |
-| `export` | Write selected exports without OCR or a processed PDF. |
+| Action | Responsibility | Output |
+| --- | --- | --- |
+| `analyze` | Diagnose PDF properties and preparation needs. It does not change the PDF. | `<stem>.analysis.json` diagnostic report |
+| `enhance` | Prepare physical pages: scan cleanup, rotation, splitting, page selection, and OCR. | `<stem>.prepared.pdf` and `<stem>.enhance.json` |
+| `partition` | Identify logical units from existing PDF text. It does not run OCR. | `<stem>.partition.json` for review |
+| `export` | Write selected derivatives from the supplied PDF. It does not run cleanup or OCR. | Text, metadata, images, thumbnails, unit HTML, and unit PDFs |
+
+`analyze`, `enhance`, and `partition` are optional. `export` can run alone
+on any PDF. Run `analyze` to find out whether a PDF needs `enhance`.
+Run `enhance` only when the PDF needs cleanup, page selection, or OCR.
+Run `partition` only when you need a reviewed plan with several units.
+No action checks that an earlier action ran.
 
 List the actions and their options:
 
 ```bash
 uv run --locked pdfwtf --help
-uv run --locked pdfwtf enhance --help
 uv run --locked pdfwtf analyze --help
+uv run --locked pdfwtf enhance --help
+uv run --locked pdfwtf partition --help
 uv run --locked pdfwtf export --help
 ```
 
@@ -163,75 +171,124 @@ The CLI does not search the working directory.
 The default output directory is `PDFWTF_HOME/instance/_data/out`.
 Use `--outdir` to select another output directory.
 
-### Process a PDF
+### Analyze a PDF
 
-Process a PDF and export its text:
+Analysis is a read-only diagnostic. It reports page composition, text
+statistics, image coverage, an OCR assessment, and advisory
+recommendations for each page:
 
 ```bash
-uv run --locked pdfwtf enhance input.pdf --outdir output --get-text
+uv run --locked pdfwtf analyze issue.pdf
 ```
+
+The command writes `<stem>.analysis.json` and prints a summary:
+
+```text
+Pages        :  12
+Composition  :  heterogeneous (born_digital=10, scanned=2)
+OCR need     :  likely=2, unlikely=10, uncertain=0
+Advice       :  run_ocr for pages 11-12
+Warnings     :  3
+Report       :  .../instance/_data/out/issue.analysis.json
+```
+
+The classifications are heuristics. Recommendations are advisory.
+The report is not a partition plan.
+The command exits with status 0 when the report is written, also with
+warnings or pages that could not be inspected. It exits with status 1
+for an unreadable, invalid, or password-protected PDF.
+For the report structure and rules, see the
+[analysis specification](specs/ANALYSIS.md).
+
+### Staged workflow
+
+1. Optional: enhance the source PDF once.
+
+   ```bash
+   uv run --locked pdfwtf enhance issue.pdf --outdir /data/out
+   ```
+
+   The result is `/data/out/issue.prepared.pdf`. The source PDF does not change.
+
+2. Optional: partition the prepared PDF, and review the plan.
+
+   ```bash
+   uv run --locked pdfwtf partition /data/out/issue.prepared.pdf --outdir /data/out --doc_type journal-issue
+   ```
+
+   Give the prepared PDF as an absolute path. A relative path starts at the
+   input directory, not at the output directory.
+
+3. Export from the prepared PDF. Repeat this step as necessary.
+
+   ```bash
+   uv run --locked pdfwtf export /data/out/issue.prepared.pdf --outdir /data/out --get-text
+   uv run --locked pdfwtf export /data/out/issue.prepared.pdf --outdir /data/out --plan issue.plan.json --get-html --get-unit-pdf
+   ```
+
+To export without the optional steps, run `export` on the original PDF:
+
+```bash
+uv run --locked pdfwtf export issue.pdf --get-text
+uv run --locked pdfwtf export issue.pdf --doc_type unit --get-html
+```
+
+### Enhance a PDF
 
 Use `--pdf_type auto` for automatic scan detection. This is the default.
 Use `--pdf_type scanned` to force scan preparation and OCR.
 
 If the PDF has existing text, use `--pdf_type born-digital` to bypass scan
-preparation and OCR:
-
-```bash
-uv run --locked pdfwtf enhance input.pdf --pdf_type born-digital --get-text
-```
-
-With `born-digital`, text exports contain only existing extractable text.
+preparation and OCR. The prepared PDF is then a copy of the selected pages.
 Do not combine this PDF type with `--remove-bg`, `--layout single`,
 `--layout double`, `--output-pages`, or `--pre-rotate`.
 
-### Select pages and exports
-
-Use `--extract` to keep input pages in the processed PDF.
+Use `--extract` to keep input pages in the prepared PDF.
 Use `--remove` to remove input pages from that PDF.
 Both options use absolute input page indices starting at 1.
 If a page occurs in both lists, removal takes precedence.
-These options do not filter page exports.
 
 ```bash
 uv run --locked pdfwtf enhance input.pdf --extract 1-5 --remove 2
 ```
 
-Select the required exports:
+The `<stem>.enhance.json` report records the settings, the identity of the
+input and prepared PDFs, and whether scan processing ran.
+
+These former `enhance` options are removed: `--no-pdf-out`, `--plan`,
+`--doc_type`, `--unit_type`, `--get-doi`, `--get-format`, `--get-html`,
+`--get-img`, `--get-meta`, `--get-text`, and `--get-thumb`.
+If you use one of them, `enhance` stops and names the action that owns it.
+Physical page splitting (`--output-pages`) is an enhancement. Logical units
+are a partition and export concept.
+
+### Export a PDF
+
+Export uses the supplied PDF as it is. It renders page images and thumbnails
+and can extract unit PDFs. It does not create text from scanned images.
+To export text from a scan, enhance it first, then export the prepared PDF.
 
 | Option | Output |
 | --- | --- |
-| `--get-doi` | DOI candidates from the first derivative page and JSON metadata |
+| `--get-doi` | DOI candidates and JSON metadata |
 | `--get-format` | Page image format. The only supported format is PNG. |
-| `--get-html` | UTF-8 HTML fragments for selected units. |
+| `--get-html` | UTF-8 HTML fragments for selected units |
 | `--get-img` | PNG page images |
 | `--get-meta` | JSON metadata |
 | `--get-text` | Per-page text and combined text |
 | `--get-thumb` | Page images and JPEG thumbnails |
+| `--get-unit-pdf` | One PDF for each selected unit. Requires `--plan`. |
 
 DOI candidates are not externally verified.
 If you also need text files, use `--get-text`.
 
-To export existing PDF content without OCR, use `export`:
-
-```bash
-uv run --locked pdfwtf export input.pdf --get-text
-uv run --locked pdfwtf export input.pdf --get-meta --get-img --get-thumb
-```
-
-For OCR before export without a final PDF, use `enhance --no-pdf-out`:
-
-```bash
-uv run --locked pdfwtf enhance input.pdf --no-pdf-out --get-text
-```
-
-### Analyze and export units
+### Partition and export units
 
 The container workflow uses existing PDF text and whole-page unit boundaries.
-Write analysis proposals:
+Write partition proposals:
 
 ```bash
-uv run --locked pdfwtf analyze issue.pdf --doc_type journal-issue
+uv run --locked pdfwtf partition /data/out/issue.prepared.pdf --doc_type journal-issue
 ```
 
 Review the proposals in a consuming application, such as the demo GUI.
@@ -239,23 +296,34 @@ Save the confirmed page ranges, unit types, and selections in a separate plan.
 Export the reviewed units as metadata and HTML:
 
 ```bash
-uv run --locked pdfwtf export issue.pdf --plan issue.plan.json --get-html
+uv run --locked pdfwtf export /data/out/issue.prepared.pdf --plan issue.plan.json --get-html
 ```
+
+A plan is valid only for the exact PDF that you partitioned. Export compares
+the SHA-256 hash and page count of the PDF with the plan. If they differ,
+export stops with this message: "The plan was created for a different PDF."
+A moved or renamed copy of the same PDF is accepted.
+If you enhance the PDF again, partition the new prepared PDF again.
 
 To select specific reviewed unit types, add `--unit_type`:
 
 ```bash
-uv run --locked pdfwtf export issue.pdf --plan issue.plan.json --get-html --unit_type article
+uv run --locked pdfwtf export /data/out/issue.prepared.pdf --plan issue.plan.json --get-html --unit_type article
 ```
 
 Repeat `--unit_type` to select several types.
-For schemas, output filenames, and analysis limits, see the
-[container analysis specification](specs/CONTAINER_ANALYSIS.md).
+For schemas, output filenames, and partitioning limits, see the
+[container partitioning specification](specs/CONTAINER_PARTITION.md).
 
 ### LLM tasks
 
 LLM tasks are optional. They send unit HTML to Gemini. Ordinary processing
 does not need an API key.
+
+All actions, including `analyze`, accept `--llm-task` and
+`--list-llm-tasks`. Export is currently
+the only action with an implemented LLM stage. If you select a task that
+an action cannot run, the action stops before processing starts.
 
 `gemini-call` reads `GEMINI_API_KEY` only from the operating-system
 environment. It does not read `.env`. If the key is only in
@@ -278,7 +346,7 @@ uv run --locked pdfwtf export --list-llm-tasks
 Run a task with `--llm-task`. The `clean_html` task requires `--get-html`:
 
 ```bash
-uv run --locked pdfwtf export issue.pdf --plan issue.plan.json --get-html --llm-task clean_html
+uv run --locked pdfwtf export /data/out/issue.prepared.pdf --plan issue.plan.json --get-html --llm-task clean_html
 ```
 
 Repeat `--llm-task` to select several tasks. The task writes
@@ -291,26 +359,56 @@ In the demo GUI, select LLM tasks in the Export modal.
 For task configuration, see the
 [configuration specification](specs/CONFIGURATION.md).
 
+### Migration from the combined `enhance` action
+
+- Move export options from `enhance` to `export`: `--get-*`, `--plan`,
+  `--doc_type`, and `--unit_type`. Run `export` on the prepared PDF.
+- Remove `--no-pdf-out`. Enhancement always writes the prepared PDF. Use
+  `export` when you need derivatives without a PDF.
+- Expect `<stem>.prepared.pdf` instead of `<stem>.pdf` from `enhance`.
+- Export metadata now has `"output": null`. Page `skip` flags are no longer
+  written, and `keep` flags come only from a reviewed plan.
+- Change `"commands": ["export", "enhance"]` to `"commands": ["export"]` in
+  `LLM_TASKS`. The earlier value now stops configuration loading.
+- Partition the PDF that you export. A plan for the original PDF does not fit
+  a prepared PDF with changed content or page structure.
+- Python callers: use `enhance_pdf`, `partition_pdf`, or `export_pdf`.
+  `process_pdf` remains as a dispatcher and rejects misplaced options.
+- GUI hosts: rename nothing. Optionally set `PDFWTF_GUI_PREPARE_ADAPTER`.
+  `start_export` can receive `plan=None`. See the
+  [GUI host configuration](specs/CONFIGURATION.md#gui-host-configuration).
+
 ## Demo GUI
 
-PDF-WTF-GUI demonstrates PDF review and unit export.
+PDF-WTF-GUI demonstrates PDF preparation, review, and unit export.
 Run the demo in Docker with Docker Desktop or Docker Engine and Docker Compose.
 
 Open http://127.0.0.1:5001 in a browser.
 
 1. Upload a PDF.
-2. Select the document type in the file row.
-3. Select Analyze.
-4. Select Review to confirm unit titles, types, ranges, and inclusion.
-5. Save the plan.
-6. Select Export.
-7. Download the results.
+   Optional: select Analyze to diagnose the PDF. After the analysis,
+   select Analyze again to see the report summary, download the report,
+   or run the analysis again.
+2. Optional: for a scanned PDF, open Prepare PDF in the file row, and
+   select Prepare.
+   The prepared PDF then becomes the active PDF.
+3. Optional: select the document type, and select Partition.
+4. Optional: select Review to confirm unit titles, types, ranges, and
+   inclusion. Save the plan.
+5. Select Export. Without a saved plan, export uses the whole active PDF as
+   one unit.
+6. Download the results.
 
-Upload does not start analysis.
-Analysis and export use existing PDF text without OCR.
+After preparation, the file row shows "Active: prepared PDF". A row without
+this badge uses the original PDF.
+Preview, partitioning, review, and export use the active PDF.
+Preparation always starts from the original PDF. After preparation, the GUI
+deletes the saved partition, plan, and export archive of the earlier active PDF.
+Upload does not start preparation or partitioning.
+Partitioning and export do not run OCR.
 
-The standalone host uses the GUI demo adapter for analysis and export.
-This adapter is not a production queue.
+The standalone host uses the GUI demo adapter for preparation, partitioning,
+and export. This adapter is not a production queue.
 For host integration, see the
 [GUI host configuration](specs/CONFIGURATION.md#gui-host-configuration).
 
@@ -331,7 +429,8 @@ For status checks, logs, and development commands, see the
 
 - [Project](specs/PROJECT.md): scope, components, processing rules, and development commands.
 - [Configuration](specs/CONFIGURATION.md): environment setup, paths, and host integration.
-- [Container analysis](specs/CONTAINER_ANALYSIS.md): reviewed plans, schemas, and unit results.
+- [Container partitioning](specs/CONTAINER_PARTITION.md): reviewed plans, schemas, and unit results.
+- [Analysis](specs/ANALYSIS.md): the diagnostic report, classification rules, and limitations.
 
 ## Application log files
 

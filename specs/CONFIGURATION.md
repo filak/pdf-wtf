@@ -146,7 +146,7 @@ must have exactly these keys:
 LLM_TASKS = {
     "clean_html": {
         "description": {"en": "Clean HTML output", "cs": "Vyčistit HTML výstup"},
-        "commands": ["export", "enhance"],
+        "commands": ["export"],
         "stage": "after_unit_html",
         "template": "wp_html",
         "output": {"suffix": ".clean.html"}
@@ -158,7 +158,10 @@ LLM_TASKS = {
 - `stage` must be a stage defined in code. The only stage is
   `after_unit_html`.
 - `commands` is a non-empty list of unique actions that the stage supports.
-  `after_unit_html` supports `export` and `enhance`.
+  `after_unit_html` supports only `export`. Export is currently the only
+  implemented LLM stage. `enhance` and `partition` accept `--llm-task`, but
+  no task can run for them yet. A configuration that lists `enhance` for
+  `after_unit_html` is invalid. Change it to `["export"]`.
 - `template` names a module in `src/pdfwtf/templates/llm/`. The module must
   define non-empty `prompt` and `system` strings.
 - `output` contains only `suffix`. The suffix uses lowercase letters, digits,
@@ -201,38 +204,70 @@ directory in `instance/_data/in/<job-id>`. It does not use the configured
 `input_dir`. It stores the corresponding approved plan under the configured
 `output_dir` in `<job-id>/approved.plan.json`. The host creates these
 directories when required. Both directories are outside static assets.
-The standalone demo adapter stores the completed machine analysis at
-`<output_dir>/<job-id>/source.analysis.json`. It publishes this file before
+The standalone demo adapter stores the completed machine partition at
+`<output_dir>/<job-id>/source.partition.json`. It publishes this file before
 reporting the job as complete. A write failure causes the job to fail.
+An optional prepared PDF is stored next to the upload as
+`instance/_data/in/<job-id>/prepared.pdf`, and its enhancement report as
+`<output_dir>/<job-id>/enhance.json`.
 
 The reusable blueprint reads only settings in the `PDFWTF_GUI_*` namespace.
-`PDFWTF_GUI_ANALYSIS_ADAPTER` supplies the start, status, result, and controlled
-document operations. `PDFWTF_GUI_ACCESS_CHECK` is an optional callable for host
+`PDFWTF_GUI_PARTITION_ADAPTER` supplies the start, status, result, and controlled
+document operations. `start(job_id, source, document_type, *, llm_tasks=())`
+receives the active PDF. The blueprint resolves the active PDF itself and
+does not use `document_path` for routing. `PDFWTF_GUI_ACCESS_CHECK` is an optional callable for host
 access control. `PDFWTF_GUI_BASE_TEMPLATE` selects the host layout integration
 point. `PDFWTF_GUI_INPUT_DIR` and `PDFWTF_GUI_OUTPUT_DIR` supply the host's
 resolved input and output directories to the blueprint. They are Flask
 integration settings, not environment overrides.
 
+`PDFWTF_GUI_PREPARE_ADAPTER` is optional. It supplies
+`start_prepare(job_id, source, destination, *, options, llm_tasks=())` and
+`prepare_status(job_id)`. `options` contains `pdf_type`, `languages`, and
+`remove_background_flag`. The adapter must publish `destination` atomically,
+raise `LookupError` while another operation for the job is active, and raise
+`ValueError` when the selected LLM tasks cannot run. `prepare_status` raises
+`KeyError` for an unknown job. Without this setting, the GUI hides the
+preparation controls and returns HTTP 503 for the preparation endpoint.
+The access callback uses `prepare` and `prepare_status` actions.
+
+`PDFWTF_GUI_ANALYZE_ADAPTER` is optional. It supplies
+`start_analysis(job_id, source, *, llm_tasks=())` and
+`analysis_status(job_id)`. `source` is the active PDF. The adapter must
+publish the report at `<output_dir>/<job-id>/analysis.json` atomically,
+raise `LookupError` while preparation is active, and raise `ValueError`
+when the selected LLM tasks cannot run. `analysis_status` raises
+`KeyError` for an unknown job. Without this setting, the GUI hides the
+Analyze button and returns HTTP 503 for the analysis endpoint. The access
+callback uses `analyze`, `analyze_status`, `analysis_summary`, and
+`download_analysis_report` actions. The former
+`PDFWTF_GUI_ANALYSIS_ADAPTER` key named the partition adapter. It is not
+read. Use `PDFWTF_GUI_PARTITION_ADAPTER` for partitioning.
+
 The standalone host owns the secret key, Flask-Babel, CSRF protection, upload
-limit, and the demo analysis adapter. The integrating apps must use its existing host extensions
+limit, and the demo adapter for analysis, preparation, partitioning, and
+export. The integrating apps must use its existing host extensions
 and must supply its production access-control and processing integration. The
 blueprint does not initialize global Flask extensions.
 
 `PDFWTF_GUI_EXPORT_ADAPTER` supplies `start_export`, `export_status`, and
-`export_path` operations. The standalone host uses its demo adapter for both
-analysis and export. A host that supplies a custom analysis adapter must also
+`export_path` operations. The standalone host uses its demo adapter for
+preparation, partitioning, and export. A host that supplies a custom partition adapter must also
 supply an export adapter to enable export processing. The access callback uses
 `export`, `export_status`, and `download_export` actions for these operations.
 Export endpoints require a valid source path within the configured input
-directory. Export start also requires a saved plan within the output directory
-and CSRF protection. Export download paths must remain within the output
+directory. Export start requires CSRF protection. The `plan` argument of
+`start_export` is the saved plan, or `None` when no plan is saved. With
+`None`, the adapter exports the whole active PDF as one unit. A saved plan
+for another PDF returns HTTP 409 before the adapter is called. Export download paths must remain within the output
 directory.
 
 The demo adapter snapshots the saved plan and validates it in the processing
 worker before writing results. Plan saving and plan deletion return HTTP 409
 while export is queued or running. Plan read, save, download, and delete paths
 must remain within the configured output directory.
-The demo adapter runs the existing born-digital pipeline.
+The demo adapter runs the shared export operation on the active PDF. It
+does not run cleanup or OCR.
 Each export uses an isolated results directory. It publishes
 `<output_dir>/<job-id>/export.zip` after processing and ZIP creation succeed.
 The archive contains unit results. With `no-pdf-out` off, it also contains
@@ -241,8 +276,8 @@ Unit results use the `_units` directory inside the GUI ZIP. The manifest
 links each unit PDF with a `pdf` field. It always includes the complete
 `upload.json` object under `upload`, immediately after `kind`. Missing or
 invalid upload metadata causes export to fail. The archive excludes a
-combined document PDF. The GUI-only `include-source` switch adds the original
-uploaded `source.pdf` at the ZIP root. It defaults to off and is independent
+combined document PDF. The GUI-only `include-source` switch adds the active
+PDF at the ZIP root, as `source.pdf` or `prepared.pdf`. It defaults to off and is independent
 of `no-pdf-out`. The export adapter accepts `include_source=False` as an
 optional keyword argument.
 A successful rerun replaces this archive. Temporary export files are removed
@@ -257,9 +292,10 @@ Set both values on the first save or when saving an older plan without
 `created`. Document-type updates preserve the upload `created` value.
 
 The GUI-only `debug` export option defaults to off. When enabled, the adapter
-copies `approved.plan.json` and `source.analysis.json` to the ZIP root.
-Copy the saved files without changing their bytes. Export fails if either
-file is missing or escapes the job directory. The adapter accepts
+copies `approved.plan.json` and `source.partition.json` to the ZIP root.
+Copy the saved files without changing their bytes. With a saved plan, export
+fails if either file is missing or escapes the job directory. Without a
+saved plan, the ZIP contains only the generated one-unit plan. The adapter accepts
 `debug=False` as an optional keyword argument. This option is independent
 of the other export switches and does not enable diagnostic logging.
 
@@ -276,9 +312,12 @@ configuration. The export adapter accepts `llm_tasks=()` as an optional keyword
 argument. It raises `ValueError` when the selection cannot run, and the
 blueprint then returns HTTP 400. The export start request accepts
 `llm_tasks` as a JSON list of task names. An adapter can provide an optional
-`llm_tasks()` operation that returns the selectable tasks. Without it, the
-Export modal shows no LLM tasks. The demo adapter passes the configuration,
-the selected task names, and the `export` action to the shared pipeline. When
+`llm_tasks(command="export")` operation that returns the selectable tasks for
+one operation. An older `llm_tasks()` operation without an argument is used
+for export only. Without it, the Export modal shows no LLM tasks. The demo
+adapter passes the configuration and the selected task names to the shared
+export operation. Preparation and partitioning adapters also accept
+`llm_tasks=()` and validate it with their own action name before scheduling. When
 a task fails, export status is `complete` and includes a localized `warning`.
 
 ## Application log files

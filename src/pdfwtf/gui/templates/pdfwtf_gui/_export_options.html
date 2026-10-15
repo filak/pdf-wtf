@@ -22,7 +22,7 @@
         <div class="form-check form-switch mt-2">
           <input id="export-include-source" name="include_source" class="form-check-input" type="checkbox" role="switch" aria-describedby="export-source-help">
           <label class="form-check-label" for="export-include-source">include-source</label>
-          <div id="export-source-help" class="form-text">{{ _('Include the original source PDF in the ZIP.') }}</div>
+          <div id="export-source-help" class="form-text">{{ _('Include the active PDF in the ZIP.') }}</div>
         </div>
         <div class="form-check form-switch mt-2">
           <input id="export-no-pdf-out" name="no_pdf_out" class="form-check-input" type="checkbox" role="switch" aria-describedby="export-no-pdf-help">
@@ -32,7 +32,7 @@
         <div class="form-check form-switch mt-2">
           <input id="export-debug" name="debug" class="form-check-input" type="checkbox" role="switch" aria-describedby="export-debug-help">
           <label class="form-check-label" for="export-debug">debug</label>
-          <div id="export-debug-help" class="form-text">{{ _('Include the saved plan and analysis JSON in the ZIP.') }}</div>
+          <div id="export-debug-help" class="form-text">{{ _('Include the saved plan and partition JSON in the ZIP.') }}</div>
         </div>
         {% if llm_tasks %}
         <fieldset id="export-llm-tasks" class="mt-3" aria-describedby="export-llm-help">

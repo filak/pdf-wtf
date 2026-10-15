@@ -5,9 +5,9 @@
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: pdfwtf 0.1.4\n"
+"Project-Id-Version: pdfwtf 0.1.6\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-14 14:57+0200\n"
+"POT-Creation-Date: 2026-10-15 12:56+0200\n"
 "PO-Revision-Date: 2026-10-10 18:28+0200\n"
 "Last-Translator: PDF-WTF contributors\n"
 "Language: cs\n"
@@ -18,161 +18,338 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: src/pdfwtf/gui/blueprint.py:99
+#: src/pdfwtf/gui/blueprint.py:113
 msgid "Select a valid PDF type."
 msgstr "Vyberte platný typ PDF."
 
-#: src/pdfwtf/gui/blueprint.py:119
+#: src/pdfwtf/gui/blueprint.py:133
 msgid "Select a valid PDF document."
 msgstr "Vyberte platný dokument PDF."
 
-#: src/pdfwtf/gui/blueprint.py:143
+#: src/pdfwtf/gui/blueprint.py:157
 msgid "Upload could not be saved. Try again."
 msgstr "Soubor se nepodařilo uložit. Zkuste to znovu."
 
-#: src/pdfwtf/gui/blueprint.py:157 src/pdfwtf/gui/blueprint.py:206
-#: src/pdfwtf/gui/blueprint.py:408 src/pdfwtf/gui/blueprint.py:412
-#: src/pdfwtf/gui/blueprint.py:480 src/pdfwtf/gui/blueprint.py:525
+#: src/pdfwtf/gui/blueprint.py:180 src/pdfwtf/gui/blueprint.py:240
+#: src/pdfwtf/gui/blueprint.py:428 src/pdfwtf/gui/blueprint.py:477
+#: src/pdfwtf/gui/blueprint.py:481 src/pdfwtf/gui/blueprint.py:556
+#: src/pdfwtf/gui/blueprint.py:601 src/pdfwtf/gui/blueprint.py:667
+#: src/pdfwtf/gui/blueprint.py:689 src/pdfwtf/gui/blueprint.py:742
+#: src/pdfwtf/gui/blueprint.py:753
 msgid "Wait for the active operation to finish."
 msgstr "Počkejte na dokončení probíhající operace."
 
-#: src/pdfwtf/gui/blueprint.py:165
-msgid "Wait for analysis to finish before deleting the file."
-msgstr "Před smazáním souboru počkejte na dokončení analýzy."
+#: src/pdfwtf/gui/blueprint.py:189
+msgid "Wait for partitioning to finish before deleting the file."
+msgstr "Před smazáním souboru počkejte na dokončení rozdělení."
 
-#: src/pdfwtf/gui/blueprint.py:194
+#: src/pdfwtf/gui/blueprint.py:228
 msgid "The file could not be deleted. Try again."
 msgstr "Soubor se nepodařilo smazat. Zkuste to znovu."
 
-#: src/pdfwtf/gui/blueprint.py:218
+#: src/pdfwtf/gui/blueprint.py:252
 msgid "Select a valid document type."
 msgstr "Vyberte platný typ dokumentu."
 
-#: src/pdfwtf/gui/blueprint.py:235
-msgid "Analysis could not start. Try again."
-msgstr "Analýzu se nepodařilo spustit. Zkuste to znovu."
+#: src/pdfwtf/gui/blueprint.py:270
+msgid "Partitioning could not start. Try again."
+msgstr "Rozdělení se nepodařilo spustit. Zkuste to znovu."
 
-#: src/pdfwtf/gui/blueprint.py:253
-msgid "Analysis failed. Upload the document again or contact support."
-msgstr "Analýza selhala. Nahrajte dokument znovu nebo kontaktujte podporu."
+#: src/pdfwtf/gui/blueprint.py:288
+msgid "Partitioning failed. Upload the document again or contact support."
+msgstr "Rozdělení selhalo. Nahrajte dokument znovu nebo kontaktujte podporu."
 
-#: src/pdfwtf/gui/blueprint.py:330
+#: src/pdfwtf/gui/blueprint.py:371
 msgid "Preface"
 msgstr "Předmluva"
 
-#: src/pdfwtf/gui/blueprint.py:331
+#: src/pdfwtf/gui/blueprint.py:372
 msgid "Editorial"
 msgstr "Úvodník"
 
-#: src/pdfwtf/gui/blueprint.py:332
+#: src/pdfwtf/gui/blueprint.py:373
 msgid "Table of contents"
 msgstr "Obsah"
 
-#: src/pdfwtf/gui/blueprint.py:333
+#: src/pdfwtf/gui/blueprint.py:374
 msgid "Programme"
 msgstr "Program"
 
-#: src/pdfwtf/gui/blueprint.py:334
+#: src/pdfwtf/gui/blueprint.py:375
 msgid "Article"
 msgstr "Článek"
 
-#: src/pdfwtf/gui/blueprint.py:335
+#: src/pdfwtf/gui/blueprint.py:376
 msgid "Chapter"
 msgstr "Kapitola"
 
-#: src/pdfwtf/gui/blueprint.py:336
+#: src/pdfwtf/gui/blueprint.py:377
 msgid "Abstract"
 msgstr "Abstrakt"
 
-#: src/pdfwtf/gui/blueprint.py:337
+#: src/pdfwtf/gui/blueprint.py:378
 msgid "Poster"
 msgstr "Poster"
 
-#: src/pdfwtf/gui/blueprint.py:338
+#: src/pdfwtf/gui/blueprint.py:379
 msgid "Book review"
 msgstr "Recenze knihy"
 
-#: src/pdfwtf/gui/blueprint.py:339
+#: src/pdfwtf/gui/blueprint.py:380
 msgid "Full-page advertisement"
 msgstr "Celostránková inzerce"
 
-#: src/pdfwtf/gui/blueprint.py:340
+#: src/pdfwtf/gui/blueprint.py:381
 msgid "Cover"
 msgstr "Obálka"
 
-#: src/pdfwtf/gui/blueprint.py:341
+#: src/pdfwtf/gui/blueprint.py:382
 #: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:25
 msgid "Unknown"
 msgstr "Neznámý typ"
 
-#: src/pdfwtf/gui/blueprint.py:379 src/pdfwtf/gui/blueprint.py:386
+#: src/pdfwtf/gui/blueprint.py:431 src/pdfwtf/gui/blueprint.py:440
 msgid "Select valid export options."
 msgstr "Vyberte platné možnosti exportu."
 
-#: src/pdfwtf/gui/blueprint.py:390 src/pdfwtf/gui/blueprint.py:415
+#: src/pdfwtf/gui/blueprint.py:444 src/pdfwtf/gui/blueprint.py:484
 msgid "Select valid LLM tasks."
 msgstr "Vyberte platné úlohy LLM."
 
-#: src/pdfwtf/gui/blueprint.py:398
+#: src/pdfwtf/gui/blueprint.py:455
 msgid "The saved plan could not be read."
 msgstr "Uložený plán nelze načíst."
 
-#: src/pdfwtf/gui/blueprint.py:418
+#: src/pdfwtf/gui/blueprint.py:462
+msgid ""
+"The saved plan does not match the active PDF. Partition the document "
+"again."
+msgstr "Uložený plán neodpovídá aktivnímu PDF. Rozdělte dokument znovu."
+
+#: src/pdfwtf/gui/blueprint.py:487
 msgid "Export could not start. Try again."
 msgstr "Export se nepodařilo spustit. Zkuste to znovu."
 
-#: src/pdfwtf/gui/blueprint.py:442
+#: src/pdfwtf/gui/blueprint.py:511
 msgid "Export finished, but LLM processing is incomplete. See manifest.json."
 msgstr "Export je dokončen, ale zpracování LLM není úplné. Viz manifest.json."
 
-#: src/pdfwtf/gui/blueprint.py
+#: src/pdfwtf/gui/blueprint.py:518
 #, python-format
 msgid "%(count)s more errors. See manifest.json."
 msgstr "Další chyby: %(count)s. Viz manifest.json."
 
-#: src/pdfwtf/gui/blueprint.py:446
+#: src/pdfwtf/gui/blueprint.py:522
 msgid "Export failed. Check the host logs."
 msgstr "Export selhal. Zkontrolujte protokoly hostitele."
 
-#: src/pdfwtf/gui/blueprint.py:483
+#: src/pdfwtf/gui/blueprint.py:559
 msgid "The plan must be a JSON object."
 msgstr "Plán musí být objekt JSON."
 
-#: src/pdfwtf/gui/blueprint.py:490
+#: src/pdfwtf/gui/blueprint.py:566
 msgid "The plan is not valid."
 msgstr "Plán není platný."
 
-#: src/pdfwtf/gui/blueprint.py:516
+#: src/pdfwtf/gui/blueprint.py:592
 msgid "The approved plan was saved."
 msgstr "Schválený plán byl uložen."
 
-#: src/pdfwtf/gui/blueprint.py:534
+#: src/pdfwtf/gui/blueprint.py:610
 msgid "The plan was deleted."
 msgstr "Plán byl smazán."
 
-#: src/pdfwtf/gui/blueprint.py:562
+#: src/pdfwtf/gui/blueprint.py:648
+msgid "Select valid preparation options."
+msgstr "Vyberte platné možnosti přípravy."
+
+#: src/pdfwtf/gui/blueprint.py:698
+msgid "Preparation could not start. Try again."
+msgstr "Přípravu se nepodařilo spustit. Zkuste to znovu."
+
+#: src/pdfwtf/gui/blueprint.py:718
+msgid "Preparation failed. Check the host logs."
+msgstr "Příprava selhala. Zkontrolujte protokoly hostitele."
+
+#: src/pdfwtf/gui/blueprint.py:762
+msgid "Analysis could not start. Try again."
+msgstr "Analýzu se nepodařilo spustit. Zkuste to znovu."
+
+#: src/pdfwtf/gui/blueprint.py:782
+msgid "Analysis failed. Check the host logs."
+msgstr "Analýza selhala. Zkontrolujte protokoly hostitele."
+
+#: src/pdfwtf/gui/blueprint.py:845
 msgid "The PDF is larger than the configured upload limit."
 msgstr "Soubor PDF je větší než nastavený limit pro nahrávání."
 
-#: src/pdfwtf/gui/blueprint.py:748
+#: src/pdfwtf/gui/blueprint.py:942
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_uploads.html:12
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_uploads.html:55
+#: src/pdfwtf/gui/templates/pdfwtf_gui/input.html:31
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:15
+msgid "Born-digital"
+msgstr "Digitálně vytvořené"
+
+#: src/pdfwtf/gui/blueprint.py:943
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_uploads.html:10
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_uploads.html:54
+#: src/pdfwtf/gui/templates/pdfwtf_gui/input.html:32
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:13
+msgid "Scanned"
+msgstr "Naskenované"
+
+#: src/pdfwtf/gui/blueprint.py:944
+msgid "Mixed content"
+msgstr "Smíšený obsah"
+
+#: src/pdfwtf/gui/blueprint.py:945
+msgid "Blank"
+msgstr "Prázdná"
+
+#: src/pdfwtf/gui/blueprint.py:946
+msgid "Uncertain"
+msgstr "Nejisté"
+
+#: src/pdfwtf/gui/blueprint.py:947
+msgid "Different page types"
+msgstr "Různé typy stránek"
+
+#: src/pdfwtf/gui/blueprint.py:950
+msgid "OCR likely needed"
+msgstr "OCR pravděpodobně potřeba"
+
+#: src/pdfwtf/gui/blueprint.py:951
+msgid "OCR unlikely needed"
+msgstr "OCR pravděpodobně není potřeba"
+
+#: src/pdfwtf/gui/blueprint.py:952
+msgid "OCR need uncertain"
+msgstr "Potřeba OCR nejistá"
+
+#: src/pdfwtf/gui/blueprint.py:955
+msgid "Run OCR"
+msgstr "Spustit OCR"
+
+#: src/pdfwtf/gui/blueprint.py:956
+msgid "Review text quality"
+msgstr "Zkontrolovat kvalitu textu"
+
+#: src/pdfwtf/gui/blueprint.py:957
+msgid "Check page content"
+msgstr "Zkontrolovat obsah stránek"
+
+#: src/pdfwtf/gui/blueprint.py:958
+msgid "Review blank pages"
+msgstr "Zkontrolovat prázdné stránky"
+
+#: src/pdfwtf/gui/blueprint.py:1163
 msgid "Select a PDF document."
 msgstr "Vyberte dokument PDF."
 
-#: src/pdfwtf/gui/blueprint.py:750
+#: src/pdfwtf/gui/blueprint.py:1165
 msgid "The selected file must have a .pdf extension."
 msgstr "Vybraný soubor musí mít příponu .pdf."
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/_analysis_actions.html:3
-#: src/pdfwtf/gui/templates/pdfwtf_gui/_job_complete.html:4
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:2
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:10
-msgid "Review"
-msgstr "Zkontrolovat"
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_analysis_complete.html:2
+msgid "Analysis is complete. Select Analyze to show the report."
+msgstr "Analýza je dokončena. Zprávu zobrazíte tlačítkem Analyzovat."
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/_analysis_actions.html:9
-#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:53
-msgid "Export"
-msgstr "Exportovat"
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_analysis_modal.html:6
+msgid "Loading the analysis report…"
+msgstr "Načítá se zpráva analýzy…"
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_analysis_status.html:10
+msgid "Analyzing the PDF…"
+msgstr "Probíhá analýza PDF…"
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_analysis_status.html:12
+msgid "Waiting for analysis…"
+msgstr "Čeká se na analýzu…"
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_analysis_summary.html:2
+msgid "PDF analysis"
+msgstr "Analýza PDF"
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_analysis_summary.html:3
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_analysis_summary.html:56
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:8
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:52
+msgid "Close"
+msgstr "Zavřít"
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_analysis_summary.html:7
+msgid "Analyzed PDF: prepared PDF"
+msgstr "Analyzované PDF: připravené PDF"
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_analysis_summary.html:7
+msgid "Analyzed PDF: original PDF"
+msgstr "Analyzované PDF: původní PDF"
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_analysis_summary.html:12
+#, python-format
+msgid "Some pages could not be inspected: %(pages)s"
+msgstr "Některé stránky nebylo možné zkontrolovat: %(pages)s"
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_analysis_summary.html:16
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:81
+msgid "Pages"
+msgstr "Strany"
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_analysis_summary.html:17
+msgid "Document composition"
+msgstr "Složení dokumentu"
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_analysis_summary.html:23
+msgid "Pages by composition"
+msgstr "Stránky podle složení"
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_analysis_summary.html:33
+msgid "Pages by OCR need"
+msgstr "Stránky podle potřeby OCR"
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_analysis_summary.html:42
+msgid "Recommendations"
+msgstr "Doporučení"
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_analysis_summary.html:46
+#, python-format
+msgid "pages %(pages)s"
+msgstr "stránky %(pages)s"
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_analysis_summary.html:50
+msgid "No recommendations."
+msgstr "Žádná doporučení."
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_analysis_summary.html:52
+msgid "Recommendations are advisory. The classifications are heuristics."
+msgstr "Doporučení jsou pouze informativní. Klasifikace je heuristická."
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_analysis_summary.html:53
+#, python-format
+msgid "Warnings: %(count)s. See the report for details."
+msgstr "Upozornění: %(count)s. Podrobnosti jsou ve zprávě."
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_analysis_summary.html:57
+msgid "Download report"
+msgstr "Stáhnout zprávu"
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_analysis_summary.html:63
+msgid "Run again"
+msgstr "Spustit znovu"
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_analyze_button.html:7
+msgid "Show the analysis report."
+msgstr "Zobrazit zprávu analýzy."
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_analyze_button.html:7
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_analyze_button.html:12
+msgid "Analyze"
+msgstr "Analyzovat"
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_analyze_button.html:12
+msgid "Diagnose the PDF without changing it."
+msgstr "Diagnostikovat PDF bez jeho změny."
 
 #: src/pdfwtf/gui/templates/pdfwtf_gui/_delete_confirmation.html:5
 msgid "Confirm deletion"
@@ -183,7 +360,7 @@ msgid "Cancel"
 msgstr "Zrušit"
 
 #: src/pdfwtf/gui/templates/pdfwtf_gui/_delete_confirmation.html:10
-#: src/pdfwtf/gui/templates/pdfwtf_gui/_uploads.html:20
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_uploads.html:26
 msgid "Delete"
 msgstr "Smazat"
 
@@ -237,11 +414,6 @@ msgstr "Stáhnout export"
 msgid "Export options"
 msgstr "Možnosti exportu"
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:8
-#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:52
-msgid "Close"
-msgstr "Zavřít"
-
 #: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:15
 msgid "Write HTML for included units."
 msgstr "Vytvořit HTML pro zahrnuté jednotky."
@@ -251,16 +423,16 @@ msgid "Include unit metadata JSON files in the ZIP."
 msgstr "Přidat soubory metadat jednotek ve formátu JSON do ZIPu."
 
 #: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:25
-msgid "Include the original source PDF in the ZIP."
-msgstr "Přidat původní zdrojové PDF do ZIPu."
+msgid "Include the active PDF in the ZIP."
+msgstr "Přidat aktivní PDF do ZIPu."
 
 #: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:30
 msgid "Do not write PDF for units."
 msgstr "Nevytvářet PDF pro jednotky."
 
 #: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:35
-msgid "Include the saved plan and analysis JSON in the ZIP."
-msgstr "Přidat uložený plán a analýzu ve formátu JSON do ZIPu."
+msgid "Include the saved plan and partition JSON in the ZIP."
+msgstr "Přidat uložený plán a rozdělení ve formátu JSON do ZIPu."
 
 #: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:39
 msgid "LLM tasks"
@@ -270,55 +442,109 @@ msgstr "Úlohy LLM"
 msgid "Select a LLM task"
 msgstr "Vyberte úlohu LLM"
 
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:53
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_partition_actions.html:10
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:52
+msgid "Export"
+msgstr "Exportovat"
+
 #: src/pdfwtf/gui/templates/pdfwtf_gui/_job_complete.html:2
-msgid "Analysis is complete."
-msgstr "Analýza je dokončena."
+msgid "Partition is complete."
+msgstr "Rozdělení je dokončeno."
 
 #: src/pdfwtf/gui/templates/pdfwtf_gui/_job_complete.html:3
 msgid "This result was created by the local demo adapter."
 msgstr "Tento výsledek vytvořil místní ukázkový adaptér."
 
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_job_complete.html:4
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_partition_actions.html:3
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:2
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:10
+msgid "Review"
+msgstr "Zkontrolovat"
+
 #: src/pdfwtf/gui/templates/pdfwtf_gui/_job_complete.html:5
-msgid "Download analysis"
-msgstr "Stáhnout analýzu"
+msgid "Download partition"
+msgstr "Stáhnout rozdělení"
 
 #: src/pdfwtf/gui/templates/pdfwtf_gui/_job_status.html:10
-msgid "Analyzing the document…"
-msgstr "Probíhá analýza dokumentu…"
+msgid "Partitioning the document…"
+msgstr "Probíhá rozdělení dokumentu…"
 
 #: src/pdfwtf/gui/templates/pdfwtf_gui/_job_status.html:12
-msgid "Waiting for analysis…"
-msgstr "Čeká se na analýzu…"
+msgid "Waiting for partitioning…"
+msgstr "Čeká se na rozdělení…"
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_partition_actions.html:10
+msgid "Export the units of the saved plan."
+msgstr "Exportovat jednotky uloženého plánu."
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_partition_actions.html:10
+msgid "Export the whole PDF as one unit."
+msgstr "Exportovat celé PDF jako jednu jednotku."
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_prepare_complete.html:2
+msgid "Preparation is complete. The prepared PDF is now active."
+msgstr "Příprava je dokončena. Připravené PDF je nyní aktivní."
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_prepare_status.html:10
+msgid "Preparing the PDF…"
+msgstr "Probíhá příprava PDF…"
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_prepare_status.html:12
+msgid "Waiting for preparation…"
+msgstr "Čeká se na přípravu…"
 
 #: src/pdfwtf/gui/templates/pdfwtf_gui/_uploads.html:2
 msgid "Process files"
 msgstr "Zpracovat soubory"
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/_uploads.html:10
-#: src/pdfwtf/gui/templates/pdfwtf_gui/input.html:32
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:13
-msgid "Scanned"
-msgstr "Naskenované"
-
-#: src/pdfwtf/gui/templates/pdfwtf_gui/_uploads.html:12
-#: src/pdfwtf/gui/templates/pdfwtf_gui/input.html:31
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:15
-msgid "Born-digital"
-msgstr "Digitálně vytvořené"
-
 #: src/pdfwtf/gui/templates/pdfwtf_gui/_uploads.html:17
-msgid "Delete this file and its saved analysis and plan?"
-msgstr "Smazat tento soubor, jeho uloženou analýzu a plán?"
+msgid "Active: prepared PDF"
+msgstr "Aktivní: připravené PDF"
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/_uploads.html:21
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_uploads.html:25
+msgid "Prepared PDF"
+msgstr "Připravené PDF"
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_uploads.html:23
+msgid "Delete this file, its prepared PDF, and its saved partition and plan?"
+msgstr "Smazat tento soubor, jeho připravené PDF, uložené rozdělení a plán?"
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_uploads.html:32
 msgid "Document type"
 msgstr "Typ dokumentu"
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/_uploads.html:25
-msgid "Analyze"
-msgstr "Analyzovat"
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_uploads.html:36
+msgid "Partition"
+msgstr "Rozdělit"
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/_uploads.html:33
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_uploads.html:44
+msgid "Prepare PDF (optional)"
+msgstr "Připravit PDF (volitelné)"
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_uploads.html:51
+#: src/pdfwtf/gui/templates/pdfwtf_gui/input.html:29
+msgid "PDF type"
+msgstr "Typ PDF"
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_uploads.html:53
+msgid "Detect"
+msgstr "Rozpoznat"
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_uploads.html:57
+msgid "OCR languages"
+msgstr "Jazyky OCR"
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_uploads.html:61
+msgid "Crop dark page backgrounds"
+msgstr "Oříznout tmavé pozadí stránek"
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_uploads.html:63
+msgid "Prepare"
+msgstr "Připravit"
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_uploads.html:70
 msgid "No uploaded files."
 msgstr "Žádné nahrané soubory."
 
@@ -346,10 +572,6 @@ msgstr "Není vybrán žádný soubor"
 msgid "or drop a PDF here"
 msgstr "nebo sem přetáhněte PDF"
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/input.html:29
-msgid "PDF type"
-msgstr "Typ PDF"
-
 #: src/pdfwtf/gui/templates/pdfwtf_gui/input.html:34
 msgid "Upload"
 msgstr "Nahrát"
@@ -371,162 +593,155 @@ msgid "Save plan"
 msgstr "Uložit plán"
 
 #: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:46
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:47
 msgid "More"
 msgstr "Další"
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:48
-msgid "Exports"
-msgstr "Exporty"
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:53
+msgid "Show partition"
+msgstr "Zobrazit rozdělení"
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:49
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:54
 msgid "Show plan"
 msgstr "Zobrazit plán"
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:50
-msgid "Show analysis"
-msgstr "Zobrazit analýzu"
-
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:52
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:57
 msgid "Delete the approved plan?"
 msgstr "Smazat schválený plán?"
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:54
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:59
 msgid "Delete plan"
 msgstr "Smazat plán"
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:63
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:68
 msgid "Possible unit boundaries within a page were detected."
 msgstr "Byly zjištěny možné hranice jednotek uvnitř strany."
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:64
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:69
 msgid "Check the listed pages. This warning does not prevent saving the plan."
 msgstr "Zkontrolujte uvedené strany. Toto upozornění nebrání uložení plánu."
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:67
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:72
 #, python-format
 msgid "Input page %(page)s"
 msgstr "Vstupní strana %(page)s"
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:76
-msgid "Pages"
-msgstr "Strany"
-
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:81
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:86
 msgid "Previous"
 msgstr "Předchozí"
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:82
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:87
 msgid "Preview page"
 msgstr "Strana náhledu"
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:85
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:90
 msgid "Next"
 msgstr "Další"
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:86
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:91
 msgid "Zoom out"
 msgstr "Oddálit"
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:88
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:93
 msgid "Zoom in"
 msgstr "Přiblížit"
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:92
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:97
 msgid "PDF page preview"
 msgstr "Náhled strany PDF"
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:99
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:104
 msgid "Units"
 msgstr "Jednotky"
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:100
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:105
 msgid "Apply to units"
 msgstr "Použít pro jednotky"
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:102
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:107
 msgid "All"
 msgstr "Všechny"
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:103
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:108
 msgid "Selected"
 msgstr "Vybrané"
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:104
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:110
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:123
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:109
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:115
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:129
 msgid "Included"
 msgstr "Zahrnuto"
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:105
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:127
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:110
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:133
 msgid "Removed"
 msgstr "Vyřazeno"
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:106
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:111
 msgid "Clear selection"
 msgstr "Zrušit výběr"
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:109
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:114
 msgid "Include or exclude units"
 msgstr "Zahrnout nebo vyřadit jednotky"
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:122
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:128
 msgid "New unit"
 msgstr "Nová jednotka"
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:124
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:130
 msgid "Select at least two adjacent units to merge."
 msgstr "Vyberte alespoň dvě sousední jednotky ke sloučení."
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:125
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:131
 msgid "The PDF preview could not load."
 msgstr "Náhled PDF se nepodařilo načíst."
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:126
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:132
 msgid "Merged unit"
 msgstr "Sloučená jednotka"
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:128
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:134
 msgid "Select unit"
 msgstr "Vybrat jednotku"
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:129
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:135
 msgid "Mixed"
 msgstr "Smíšené"
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:130
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:136
 msgid "Title"
 msgstr "Název"
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:131
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:137
 msgid "Type"
 msgstr "Typ"
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:132
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:138
 msgid "Start page"
 msgstr "Počáteční strana"
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:133
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:139
 msgid "End page"
 msgstr "Koncová strana"
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:134
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:140
 msgid "The plan could not be saved."
 msgstr "Plán se nepodařilo uložit."
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:135
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:141
 msgid "Saving…"
 msgstr "Probíhá ukládání…"
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:136
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:142
 msgid "The plan could not be deleted."
 msgstr "Plán se nepodařilo smazat."
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:137
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:143
 msgid "Include or exclude unit"
 msgstr "Zahrnout nebo vyloučit jednotku"
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:138
+#: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:144
 #, python-format
 msgid "View input page %(page)s"
 msgstr "Zobrazit vstupní stranu %(page)s"
@@ -593,4 +808,25 @@ msgstr "Automaticky"
 
 #~ msgid "Download"
 #~ msgstr "Stáhnout"
+
+#~ msgid "Analysis could not start. Try again."
+#~ msgstr "Analýzu se nepodařilo spustit. Zkuste to znovu."
+
+#~ msgid "Analysis is complete."
+#~ msgstr "Analýza je dokončena."
+
+#~ msgid "Download analysis"
+#~ msgstr "Stáhnout analýzu"
+
+#~ msgid "Analyze"
+#~ msgstr "Analyzovat"
+
+#~ msgid "Exports"
+#~ msgstr "Exporty"
+
+#~ msgid "Show analysis"
+#~ msgstr "Zobrazit analýzu"
+
+#~ msgid "Active: original PDF"
+#~ msgstr "Aktivní: původní PDF"
 

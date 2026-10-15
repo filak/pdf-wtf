@@ -133,7 +133,7 @@ def test_input_directory_cannot_be_a_file(configured_home, monkeypatch):
 def _task(**changes):
     task = {
         "description": {"en": "Clean HTML output", "cs": "Vyčistit HTML výstup"},
-        "commands": ["export", "enhance"],
+        "commands": ["export"],
         "stage": "after_unit_html",
         "template": "wp_html",
         "output": {"suffix": ".clean.html"},
@@ -145,7 +145,7 @@ def _task(**changes):
 def test_valid_llm_task():
     validated = validate_llm_tasks({"clean_html": _task()})
     task = validated["clean_html"]
-    assert task.commands == ("export", "enhance")
+    assert task.commands == ("export",)
     assert task.stage == "after_unit_html"
     assert task.output_suffix == ".clean.html"
     assert task.label("cs") == "Vyčistit HTML výstup"
@@ -158,7 +158,12 @@ def test_valid_llm_task():
     "changes, message",
     [
         ({"stage": "before_ocr"}, r"invalid stage 'before_ocr'"),
-        ({"commands": ["analyze"]}, r"does not support commands \['analyze'\]"),
+        ({"commands": ["partition"]}, r"does not support commands \['partition'\]"),
+        # The HTML stage moved to export. Enhancement has no implemented stage.
+        (
+            {"commands": ["export", "enhance"]},
+            r"does not support commands \['enhance'\]. Allowed values: \['export'\]",
+        ),
         ({"commands": []}, r"'commands' must be a non-empty list"),
         ({"commands": ["export", "export"]}, r"'commands' must be a non-empty list"),
         ({"output": {"suffix": ".html"}}, "unsafe output suffix"),

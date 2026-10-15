@@ -9,7 +9,7 @@
       <div>
         <h1 class="h3 mb-1">{{ _('Review') }}
 
-          {% if analysis.pdf_type == 'scanned' %}
+          {% if partition.pdf_type == 'scanned' %}
           <i class="bi bi-file-earmark-break-fill" role="img" aria-label="{{ _('Scanned') }}"></i>
           {% else %}
           <i class="bi bi-file-pdf-fill" role="img" aria-label="{{ _('Born-digital') }}"></i>
@@ -23,19 +23,19 @@
           'book': _('Book'),
           'proceedings': _('Proceedings'),
           'unknown': _('Unknown'),
-        }.get(analysis.document_type, analysis.document_type) }}</span>
+        }.get(partition.document_type, partition.document_type) }}</span>
       </h1>
       </div>
-      {% if analysis.source.bibliographic %}
+      {% if partition.source.bibliographic %}
       <div class="flex-grow-1 text-center text-break fw-semibold px-2">
-        <span class="badge text-bg-secondary">{{ analysis.source.bibliographic.kind }}</span>
-        {{ analysis.source.bibliographic.book_title | truncate(30) }}
-        {{ analysis.source.bibliographic.journal_title | truncate(30) }}
-        {{ analysis.source.bibliographic.year }},
-        {{ analysis.source.bibliographic.volume }}
-        ({{ analysis.source.bibliographic.issue }})
-        {{ analysis.source.bibliographic.issn }}
-        {{ analysis.source.bibliographic.isbn }}
+        <span class="badge text-bg-secondary">{{ partition.source.bibliographic.kind }}</span>
+        {{ partition.source.bibliographic.book_title | truncate(30) }}
+        {{ partition.source.bibliographic.journal_title | truncate(30) }}
+        {{ partition.source.bibliographic.year }},
+        {{ partition.source.bibliographic.volume }}
+        ({{ partition.source.bibliographic.issue }})
+        {{ partition.source.bibliographic.issn }}
+        {{ partition.source.bibliographic.isbn }}
       </div>
       {% endif %}
       <div class="d-flex gap-2">
@@ -50,7 +50,7 @@
                     data-export-url="{{ url_for('pdfwtf_gui.start_export', job_id=job_id) }}"
                     data-export-status-url="{{ url_for('pdfwtf_gui.export_status', job_id=job_id) }}"
                     data-source-filename="{{ source_filename }}"{% if not plan %} disabled{% endif %}>{{ _('Export') }}</button>
-            <a id="show-analysis" class="btn btn-sm btn-outline-primary" href="{{ url_for('pdfwtf_gui.download_analysis', job_id=job_id, inline=1) }}" target="_blank" rel="noopener">{{ _('Show analysis') }}</a>
+            <a id="show-partition" class="btn btn-sm btn-outline-primary" href="{{ url_for('pdfwtf_gui.download_partition', job_id=job_id, inline=1) }}" target="_blank" rel="noopener">{{ _('Show partition') }}</a>
             <a id="show-plan" class="btn btn-sm btn-outline-secondary{% if not plan %} disabled{% endif %}" href="{{ url_for('pdfwtf_gui.download_plan', job_id=job_id, inline=1) }}" target="_blank" rel="noopener"{% if not plan %} aria-disabled="true"{% endif %}>{{ _('Show plan') }}</a>
             <button id="delete-plan" class="btn btn-sm btn-danger" type="button"
                     hx-delete="{{ url_for('pdfwtf_gui.delete_plan', job_id=job_id) }}"
@@ -63,15 +63,16 @@
     </div>
   </div>
 
-  {% if analysis.suspected_shared_page_boundaries %}
-    <div class="alert alert-warning">
+  {% if partition.suspected_shared_page_boundaries %}
+    <div class="alert alert-warning alert-dismissible fade show">
       <strong>{{ _('Possible unit boundaries within a page were detected.') }}</strong>
       {{ _('Check the listed pages. This warning does not prevent saving the plan.') }}
       <ul class="mb-0 mt-2">
-        {% for boundary in analysis.suspected_shared_page_boundaries %}
+        {% for boundary in partition.suspected_shared_page_boundaries %}
         <li>{{ _('Input page %(page)s', page=boundary.input_page) }}</li>
         {% endfor %}
       </ul>
+      {% include "pdfwtf_gui/_close_alert.html" %}
     </div>
   {% endif %}
 
@@ -122,7 +123,7 @@
 
 {% include "pdfwtf_gui/_delete_confirmation.html" %}
 {% include "pdfwtf_gui/_export_options.html" %}
-<script id="analysis-data" type="application/json">{{ analysis|tojson }}</script>
+<script id="partition-data" type="application/json">{{ partition|tojson }}</script>
 <script id="plan-data" type="application/json">{{ plan|tojson }}</script>
 <script id="gui-messages" type="application/json">{{ {
   'add_title': _('New unit'),

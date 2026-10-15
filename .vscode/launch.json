@@ -16,19 +16,19 @@
             "console": "integratedTerminal",
             "justMyCode": false,
             "args": [
-                //"--help"
+                "--help"
                 //"f:\\Decko\\pdf-wtf\\instance\\_data\\in\\2023\\NV18-01-00399\\190141.pdf",
                 //"--extract=3-5",
                 //"--lang=ces",
                 //"--outdir=f:\\Decko\\pdf-wtf\\instance\\_data\\out-pdf",
                 //"--layout=double",
                 //"--pre-rotate=90",
-                "enhance",
-                "born_digital.pdf",
-                "--get-doi",
-                "--get-img",
-                "--get-text",
-                "--get-thumb",
+                //"enhance",
+                //"born_digital.pdf",
+                //"--get-doi",
+                //"--get-img",
+                //"--get-text",
+                //"--get-thumb",
                 //"--debug",
             ]
         },

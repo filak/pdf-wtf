@@ -42,5 +42,6 @@
 </div>
 {% include "pdfwtf_gui/_delete_confirmation.html" %}
 {% include "pdfwtf_gui/_export_options.html" %}
+{% if analyze_enabled %}{% include "pdfwtf_gui/_analysis_modal.html" %}{% endif %}
 <script src="{{ url_for('pdfwtf_gui.static', filename='upload.js') }}" defer></script>
 {% endblock %}

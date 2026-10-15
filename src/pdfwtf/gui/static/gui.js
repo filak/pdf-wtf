@@ -7,9 +7,9 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
 
 const app = document.querySelector("#review-app");
 if (app) {
-  const analysis = JSON.parse(document.querySelector("#analysis-data").textContent);
+  const partition = JSON.parse(document.querySelector("#partition-data").textContent);
   const plan = JSON.parse(document.querySelector("#plan-data").textContent);
-  const reviewData = plan || analysis;
+  const reviewData = plan || partition;
   const messages = JSON.parse(document.querySelector("#gui-messages").textContent);
   const unitTypes = JSON.parse(document.querySelector("#unit-types").textContent);
   const unitTypeLabels = new Map(Object.entries(JSON.parse(

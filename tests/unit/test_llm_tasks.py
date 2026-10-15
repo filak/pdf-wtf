@@ -17,7 +17,7 @@ from pdfwtf.llm_tasks import (
     run_after_unit_html,
     validate_task_selection,
 )
-from test_container_analysis import make_structured_pdf, reviewed_plan, unit
+from test_container_partition import make_structured_pdf, reviewed_plan, unit
 
 # The conftest guard replaces this wrapper in every test.
 _REAL_CALL_GEMINI = llm_tasks._call_gemini
@@ -46,7 +46,7 @@ def _manifest(directory):
 def test_tasks_are_available_with_valid_config_and_key(llm_home):
     config = load_config()
     assert [task.name for task in available_tasks(config, "export")] == ["clean_html"]
-    assert available_tasks(config, "analyze") == []
+    assert available_tasks(config, "partition") == []
 
 
 def test_tasks_are_unavailable_without_key(llm_home, monkeypatch):
@@ -58,7 +58,7 @@ def test_tasks_are_unavailable_without_key(llm_home, monkeypatch):
     "names, command, get_html, message",
     [
         (["missing"], "export", True, "Unknown LLM task 'missing'"),
-        (["clean_html"], "analyze", True, "does not support the 'analyze' command"),
+        (["clean_html"], "partition", True, "does not support the 'partition' command"),
         (["clean_html"], "export", False, "requires --get-html"),
     ],
 )
@@ -85,10 +85,27 @@ def test_selection_rejects_key_only_in_dotenv(llm_home, monkeypatch):
 def test_selection_removes_duplicates_and_allows_no_tasks(llm_home):
     config = load_config()
     selected = validate_task_selection(
-        config, ["clean_html", "clean_html"], "enhance", get_html=True
+        config, ["clean_html", "clean_html"], "export", get_html=True
     )
     assert [task.name for task in selected] == ["clean_html"]
     assert validate_task_selection(config, [], "export", get_html=False) == ()
+
+
+@pytest.mark.parametrize("command", ["analyze", "enhance", "partition", "export"])
+def test_no_tasks_need_no_key_for_any_command(command):
+    assert validate_task_selection(load_config(), [], command, get_html=False) == ()
+
+
+def test_selection_rejects_unknown_command(llm_home):
+    with pytest.raises(LLMTaskError, match="Unknown command 'diagnose'"):
+        validate_task_selection(load_config(), [], "diagnose", get_html=False)
+
+
+@pytest.mark.parametrize("command", ["analyze", "enhance", "partition"])
+def test_export_stage_task_is_rejected_for_other_commands(llm_home, command):
+    # Export is the only implemented LLM stage. Nothing is silently ignored.
+    with pytest.raises(LLMTaskError, match=f"does not support the '{command}'"):
+        validate_task_selection(load_config(), ["clean_html"], command, get_html=True)
 
 
 # Response handling
@@ -258,23 +275,36 @@ def test_cli_export_runs_selected_task(llm_home, fake_gemini, tmp_path):
     assert (units / "first.html").is_file()
     assert (units / "first.clean.html").is_file()
     manifest = _manifest(units)
-    assert manifest["schema_version"] == "1.3"
+    assert manifest["schema_version"] == "1.4"
     assert manifest["llm"]["status"] == "complete"
 
 
-def test_cli_enhance_accepts_task(llm_home, fake_gemini, tmp_path):
+@pytest.mark.parametrize("command", ["analyze", "enhance", "partition"])
+def test_cli_rejects_export_task_for_other_commands(
+    llm_home, fake_gemini, tmp_path, command
+):
+    source = make_structured_pdf(tmp_path / "input.pdf", page_count=1)
+    output = tmp_path / "out"
+    result = CliRunner().invoke(
+        cli.main,
+        [command, str(source), "--outdir", str(output), "--llm-task", "clean_html"],
+    )
+    assert result.exit_code == 1
+    assert f"does not support the '{command}' command" in result.output
+    assert fake_gemini[0] == []
+    assert not output.exists()
+
+
+def test_cli_export_direct_unit_runs_task(llm_home, fake_gemini, tmp_path):
     source = make_structured_pdf(tmp_path / "input.pdf", page_count=1)
     output = tmp_path / "out"
     result = CliRunner().invoke(
         cli.main,
         [
-            "enhance",
+            "export",
             str(source),
             "--outdir",
             str(output),
-            "--pdf_type",
-            "born-digital",
-            "--no-pdf-out",
             "--doc_type",
             "unit",
             "--get-html",
@@ -338,7 +368,7 @@ def test_cli_ordinary_export_works_without_key(tmp_path):
     result = CliRunner().invoke(cli.main, [*args, "--get-html"])
     assert result.exit_code == 0, result.output
     manifest = _manifest(units)
-    assert manifest["schema_version"] == "1.3"
+    assert manifest["schema_version"] == "1.4"
     assert "llm" not in manifest
     assert not list(units.glob("*.clean.html"))
 
@@ -349,12 +379,21 @@ def test_cli_lists_tasks_without_input(llm_home, monkeypatch):
     assert "clean_html  (available)" in result.output
     assert "Clean HTML output" in result.output
     monkeypatch.delenv("GEMINI_API_KEY")
-    result = CliRunner().invoke(cli.main, ["enhance", "--list-llm-tasks"])
+    result = CliRunner().invoke(cli.main, ["export", "--list-llm-tasks"])
     assert result.exit_code == 0, result.output
     assert "unavailable: GEMINI_API_KEY is not set." in result.output
 
 
-def test_cli_analyze_has_no_llm_options():
-    result = CliRunner().invoke(cli.main, ["analyze", "--llm-task", "clean_html"])
-    assert result.exit_code == 2
-    assert "No such option" in result.output
+@pytest.mark.parametrize("command", ["analyze", "enhance", "partition"])
+def test_every_command_lists_tasks(llm_home, command):
+    result = CliRunner().invoke(cli.main, [command, "--list-llm-tasks"])
+    assert result.exit_code == 0, result.output
+    assert f"No LLM tasks are configured for '{command}'." in result.output
+
+
+@pytest.mark.parametrize("command", ["analyze", "enhance", "partition", "export"])
+def test_every_command_has_llm_options(command):
+    result = CliRunner().invoke(cli.main, [command, "--help"])
+    assert result.exit_code == 0, result.output
+    assert "--llm-task NAME" in result.output
+    assert "--list-llm-tasks" in result.output

@@ -11,22 +11,59 @@
       {% else %}
       <i class="bi bi-file-pdf-fill flex-shrink-0" role="img" aria-label="{{ _('Born-digital') }}"></i>
       {% endif %}
-      <a class="text-break small" href="{{ url_for('pdfwtf_gui.document', job_id=upload.job_id) }}" target="_blank" rel="noopener">{{ upload.filename }}</a>
+      {# The file name opens the original upload. #}
+      <a class="text-break small" href="{{ url_for('pdfwtf_gui.document', job_id=upload.job_id, variant='source') }}" target="_blank" rel="noopener">{{ upload.filename }}</a>
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button class="btn btn-sm btn-outline-danger shadow-sm me-auto" type="button"
-              hx-confirm="{{ _('Delete this file and its saved analysis and plan?') }}"
+      <button class="btn btn-sm btn-outline-danger shadow-sm{% if upload.active_pdf != 'prepared' %} me-auto{% endif %}" type="button"
+              hx-confirm="{{ _('Delete this file, its prepared PDF, and its saved partition and plan?') }}"
               hx-delete="{{ url_for('pdfwtf_gui.delete_upload', job_id=upload.job_id) }}"
               hx-target="closest .upload-row" hx-swap="outerHTML"
               hx-disabled-elt="#upload-form-{{ upload.job_id }} button, #upload-form-{{ upload.job_id }} select">{{ _('Delete') }}</button>
+      {# Mark the prepared PDF only. Without it, the original PDF is active. #}
+      {% if upload.active_pdf == 'prepared' %}
+      <span id="active-pdf-{{ upload.job_id }}" class="badge text-bg-success">{{ _('Active: prepared PDF') }}</span>
+      <a class="small me-auto" href="{{ url_for('pdfwtf_gui.document', job_id=upload.job_id, variant='prepared') }}" target="_blank" rel="noopener">{{ _('Prepared PDF') }}</a>
+      {% endif %}
+      {% if analyze_enabled %}
+      {% with job_id=upload.job_id, has_analysis=upload.has_analysis, update_actions=false %}
+      {% include "pdfwtf_gui/_analyze_button.html" %}
+      {% endwith %}
+      {% endif %}
       <label class="visually-hidden" for="document-type-{{ upload.job_id }}">{{ _('Document type') }}</label>
       {% with job_id=upload.job_id, document_type=upload.document_type %}
       {% include "pdfwtf_gui/_document_type.html" %}
       {% endwith %}
-      <button class="btn btn-sm btn-primary shadow-sm" type="submit">{{ _('Analyze') }}</button>
-      {% with job_id=upload.job_id, has_analysis=upload.has_analysis, has_plan=upload.has_plan %}
-      {% include "pdfwtf_gui/_analysis_actions.html" %}
+      <button class="btn btn-sm btn-primary shadow-sm" type="submit">{{ _('Partition') }}</button>
+      {% with job_id=upload.job_id, has_partition=upload.has_partition, has_plan=upload.has_plan %}
+      {% include "pdfwtf_gui/_partition_actions.html" %}
       {% endwith %}
     </form>
+    {% if prepare_enabled and upload.pdf_type == 'scanned' %}
+    {# Preparation is optional and offered only for scanned uploads. It writes a separate prepared PDF and makes it active. #}
+    <details class="mt-1">
+      <summary class="small">{{ _('Prepare PDF (optional)') }}</summary>
+      <form id="prepare-form-{{ upload.job_id }}" method="post" action="{{ url_for('pdfwtf_gui.start_prepare', job_id=upload.job_id) }}"
+            hx-post="{{ url_for('pdfwtf_gui.start_prepare', job_id=upload.job_id) }}"
+            hx-target="#job-state-{{ upload.job_id }}" hx-swap="innerHTML"
+            hx-disabled-elt="#prepare-form-{{ upload.job_id }} button"
+            class="d-flex flex-wrap align-items-center gap-2 mt-1">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label class="small" for="prepare-pdf-type-{{ upload.job_id }}">{{ _('PDF type') }}</label>
+        <select id="prepare-pdf-type-{{ upload.job_id }}" name="pdf_type" class="form-select form-select-sm w-auto">
+          <option value="auto">{{ _('Detect') }}</option>
+          <option value="scanned"{% if upload.pdf_type == 'scanned' %} selected{% endif %}>{{ _('Scanned') }}</option>
+          <option value="born-digital">{{ _('Born-digital') }}</option>
+        </select>
+        <label class="small" for="prepare-languages-{{ upload.job_id }}">{{ _('OCR languages') }}</label>
+        <input id="prepare-languages-{{ upload.job_id }}" name="languages" value="eng" class="form-control form-control-sm w-auto" size="10" pattern="[a-z_]{3,16}(\+[a-z_]{3,16}){0,7}">
+        <div class="form-check form-switch">
+          <input id="prepare-remove-bg-{{ upload.job_id }}" name="remove_background" value="1" class="form-check-input" type="checkbox" role="switch">
+          <label class="form-check-label small" for="prepare-remove-bg-{{ upload.job_id }}">{{ _('Crop dark page backgrounds') }}</label>
+        </div>
+        <button class="btn btn-sm btn-outline-primary shadow-sm" type="submit">{{ _('Prepare') }}</button>
+      </form>
+    </details>
+    {% endif %}
     <div id="job-state-{{ upload.job_id }}" class="upload-status mt-2"></div>
   </div>
   {% else %}

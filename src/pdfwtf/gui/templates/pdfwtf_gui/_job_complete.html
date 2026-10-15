@@ -1,12 +1,13 @@
-<div id="analysis-state-{{ job_id }}" class="alert alert-success">
-  <p class="mb-2">{{ _('Analysis is complete.') }}</p>
+<div id="partition-state-{{ job_id }}" class="alert alert-success alert-dismissible fade show" role="alert">
+  <p class="mb-2">{{ _('Partition is complete.') }}</p>
   {% if demo %}<p class="small mb-2">{{ _('This result was created by the local demo adapter.') }}</p>{% endif %}
   <a class="btn btn-success shadow-sm" href="{{ url_for('pdfwtf_gui.review', job_id=job_id) }}">{{ _('Review') }}</a>
-  <a class="btn btn-outline-success shadow-sm" href="{{ url_for('pdfwtf_gui.download_analysis', job_id=job_id) }}">{{ _('Download analysis') }}</a>
+  <a class="btn btn-outline-success shadow-sm" href="{{ url_for('pdfwtf_gui.download_partition', job_id=job_id) }}">{{ _('Download partition') }}</a>
+  {% include "pdfwtf_gui/_close_alert.html" %}
 </div>
 {% if update_actions %}
-{% with has_analysis=true %}
-{% include "pdfwtf_gui/_analysis_actions.html" %}
+{% with has_partition=true %}
+{% include "pdfwtf_gui/_partition_actions.html" %}
 {% include "pdfwtf_gui/_document_type.html" %}
 {% endwith %}
 {% endif %}

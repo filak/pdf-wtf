@@ -7,13 +7,13 @@ import pymupdf as fitz
 import pytest
 
 from pdfwtf import cli
-from pdfwtf.container_analysis import (
+from pdfwtf.container_partition import (
     PlanValidationError,
     SCHEMA_VERSION,
     _normalize_text,
     _unit_type,
     _valid_bbox,
-    analyze_container,
+    partition_container,
     export_units,
     source_identity,
     validate_plan,
@@ -36,9 +36,9 @@ def make_structured_pdf(path, page_count=3):
 
 
 def reviewed_plan(source, units, document_type="book"):
-    analysis = analyze_container(source, document_type)
+    partition = partition_container(source, document_type)
     pages = []
-    for page in analysis["pages"]:
+    for page in partition["pages"]:
         input_page = page["input_page"]
         pages.append(
             {
@@ -56,7 +56,7 @@ def reviewed_plan(source, units, document_type="book"):
     return {
         "schema_version": SCHEMA_VERSION,
         "kind": "plan",
-        "source": analysis["source"],
+        "source": partition["source"],
         "document_type": document_type,
         "pages": pages,
         "units": units,
@@ -74,21 +74,21 @@ def unit(unit_id, start, end, selected=True):
     }
 
 
-def test_unit_analysis_has_contract_and_structure(make_pdf):
+def test_unit_partition_has_contract_and_structure(make_pdf):
     source = make_pdf(["digital", "digital"])
-    analysis = analyze_container(source, "unit")
-    assert analysis["schema_version"] == "1.3"
-    assert analysis["source"]["sha256"] == source_identity(source)["sha256"]
-    assert analysis["source"]["page_count"] == 2
-    assert analysis["source"]["bibliographic"]["kind"] == "journal"
-    assert analysis["document_type"] == "unit"
-    assert analysis["units"][0]["input_pages"] == {"start": 1, "end": 2}
-    assert analysis["coordinate_system"]["origin"] == "top-left"
-    assert "structure" not in analysis
-    assert [page["input_page"] for page in analysis["pages"]] == [1, 2]
-    assert analysis["pages"][0]["main_title"]["text"]
-    assert analysis["pages"][0]["unit_ids"] == ["unit-001"]
-    assert analysis["units"][0]["type"] in {
+    partition = partition_container(source, "unit")
+    assert partition["schema_version"] == "1.4"
+    assert partition["source"]["sha256"] == source_identity(source)["sha256"]
+    assert partition["source"]["page_count"] == 2
+    assert partition["source"]["bibliographic"]["kind"] == "journal"
+    assert partition["document_type"] == "unit"
+    assert partition["units"][0]["input_pages"] == {"start": 1, "end": 2}
+    assert partition["coordinate_system"]["origin"] == "top-left"
+    assert "structure" not in partition
+    assert [page["input_page"] for page in partition["pages"]] == [1, 2]
+    assert partition["pages"][0]["main_title"]["text"]
+    assert partition["pages"][0]["unit_ids"] == ["unit-001"]
+    assert partition["units"][0]["type"] in {
         "article",
         "chapter",
         "unknown",
@@ -102,7 +102,7 @@ def test_extracted_text_normalization():
     )
 
 
-def test_analysis_extracts_compact_journal_source(tmp_path):
+def test_partition_extracts_compact_journal_source(tmp_path):
     source = tmp_path / "journal.pdf"
     with fitz.open() as document:
         page = document.new_page(width=400, height=500)
@@ -110,8 +110,8 @@ def test_analysis_extracts_compact_journal_source(tmp_path):
         page.insert_text((30, 80), "ISSN 1234-567X", fontsize=10)
         page.insert_text((30, 110), "3-4/2022, vol. 12", fontsize=10)
         document.save(source)
-    analysis = analyze_container(source, "journal-issue")
-    assert analysis["source"]["bibliographic"] == {
+    partition = partition_container(source, "journal-issue")
+    assert partition["source"]["bibliographic"] == {
         "kind": "journal",
         "journal_title": "Journal of Testing",
         "issn": "1234-567X",
@@ -121,7 +121,7 @@ def test_analysis_extracts_compact_journal_source(tmp_path):
     }
 
 
-def test_analysis_extracts_compact_book_source(tmp_path):
+def test_partition_extracts_compact_book_source(tmp_path):
     source = tmp_path / "book.pdf"
     with fitz.open() as document:
         document.set_metadata({"title": "Collected Essays"})
@@ -130,8 +130,8 @@ def test_analysis_extracts_compact_book_source(tmp_path):
         page.insert_text((30, 80), "ISBN 978-1-4028-9462-6", fontsize=10)
         page.insert_text((30, 110), "Volume 2", fontsize=10)
         document.save(source)
-    analysis = analyze_container(source, "book")
-    assert analysis["source"]["bibliographic"] == {
+    partition = partition_container(source, "book")
+    assert partition["source"]["bibliographic"] == {
         "kind": "book",
         "book_title": "Collected Essays",
         "isbn": "9781402894626",
@@ -139,7 +139,7 @@ def test_analysis_extracts_compact_book_source(tmp_path):
     }
 
 
-def test_analysis_classifies_page_unit_and_auto_document_type(tmp_path):
+def test_partition_classifies_page_unit_and_auto_document_type(tmp_path):
     source = tmp_path / "editorial.pdf"
     with fitz.open() as document:
         page = document.new_page(width=400, height=500)
@@ -152,13 +152,13 @@ def test_analysis_classifies_page_unit_and_auto_document_type(tmp_path):
             fontsize=10,
         )
         document.save(source)
-    analysis = analyze_container(source, "auto")
-    assert analysis["document_type"] == "unit"
-    assert analysis["units"][0]["type"] == "editorial"
-    assert analysis["pages"][0]["page_type"] == "normal"
+    partition = partition_container(source, "auto")
+    assert partition["document_type"] == "unit"
+    assert partition["units"][0]["type"] == "editorial"
+    assert partition["pages"][0]["page_type"] == "normal"
 
 
-def test_analysis_extracts_doi_candidates_for_each_unit(tmp_path):
+def test_partition_extracts_doi_candidates_for_each_unit(tmp_path):
     source = tmp_path / "articles.pdf"
     with fitz.open() as document:
         for number, doi in enumerate(("10.1234/first", "10.5678/second"), start=1):
@@ -169,19 +169,19 @@ def test_analysis_extracts_doi_candidates_for_each_unit(tmp_path):
             page.insert_text((30, 135), f"https://doi.org/{doi}", fontsize=10)
         document.save(source)
 
-    analysis = analyze_container(source, "journal-issue")
+    partition = partition_container(source, "journal-issue")
 
-    assert [item["input_pages"] for item in analysis["units"]] == [
+    assert [item["input_pages"] for item in partition["units"]] == [
         {"start": 1, "end": 1},
         {"start": 2, "end": 2},
     ]
-    assert [item["doi"] for item in analysis["units"]] == [
+    assert [item["doi"] for item in partition["units"]] == [
         ["10.1234/first"],
         ["10.5678/second"],
     ]
 
 
-def test_analysis_detects_full_page_advertisement(tmp_path):
+def test_partition_detects_full_page_advertisement(tmp_path):
     source = tmp_path / "advertisement.pdf"
     image = Image.new("RGB", (400, 500), "navy")
     stream = io.BytesIO()
@@ -191,9 +191,9 @@ def test_analysis_detects_full_page_advertisement(tmp_path):
         page.insert_image(page.rect, stream=stream.getvalue())
         page.insert_text((30, 40), "Advertisement", fontsize=18, color=(1, 1, 1))
         document.save(source)
-    analysis = analyze_container(source, "unit")
-    assert analysis["pages"][0]["page_type"] == "full-page-advertisement"
-    assert analysis["pages"][0]["figures"][0]["bbox"] == [0.0, 0.0, 400.0, 500.0]
+    partition = partition_container(source, "unit")
+    assert partition["pages"][0]["page_type"] == "full-page-advertisement"
+    assert partition["pages"][0]["figures"][0]["bbox"] == [0.0, 0.0, 400.0, 500.0]
 
 
 def test_plan_allows_gaps_and_exports_only_selected_ranges(tmp_path):
@@ -364,7 +364,7 @@ def test_plan_requires_complete_consistent_page_review(tmp_path):
         validate_plan(plan, source)
 
 
-def test_analysis_flags_possible_start_within_page(tmp_path):
+def test_partition_flags_possible_start_within_page(tmp_path):
     source = tmp_path / "shared.pdf"
     with fitz.open() as document:
         first = document.new_page(width=400, height=500)
@@ -376,39 +376,41 @@ def test_analysis_flags_possible_start_within_page(tmp_path):
         second.insert_text((30, 270), "Bob Jones", fontsize=10)
         second.insert_text((30, 300), "Abstract", fontsize=10)
         document.save(source)
-    analysis = analyze_container(source, "journal-issue")
+    partition = partition_container(source, "journal-issue")
     assert [
-        item["input_page"] for item in analysis["suspected_shared_page_boundaries"]
+        item["input_page"] for item in partition["suspected_shared_page_boundaries"]
     ] == [2]
-    assert len(analysis["units"]) == 1
-    assert analysis["units"][0]["input_pages"] == {"start": 1, "end": 2}
+    assert len(partition["units"]) == 1
+    assert partition["units"][0]["input_pages"] == {"start": 1, "end": 2}
 
 
-def test_cli_end_to_end_analysis_plan_and_html(make_pdf, tmp_path):
+def test_cli_end_to_end_partition_plan_and_html(make_pdf, tmp_path):
     source = make_pdf(["digital", "digital"])
-    analysis_output = tmp_path / "analysis-out"
+    partition_output = tmp_path / "partition-out"
     result = CliRunner().invoke(
         cli.main,
         [
-            "analyze",
+            "partition",
             str(source),
             "--outdir",
-            str(analysis_output),
+            str(partition_output),
             "--doc_type",
             "unit",
         ],
     )
     assert result.exit_code == 0, result.output
-    analysis = json.loads((analysis_output / "input.analysis.json").read_text("utf-8"))
+    partition = json.loads(
+        (partition_output / "input.partition.json").read_text("utf-8")
+    )
     plan = {
-        "schema_version": analysis["schema_version"],
+        "schema_version": partition["schema_version"],
         "kind": "plan",
-        "source": analysis["source"],
-        "document_type": analysis["document_type"],
-        "pages": [{**page, "selected": True} for page in analysis["pages"]],
+        "source": partition["source"],
+        "document_type": partition["document_type"],
+        "pages": [{**page, "selected": True} for page in partition["pages"]],
         "units": [
             {
-                **analysis["units"][0],
+                **partition["units"][0],
                 "selected": True,
                 "boundary_status": "confirmed",
             }
@@ -421,18 +423,18 @@ def test_cli_end_to_end_analysis_plan_and_html(make_pdf, tmp_path):
     result = CliRunner().invoke(
         cli.main,
         [
-            "enhance",
+            "export",
             str(source),
             "--outdir",
             str(pdf_output),
-            "--pdf_type",
-            "born-digital",
             "--plan",
             str(plan_path),
+            "--get-unit-pdf",
         ],
     )
     assert result.exit_code == 0, result.output
-    with fitz.open(pdf_output / "input.pdf") as output_document:
+    # The unit PDF contains only the selected pages of the plan.
+    with fitz.open(pdf_output / "_units_input/unit-001.pdf") as output_document:
         assert len(output_document) == 1
     metadata_output = tmp_path / "metadata-out"
     result = CliRunner().invoke(
@@ -499,7 +501,7 @@ def test_plan_rejects_case_colliding_unit_ids(tmp_path):
 
 
 def test_reading_order_preserves_overlapping_and_outside_items():
-    from pdfwtf.container_analysis import _ordered_items
+    from pdfwtf.container_partition import _ordered_items
 
     items = [
         {"id": "wide", "bbox": [0, 100, 100, 200]},
@@ -661,7 +663,7 @@ def test_source_metadata_prefers_repeated_late_page_footers(tmp_path, footer):
                 page.insert_text((30, 750), footer, fontsize=10)
                 page.insert_text((30, 775), "ISSN 1234-567X", fontsize=10)
         document.save(source)
-    bibliographic = analyze_container(source, "journal-issue")["source"][
+    bibliographic = partition_container(source, "journal-issue")["source"][
         "bibliographic"
     ]
     assert bibliographic == {
@@ -699,10 +701,10 @@ def test_references_and_contacts_do_not_create_unit_starts(tmp_path, contact):
             if number:
                 page.insert_text((30, 460), "www.example.org", fontsize=11)
         document.save(source)
-    analysis = analyze_container(source, "journal-issue")
-    assert analysis["suspected_shared_page_boundaries"] == []
-    assert len(analysis["units"]) == 1
-    assert analysis["units"][0]["input_pages"] == {"start": 1, "end": 3}
+    partition = partition_container(source, "journal-issue")
+    assert partition["suspected_shared_page_boundaries"] == []
+    assert len(partition["units"]) == 1
+    assert partition["units"][0]["input_pages"] == {"start": 1, "end": 3}
 
 
 @pytest.mark.parametrize("changing_footer", [False, True])
@@ -723,18 +725,18 @@ def test_repeated_citation_footer_changes_propose_unit_boundaries(
             )
             page.insert_text((550, 760), str(10 + number), fontsize=8)
         document.save(source)
-    analysis = analyze_container(source, "journal-issue")
-    assert [unit["input_pages"]["start"] for unit in analysis["units"]] == (
+    partition = partition_container(source, "journal-issue")
+    assert [unit["input_pages"]["start"] for unit in partition["units"]] == (
         [1, 3] if changing_footer else [1]
     )
-    assert analysis["suspected_shared_page_boundaries"] == []
+    assert partition["suspected_shared_page_boundaries"] == []
 
 
-def test_magazine_issue_analysis_and_plan(tmp_path):
+def test_magazine_issue_partition_and_plan(tmp_path):
     source = make_structured_pdf(tmp_path / "source.pdf", 2)
-    analysis = analyze_container(source, "magazine-issue")
-    assert analysis["document_type"] == "magazine-issue"
-    assert analysis["source"]["bibliographic"]["kind"] == "journal"
+    partition = partition_container(source, "magazine-issue")
+    assert partition["document_type"] == "magazine-issue"
+    assert partition["source"]["bibliographic"]["kind"] == "journal"
     plan = reviewed_plan(source, [unit("one", 1, 2)], "magazine-issue")
     assert validate_plan(plan, source) == plan["units"]
 
@@ -758,13 +760,13 @@ def test_magazine_uses_large_multiline_titles_without_academic_signals(tmp_path)
                 page.insert_text((30, 430), "A LARGE PULL QUOTE", fontsize=16)
             page.insert_text((500, 760), str(number + 1), fontsize=50)
         document.save(source)
-    analysis = analyze_container(source, "magazine-issue")
-    assert [unit["input_pages"]["start"] for unit in analysis["units"]] == [1, 3]
+    partition = partition_container(source, "magazine-issue")
+    assert [unit["input_pages"]["start"] for unit in partition["units"]] == [1, 3]
     assert (
-        analysis["pages"][2]["main_title"]["text"] == "Journey 3 Across the mountains"
+        partition["pages"][2]["main_title"]["text"] == "Journey 3 Across the mountains"
     )
-    assert analysis["units"][1]["title"] == analysis["pages"][2]["main_title"]["text"]
-    assert analysis["suspected_shared_page_boundaries"] == []
+    assert partition["units"][1]["title"] == partition["pages"][2]["main_title"]["text"]
+    assert partition["suspected_shared_page_boundaries"] == []
 
 
 @pytest.mark.parametrize(
@@ -793,17 +795,17 @@ def test_magazine_photo_caption_without_prefix(tmp_path, document_type, bold, ex
             (50, 310), "Unrelated bold heading", fontsize=12, fontname="hebo"
         )
         document.save(source)
-    figure = analyze_container(source, document_type)["pages"][0]["figures"][0]
+    figure = partition_container(source, document_type)["pages"][0]["figures"][0]
     assert figure["caption"] == expected
     assert (figure["caption_bbox"] is not None) == (expected is not None)
 
 
-def test_cli_analysis_rejects_unit_type_filter():
-    result = CliRunner().invoke(cli.main, ["analyze", "--unit_type", "article"])
+def test_cli_partition_rejects_unit_type_filter():
+    result = CliRunner().invoke(cli.main, ["partition", "--unit_type", "article"])
     assert result.exit_code == 2
     assert "No such option" in result.output
     assert "--unit_type" in result.output
-    help_result = CliRunner().invoke(cli.main, ["analyze", "--help"])
+    help_result = CliRunner().invoke(cli.main, ["partition", "--help"])
     assert "--unit_type" not in help_result.output
 
 
@@ -876,16 +878,16 @@ def test_book_unit_type_default(title, expected):
     assert _unit_type("book", {"title": title}, signal) == expected
 
 
-def test_book_analysis_defaults_units_to_chapters(tmp_path):
+def test_book_partition_defaults_units_to_chapters(tmp_path):
     source = make_structured_pdf(tmp_path / "book.pdf")
-    analysis = analyze_container(source, "book")
-    assert analysis["units"]
-    assert all(unit["type"] == "chapter" for unit in analysis["units"])
+    partition = partition_container(source, "book")
+    assert partition["units"]
+    assert all(unit["type"] == "chapter" for unit in partition["units"])
 
 
 def test_html_figure_links_use_figure_ids_and_untrusted_text_is_escaped():
     from html.parser import HTMLParser
-    from pdfwtf.container_analysis import render_html
+    from pdfwtf.container_partition import render_html
 
     class Elements(HTMLParser):
         def __init__(self):
@@ -921,7 +923,7 @@ def test_html_figure_links_use_figure_ids_and_untrusted_text_is_escaped():
 
 
 def test_html_without_figures_has_final_empty_figure_list():
-    from pdfwtf.container_analysis import render_html
+    from pdfwtf.container_partition import render_html
 
     html = render_html([{"kind": "paragraph", "text": "Article content."}])
     assert html.startswith("<p>Article content.</p>")
@@ -934,7 +936,7 @@ def test_html_without_figures_has_final_empty_figure_list():
 
 @pytest.mark.parametrize("column_starts", [(25, 190), (25, 225, 425)])
 def test_column_reading_order_uses_gutters_not_page_midpoint(tmp_path, column_starts):
-    from pdfwtf.container_analysis import reconstruct_unit
+    from pdfwtf.container_partition import reconstruct_unit
 
     source = tmp_path / "column-flow.pdf"
     with fitz.open() as document:
@@ -962,7 +964,7 @@ def test_column_reading_order_uses_gutters_not_page_midpoint(tmp_path, column_st
 
 
 def test_three_columns_restart_below_full_width_separator():
-    from pdfwtf.container_analysis import _ordered_items
+    from pdfwtf.container_partition import _ordered_items
 
     items = [{"id": "heading", "bbox": [20, 10, 580, 35]}]
     for band, top in (("upper", 60), ("lower", 300)):

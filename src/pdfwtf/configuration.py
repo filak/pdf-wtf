@@ -14,9 +14,22 @@ from typing import Any, Dict, Mapping
 
 from dotenv import dotenv_values
 
+# Command identities. Every command accepts LLM task selection.
+COMMAND_ANALYZE = "analyze"
+COMMAND_ENHANCE = "enhance"
+COMMAND_PARTITION = "partition"
+COMMAND_EXPORT = "export"
+COMMANDS: tuple[str, ...] = (
+    COMMAND_ANALYZE,
+    COMMAND_ENHANCE,
+    COMMAND_PARTITION,
+    COMMAND_EXPORT,
+)
 # LLM task stages are defined in code. Each stage lists its supported commands.
+# Export is the only command with an implemented stage. Future stages can add
+# enhancement (for example OCR assistance) or partitioning support.
 LLM_STAGES: Dict[str, frozenset[str]] = {
-    "after_unit_html": frozenset({"export", "enhance"}),
+    "after_unit_html": frozenset({COMMAND_EXPORT}),
 }
 # Output suffixes that each stage requires.
 LLM_STAGE_SUFFIXES: Dict[str, str] = {"after_unit_html": ".html"}

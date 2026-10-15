@@ -8,7 +8,7 @@ import click
 from pydantic import BaseModel
 
 from pdfwtf.configuration import AppConfig, ConfigurationError, load_config
-from pdfwtf.container_analysis import UNIT_TYPES
+from pdfwtf.container_partition import UNIT_TYPES
 from pdfwtf.logging_utils import configure_logging
 from pdfwtf.pipeline import ProcessingError, process_pdf
 
@@ -35,7 +35,7 @@ class PdfCommand(click.Command):
                 "pre_rotate",
                 "remove_background_flag",
             },
-            "Analyze options": {"document_type"},
+            "Partition options": {"document_type"},
             "Export options": {
                 "plan_path",
                 "no_pdf_flag",
@@ -104,7 +104,7 @@ class CliOptions(BaseModel):
     export_format: str = "png"
     export_texts_flag: bool = False
     export_thumbs_flag: bool = False
-    analysis_flag: bool = False
+    partition_flag: bool = False
     unit_types: tuple[str, ...] = ()
     document_type: str | None = None
     plan_path: str | None = None
@@ -334,7 +334,7 @@ class PdfGroup(click.Group, PdfCommand):
 @click.group(cls=PdfGroup)
 @click.pass_context
 def main(ctx: click.Context) -> None:
-    """Analyze, enhance, or export one PDF. Select an action first."""
+    """Partition, enhance, or export one PDF. Select an action first."""
     if ctx.resilient_parsing:
         return
     try:
@@ -350,15 +350,15 @@ def main(ctx: click.Context) -> None:
 
 
 @click.pass_context
-def analyze(
+def partition(
     ctx: click.Context, input_pdf: str, output_dir: str | None, **kwargs: object
 ) -> None:
-    """Write analysis JSON from existing PDF text without OCR or unit exports."""
+    """Write partition JSON from existing PDF text without OCR or unit exports."""
     _execute(
         ctx.obj,
         input_pdf,
         output_dir,
-        analysis_flag=True,
+        partition_flag=True,
         pdf_type="born-digital",
         **kwargs,
     )
@@ -380,7 +380,7 @@ def export(
 
 
 _COMMON_PARAMS = {"input_pdf", "output_dir", "input_path_prefix", "debug_flag"}
-_ANALYZE_PARAMS = _COMMON_PARAMS | {"document_type"}
+_PARTITION_PARAMS = _COMMON_PARAMS | {"document_type"}
 _EXPORT_PARAMS = _COMMON_PARAMS | {
     "dpi",
     "get_doi_flag",
@@ -407,10 +407,10 @@ def _unit_type_option() -> click.Option:
 main.add_command(enhance)
 main.add_command(
     PdfCommand(
-        "analyze",
-        params=[param for param in enhance.params if param.name in _ANALYZE_PARAMS],
-        callback=analyze,
-        help=analyze.__doc__,
+        "partition",
+        params=[param for param in enhance.params if param.name in _PARTITION_PARAMS],
+        callback=partition,
+        help=partition.__doc__,
     )
 )
 main.add_command(

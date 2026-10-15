@@ -1,26 +1,39 @@
-"""Synchronous PDF processing and export coordination."""
+"""Synchronous enhancement, partitioning, and export operations."""
 
+from dataclasses import dataclass
+from datetime import datetime, UTC
+import inspect
 import logging
 from pathlib import Path
 import shutil
 import tempfile
-from typing import Any
+from typing import Any, Callable
 
 import ocrmypdf
 from PIL import Image
 import pymupdf as fitz
 
-from .configuration import load_config, AppConfig
-from .container_analysis import (
+from .configuration import (
+    COMMAND_ANALYZE,
+    COMMAND_ENHANCE,
+    COMMAND_EXPORT,
+    COMMAND_PARTITION,
+    load_config,
+    AppConfig,
+)
+from .container_partition import (
+    SCHEMA_VERSION,
     UNIT_TYPES,
-    analyze_container,
+    partition_container,
     direct_unit_plan,
     export_units,
     load_plan,
     publish_unit_directory,
+    source_identity,
     validate_plan,
     write_json_document,
 )
+from .diagnostics import analyze_document
 from .llm_tasks import LLMReport, run_after_unit_html, validate_task_selection
 from .page_metadata import build_page_metadata
 from .unpaper_run import get_unpaper_args, get_unpaper_version, run_unpaper_simple
@@ -40,9 +53,13 @@ from .utils.common import (
     get_doi,
     write_json,
     page_sort_key,
+    replace_file,
 )
 
 log = logging.getLogger(__name__)
+
+# Enhancement writes the prepared PDF as "<input stem>.prepared.pdf".
+PREPARED_SUFFIX = ".prepared.pdf"
 
 
 class ProcessingError(RuntimeError):
@@ -245,134 +262,155 @@ def _publish_pdf(source: Path, destination: Path) -> None:
         staged = Path(stream.name)
     try:
         shutil.copy2(source, staged)
-        staged.replace(destination)
+        replace_file(staged, destination)
     finally:
         staged.unlink(missing_ok=True)
 
 
-def process_pdf(
+@dataclass(frozen=True)
+class EnhanceResult:
+    """Files written by one successful enhancement."""
+
+    pdf: Path
+    report: Path
+    llm_report: LLMReport | None = None
+
+
+@dataclass(frozen=True)
+class _PageSettings:
+    pdf_type: str
+    ocrlib: str | None
+    languages: str
+    dpi: int
+    optimize: int
+    pre_rotate: int | None
+    layout: str | None
+    remove_background_flag: bool
+    scan_dir: str
+    debug_flag: bool
+
+
+def _resolve_input(input_pdf: str | Path) -> Path:
+    if not input_pdf:
+        raise ValueError("An input PDF is required.")
+    path = Path(input_pdf).resolve(strict=True)
+    if not path.is_file():
+        raise ValueError("The input PDF must be a file.")
+    return path
+
+
+def _check_dpi(dpi: int) -> None:
+    if not 72 <= dpi <= 1200:
+        raise ValueError("DPI must be between 72 and 1200.")
+
+
+def _check_dir_names(*names: str) -> None:
+    for name in names:
+        if not name or Path(name).name != name or name in (".", ".."):
+            raise ValueError("Export directory names must be single path components.")
+
+
+def _final_output_dir(
+    output_dir: str | Path | None,
+    input_pdf: Path,
+    input_path_prefix: str | Path | None,
+    config: AppConfig,
+) -> Path:
+    return get_output_dir_final(
+        get_output_dir(output_dir, config=config), input_pdf, input_path_prefix
+    )
+
+
+def _input_page_count(input_pdf: Path) -> int:
+    total_pages = count_pdf_pages(input_pdf)
+    if total_pages == 0:
+        raise ProcessingError("The input PDF contains no pages.")
+    return total_pages
+
+
+def _prepare_pages(
+    source: Path, directory: Path, split: str | None, settings: _PageSettings
+) -> tuple[Path, bool]:
+    """Run scan preparation and OCR when needed. Return the result and scan state."""
+    directory.mkdir()
+    working_pdf = directory / "working.pdf"
+    result = directory / "result.pdf"
+    shutil.copy2(source, working_pdf)
+    scanned = settings.pdf_type != "born-digital" and (
+        settings.pdf_type == "scanned" or is_scanned_or_hybrid(working_pdf)
+    )
+    if not scanned:
+        # Born-digital pages are copied. They are not rasterized.
+        shutil.copy2(working_pdf, result)
+        return result, False
+    images, rotated = _process_scanned(
+        working_pdf,
+        directory,
+        settings.dpi,
+        settings.pre_rotate,
+        settings.layout,
+        split,
+        settings.remove_background_flag,
+        settings.scan_dir,
+    )
+    expected_pages = count_pdf_pages(working_pdf)
+    run_ocr(
+        working_pdf,
+        result,
+        images,
+        ocrlib=settings.ocrlib,
+        lang=settings.languages,
+        rotated=rotated,
+        unpaper_ok=False,
+        debug_flag=settings.debug_flag,
+        dpi=settings.dpi,
+        optimize=settings.optimize,
+    )
+    if count_pdf_pages(result) != expected_pages:
+        raise ProcessingError("OCR did not preserve the prepared page count.")
+    return result, True
+
+
+def _timestamp() -> str:
+    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
+
+
+def enhance_pdf(
     input_pdf: str | Path,
     output_dir: str | Path | None,
+    *,
+    config: AppConfig | None = None,
     input_path_prefix: str | Path | None = None,
     extract_pages_str: str | None = None,
     skip_pages_str: str | None = None,
+    pdf_type: str = "auto",
     ocrlib: str | None = None,
-    remove_background_flag: bool = False,
     languages: str = "eng",
     dpi: int = 300,
+    optimize: int = 0,
     layout: str | None = None,
     output_pages: str | None = None,
     pre_rotate: int | None = None,
-    get_doi_flag: bool = False,
-    export_format: str = "png",
-    export_images_flag: bool = False,
-    export_texts_flag: bool = False,
-    export_thumbs_flag: bool = False,
-    scan_dir: str = "_scans",
-    txt_dir: str = "_texts",
-    img_dir: str = "_images",
-    thumb_dir: str = "_thumbs",
-    debug_flag: bool = False,
-    born_digital_flag: bool = False,
-    optimize: int = 0,
-    no_pdf_flag: bool = False,
-    export_json_flag: bool = False,
-    analysis_flag: bool = False,
-    unit_types: tuple[str, ...] = (),
-    document_type: str | None = None,
-    plan_path: str | Path | None = None,
-    export_html_flag: bool = False,
-    pdf_type: str = "auto",
-    export_unit_pdfs_flag: bool = False,
-    unit_doi_flag: bool = False,
-    config: AppConfig | None = None,
+    remove_background_flag: bool = False,
     llm_tasks: tuple[str, ...] = (),
-    command: str = "enhance",
-) -> LLMReport | None:
-    """Process one PDF without replacing its source or publishing partial OCR.
-
-    Return the LLM task report when tasks were selected, otherwise None.
-    """
+    debug_flag: bool = False,
+    scan_dir: str = "_scans",
+) -> EnhanceResult:
+    """Write a prepared PDF and an enhancement report. Never modify the input."""
     if pdf_type not in {"auto", "born-digital", "scanned"}:
         raise ValueError("PDF type must be auto, born-digital, or scanned.")
-    if born_digital_flag and pdf_type == "scanned":
-        raise ValueError("born_digital_flag cannot be combined with pdf_type scanned.")
-    born_digital_flag = born_digital_flag or pdf_type == "born-digital"
-    if analysis_flag and plan_path is not None:
-        raise ValueError("--analysis and --plan are mutually exclusive.")
-    if export_unit_pdfs_flag and plan_path is None:
-        raise ProcessingError("Unit PDF export requires a reviewed plan.")
-    unit_workflow = analysis_flag or plan_path is not None or export_html_flag
-    if set(unit_types) - UNIT_TYPES:
-        raise ProcessingError("Unknown unit type in --unit_type.")
-    if unit_types and analysis_flag:
-        raise ProcessingError("--unit_type is only supported for unit export.")
-    if unit_types and not unit_workflow:
-        raise ProcessingError("--unit_type requires --plan or --get-html for export.")
-    if unit_workflow and not born_digital_flag:
-        raise ValueError(
-            "Container analysis and unit export currently require --pdf_type born-digital."
-        )
-    if analysis_flag and any(
-        (
-            extract_pages_str,
-            skip_pages_str,
-            no_pdf_flag,
-            export_json_flag,
-            get_doi_flag,
-            export_images_flag,
-            export_texts_flag,
-            export_thumbs_flag,
-            export_html_flag,
-        )
-    ):
-        raise ValueError(
-            "--analysis cannot be combined with page selection or export options."
-        )
-    if plan_path is not None and (extract_pages_str or skip_pages_str):
-        raise ValueError("--plan cannot be combined with --extract or --remove.")
-    if export_html_flag and plan_path is None and document_type not in (None, "unit"):
-        raise ValueError("Direct --get-html processing requires --doc_type unit.")
-    if no_pdf_flag and not any(
-        (
-            export_json_flag,
-            get_doi_flag,
-            export_images_flag,
-            export_texts_flag,
-            export_thumbs_flag,
-            plan_path is not None,
-            export_html_flag,
-        )
-    ):
-        raise ValueError(
-            "No output selected. Select --get-meta, --get-doi, --get-img, "
-            "--get-text, --get-thumb, --plan, or --get-html."
-        )
-    if config is None:
-        config = load_config()
-    selected_tasks = validate_task_selection(
-        config, llm_tasks, command, get_html=export_html_flag
-    )
-    if not input_pdf:
-        raise ValueError("An input PDF is required.")
-    input_pdf = Path(input_pdf).resolve(strict=True)
-    if not input_pdf.is_file():
-        raise ValueError("The input PDF must be a file.")
     if ocrlib not in (None, "ocrmypdf", "pymupdf"):
         raise ValueError("Unsupported OCR backend.")
     if not isinstance(optimize, int) or not 0 <= optimize <= 3:
         raise ValueError("Optimization must be an integer between 0 and 3.")
-    if export_format != "png":
-        raise ValueError("Unsupported page image format.")
-    if not 72 <= dpi <= 1200:
-        raise ValueError("DPI must be between 72 and 1200.")
+    _check_dpi(dpi)
     if pre_rotate not in (None, 0, 90, 180, 270):
         raise ValueError("Unsupported pre-rotation angle.")
     if layout not in (None, "none", "single", "double"):
         raise ValueError("Unsupported scan layout.")
     if output_pages not in (None, "1", "2"):
         raise ValueError("Unsupported output page count.")
-    if born_digital_flag and (
+    if pdf_type == "born-digital" and (
         remove_background_flag
         or layout not in (None, "none")
         or output_pages is not None
@@ -382,52 +420,261 @@ def process_pdf(
             "--pdf_type born-digital cannot be combined with --remove-bg, --layout "
             "(single or double), --output-pages, or --pre-rotate."
         )
-    for name in (scan_dir, txt_dir, img_dir, thumb_dir):
-        if not name or Path(name).name != name or name in (".", ".."):
-            raise ValueError("Export directory names must be single path components.")
-    output_dir = get_output_dir_final(
-        get_output_dir(output_dir, config=config), input_pdf, input_path_prefix
-    )
-    output_pdf = output_dir / input_pdf.name
-    if (
-        not no_pdf_flag
-        and not analysis_flag
-        and (
-            output_pdf.resolve() == input_pdf
-            or (output_pdf.exists() and output_pdf.samefile(input_pdf))
-        )
+    _check_dir_names(scan_dir)
+    config = config or load_config()
+    # No stage supports enhancement yet, so any selected task fails here.
+    validate_task_selection(config, llm_tasks, COMMAND_ENHANCE, get_html=False)
+    input_pdf = _resolve_input(input_pdf)
+    output_dir = _final_output_dir(output_dir, input_pdf, input_path_prefix, config)
+    output_pdf = output_dir / f"{input_pdf.stem}{PREPARED_SUFFIX}"
+    report_path = output_dir / f"{input_pdf.stem}.enhance.json"
+    if output_pdf.resolve() == input_pdf or (
+        output_pdf.exists() and output_pdf.samefile(input_pdf)
     ):
         raise ValueError("The output PDF must differ from the input PDF.")
+    settings = _PageSettings(
+        pdf_type=pdf_type,
+        ocrlib=ocrlib,
+        languages=languages,
+        dpi=dpi,
+        optimize=optimize,
+        pre_rotate=pre_rotate,
+        layout=layout,
+        remove_background_flag=remove_background_flag,
+        scan_dir=scan_dir,
+        debug_flag=debug_flag,
+    )
 
-    export_dirs = []
-    if plan_path is not None or export_html_flag:
-        export_dirs.append(output_dir / f"_units_{input_pdf.stem}")
-    if export_images_flag or export_thumbs_flag:
-        export_dirs.append(output_dir / f"{img_dir}_{input_pdf.stem}")
-    if export_thumbs_flag:
-        export_dirs.append(output_dir / f"{thumb_dir}_{input_pdf.stem}")
-    if export_texts_flag:
-        export_dirs.append(output_dir / f"{txt_dir}_{input_pdf.stem}")
-    if any(input_pdf.is_relative_to(path.resolve()) for path in export_dirs):
-        raise ValueError("Export directories must not contain the input PDF.")
-
+    # OCR tools or a scanner can hold a work file briefly on Windows.
+    # A leftover work file must not fail a published result.
     with tempfile.TemporaryDirectory(
-        prefix="pdfwtf-", dir=get_temp_dir(config=config)
+        prefix="pdfwtf-", dir=get_temp_dir(config=config), ignore_cleanup_errors=True
     ) as temp:
         workspace = Path(temp)
         job_log = logging.LoggerAdapter(log, {"correlation_id": workspace.name})
-        total_pages = count_pdf_pages(input_pdf)
-        job_log.debug("Processing started. Input pages=%d.", total_pages)
-        if total_pages == 0:
-            raise ProcessingError("The input PDF contains no pages.")
-        if analysis_flag:
-            analysis = analyze_container(input_pdf, document_type or "auto")
-            write_json_document(
-                analysis, output_dir / f"{input_pdf.stem}.analysis.json"
-            )
-            job_log.info("Container analysis completed.")
-            return
+        total_pages = _input_page_count(input_pdf)
+        job_log.debug("Enhancement started. Input pages=%d.", total_pages)
+        selection_requested = extract_pages_str is not None
+        pages_to_keep = (
+            parse_page_ranges(extract_pages_str, total_pages)
+            if selection_requested
+            else []
+        )
+        pages_to_skip = (
+            parse_page_ranges(skip_pages_str, total_pages)
+            if skip_pages_str is not None
+            else []
+        )
+        selected = (
+            pages_to_keep if selection_requested else list(range(1, total_pages + 1))
+        )
+        if not set(selected) - set(pages_to_skip):
+            raise ValueError("Page removal must leave at least one page.")
+        selected_pdf = workspace / "selected.pdf"
+        if selection_requested:
+            extract_pages(input_pdf, selected_pdf, pages_to_keep=selected)
+        else:
+            shutil.copy2(input_pdf, selected_pdf)
+        pdf_result, scanned = _prepare_pages(
+            selected_pdf, workspace / "pdf", output_pages, settings
+        )
+        # A split input page maps to all of its generated PDF pages.
+        count = count_pdf_pages(pdf_result)
+        factor, remainder = divmod(count, len(selected))
+        if remainder or factor < 1:
+            raise ProcessingError("PDF processing did not preserve page mapping.")
+        remove = [
+            position * factor + part + 1
+            for position, original in enumerate(selected)
+            if original in pages_to_skip
+            for part in range(factor)
+        ]
+        if remove:
+            extract_pages(pdf_result, pdf_result, pages_to_skip=remove)
+        report = {
+            "schema_version": SCHEMA_VERSION,
+            "kind": "enhancement",
+            "created": _timestamp(),
+            "input": {"filename": input_pdf.name, **source_identity(input_pdf)},
+            "output": {"filename": output_pdf.name, **source_identity(pdf_result)},
+            "settings": {
+                "pdf_type": pdf_type,
+                "ocrlib": ocrlib,
+                "languages": languages,
+                "dpi": dpi,
+                "optimize": optimize,
+                "layout": layout,
+                "output_pages": output_pages,
+                "pre_rotate": pre_rotate,
+                "remove_background": remove_background_flag,
+                "extract_pages": extract_pages_str,
+                "remove_pages": skip_pages_str,
+            },
+            "scan_processing": scanned,
+            "pages": {
+                "selected": selected,
+                "removed": sorted(set(pages_to_skip) & set(selected)),
+                "pages_per_input_page": factor,
+            },
+        }
+        _publish_pdf(pdf_result, output_pdf)
+        staged_report = report_path.with_name(f".pdfwtf-{report_path.name}")
+        try:
+            write_json_document(report, staged_report)
+            replace_file(staged_report, report_path)
+        finally:
+            staged_report.unlink(missing_ok=True)
+        job_log.info("Enhancement completed.")
+    return EnhanceResult(output_pdf, report_path)
 
+
+@dataclass(frozen=True)
+class AnalysisResult:
+    """The diagnostic report of one analysis and where it was written."""
+
+    report_path: Path
+    report: dict[str, Any]
+
+
+def analyze_pdf(
+    input_pdf: str | Path,
+    output_dir: str | Path | None,
+    *,
+    config: AppConfig | None = None,
+    input_path_prefix: str | Path | None = None,
+    llm_tasks: tuple[str, ...] = (),
+    debug_flag: bool = False,
+) -> AnalysisResult:
+    """Write a read-only diagnostic report. Never modify the PDF or run OCR."""
+    config = config or load_config()
+    # No stage supports analysis yet, so any selected task fails here.
+    validate_task_selection(config, llm_tasks, COMMAND_ANALYZE, get_html=False)
+    input_pdf = _resolve_input(input_pdf)
+    # Inspect before creating output, so an unreadable PDF leaves no files.
+    report = analyze_document(input_pdf)
+    output_dir = _final_output_dir(output_dir, input_pdf, input_path_prefix, config)
+    destination = output_dir / f"{input_pdf.stem}.analysis.json"
+    staged = destination.with_name(f".pdfwtf-{destination.name}")
+    try:
+        write_json_document(report, staged)
+        staged.replace(destination)
+    finally:
+        staged.unlink(missing_ok=True)
+    log.info("PDF analysis completed. Inspection=%s.", report["summary"]["inspection"])
+    return AnalysisResult(destination, report)
+
+
+def partition_pdf(
+    input_pdf: str | Path,
+    output_dir: str | Path | None,
+    *,
+    config: AppConfig | None = None,
+    input_path_prefix: str | Path | None = None,
+    document_type: str | None = None,
+    llm_tasks: tuple[str, ...] = (),
+    debug_flag: bool = False,
+) -> Path:
+    """Write a reviewable partition from existing PDF text. Never run OCR."""
+    config = config or load_config()
+    # No stage supports partitioning yet, so any selected task fails here.
+    validate_task_selection(config, llm_tasks, COMMAND_PARTITION, get_html=False)
+    input_pdf = _resolve_input(input_pdf)
+    output_dir = _final_output_dir(output_dir, input_pdf, input_path_prefix, config)
+    _input_page_count(input_pdf)
+    destination = output_dir / f"{input_pdf.stem}.partition.json"
+    partition = partition_container(input_pdf, document_type or "auto")
+    write_json_document(partition, destination)
+    log.info("Container partitioning completed.")
+    return destination
+
+
+def export_pdf(
+    input_pdf: str | Path,
+    output_dir: str | Path | None,
+    *,
+    config: AppConfig | None = None,
+    input_path_prefix: str | Path | None = None,
+    dpi: int = 300,
+    export_format: str = "png",
+    get_doi_flag: bool = False,
+    export_json_flag: bool = False,
+    export_images_flag: bool = False,
+    export_texts_flag: bool = False,
+    export_thumbs_flag: bool = False,
+    document_type: str | None = None,
+    plan_path: str | Path | None = None,
+    export_html_flag: bool = False,
+    export_unit_pdfs_flag: bool = False,
+    unit_doi_flag: bool = False,
+    unit_types: tuple[str, ...] = (),
+    llm_tasks: tuple[str, ...] = (),
+    debug_flag: bool = False,
+    txt_dir: str = "_texts",
+    img_dir: str = "_images",
+    thumb_dir: str = "_thumbs",
+) -> LLMReport | None:
+    """Export derivatives from the supplied PDF without cleanup or OCR.
+
+    Return the LLM task report when tasks were selected, otherwise None.
+    """
+    if export_unit_pdfs_flag and plan_path is None:
+        raise ProcessingError("Unit PDF export requires a reviewed plan.")
+    unit_workflow = plan_path is not None or export_html_flag
+    if set(unit_types) - UNIT_TYPES:
+        raise ProcessingError("Unknown unit type in --unit_type.")
+    if unit_types and not unit_workflow:
+        raise ProcessingError("--unit_type requires --plan or --get-html for export.")
+    if export_html_flag and plan_path is None and document_type not in (None, "unit"):
+        raise ValueError("Direct --get-html processing requires --doc_type unit.")
+    derivatives = any(
+        (
+            export_json_flag,
+            get_doi_flag,
+            export_images_flag,
+            export_texts_flag,
+            export_thumbs_flag,
+        )
+    )
+    if not derivatives and not unit_workflow:
+        raise ValueError(
+            "No output selected. Select --get-meta, --get-doi, --get-img, "
+            "--get-text, --get-thumb, --plan, or --get-html."
+        )
+    if export_format != "png":
+        raise ValueError("Unsupported page image format.")
+    _check_dpi(dpi)
+    _check_dir_names(txt_dir, img_dir, thumb_dir)
+    config = config or load_config()
+    selected_tasks = validate_task_selection(
+        config, llm_tasks, COMMAND_EXPORT, get_html=export_html_flag
+    )
+    input_pdf = _resolve_input(input_pdf)
+    output_dir = _final_output_dir(output_dir, input_pdf, input_path_prefix, config)
+    units_dir = output_dir / f"_units_{input_pdf.stem}"
+    images_dir = output_dir / f"{img_dir}_{input_pdf.stem}"
+    thumbs_dir = output_dir / f"{thumb_dir}_{input_pdf.stem}"
+    texts_out = output_dir / f"{txt_dir}_{input_pdf.stem}"
+    export_dirs = []
+    if unit_workflow:
+        export_dirs.append(units_dir)
+    if export_images_flag or export_thumbs_flag:
+        export_dirs.append(images_dir)
+    if export_thumbs_flag:
+        export_dirs.append(thumbs_dir)
+    if export_texts_flag:
+        export_dirs.append(texts_out)
+    if any(input_pdf.is_relative_to(path.resolve()) for path in export_dirs):
+        raise ValueError("Export directories must not contain the input PDF.")
+
+    # OCR tools or a scanner can hold a work file briefly on Windows.
+    # A leftover work file must not fail a published result.
+    with tempfile.TemporaryDirectory(
+        prefix="pdfwtf-", dir=get_temp_dir(config=config), ignore_cleanup_errors=True
+    ) as temp:
+        workspace = Path(temp)
+        job_log = logging.LoggerAdapter(log, {"correlation_id": workspace.name})
+        total_pages = _input_page_count(input_pdf)
+        job_log.debug("Export started. Input pages=%d.", total_pages)
         unit_plan = None
         selected_units = None
         if plan_path is not None:
@@ -460,128 +707,18 @@ def process_pdf(
         pages_to_keep = (
             [page["input_page"] for page in unit_plan["pages"] if page["selected"]]
             if unit_plan is not None
-            else (
-                parse_page_ranges(extract_pages_str, total_pages)
-                if extract_pages_str is not None
-                else []
-            )
-        )
-        pages_to_skip = (
-            parse_page_ranges(skip_pages_str, total_pages)
-            if skip_pages_str is not None
             else []
         )
-        selection_requested = unit_plan is not None or extract_pages_str is not None
-        selected = (
-            pages_to_keep if selection_requested else list(range(1, total_pages + 1))
-        )
-        if not no_pdf_flag and not (set(selected) - set(pages_to_skip)):
-            raise ValueError("Page removal must leave at least one page.")
-
-        def prepare(source: Path, directory: Path, split: str | None) -> Path:
-            directory.mkdir()
-            working_pdf = directory / "working.pdf"
-            result = directory / "result.pdf"
-            shutil.copy2(source, working_pdf)
-            if not born_digital_flag and (
-                pdf_type == "scanned" or is_scanned_or_hybrid(working_pdf)
-            ):
-                images, rotated = _process_scanned(
-                    working_pdf,
-                    directory,
-                    dpi,
-                    pre_rotate,
-                    layout,
-                    split,
-                    remove_background_flag,
-                    scan_dir,
-                )
-                expected_pages = count_pdf_pages(working_pdf)
-                run_ocr(
-                    working_pdf,
-                    result,
-                    images,
-                    ocrlib=ocrlib,
-                    lang=languages,
-                    rotated=rotated,
-                    unpaper_ok=False,
-                    debug_flag=debug_flag,
-                    dpi=dpi,
-                    optimize=optimize,
-                )
-                if count_pdf_pages(result) != expected_pages:
-                    raise ProcessingError(
-                        "OCR did not preserve the prepared page count."
-                    )
-            else:
-                shutil.copy2(working_pdf, result)
-            return result
-
-        derivatives = any(
-            (
-                export_json_flag,
-                get_doi_flag,
-                export_images_flag,
-                export_texts_flag,
-                export_thumbs_flag,
-            )
-        )
-        result_pdf = (
-            prepare(input_pdf, workspace / "derivatives", None) if derivatives else None
-        )
-        if result_pdf is not None and count_pdf_pages(result_pdf) != total_pages:
-            raise ProcessingError("Derivative processing must preserve input indices.")
-        pdf_result = None
-        if not no_pdf_flag:
-            if result_pdf is not None and output_pages in (None, "1"):
-                pdf_result = workspace / "pdf_result.pdf"
-                if selection_requested:
-                    extract_pages(result_pdf, pdf_result, pages_to_keep=selected)
-                else:
-                    shutil.copy2(result_pdf, pdf_result)
-            else:
-                selected_pdf = workspace / "selected.pdf"
-                if selection_requested:
-                    extract_pages(input_pdf, selected_pdf, pages_to_keep=selected)
-                else:
-                    shutil.copy2(input_pdf, selected_pdf)
-                pdf_result = prepare(selected_pdf, workspace / "pdf", output_pages)
-            # A split input page maps to all of its generated PDF pages.
-            count = count_pdf_pages(pdf_result)
-            factor, remainder = divmod(count, len(selected))
-            if remainder or factor < 1:
-                raise ProcessingError("PDF processing did not preserve page mapping.")
-            remove = [
-                position * factor + part + 1
-                for position, original in enumerate(selected)
-                if original in pages_to_skip
-                for part in range(factor)
-            ]
-            if remove:
-                extract_pages(pdf_result, pdf_result, pages_to_skip=remove)
-
-        images_dir = output_dir / f"{img_dir}_{input_pdf.stem}"
-        thumbs_dir = output_dir / f"{thumb_dir}_{input_pdf.stem}"
         if export_images_flag or export_thumbs_flag:
-            export_images(result_pdf, images_dir, dpi=dpi)
+            export_images(input_pdf, images_dir, dpi=dpi)
         if export_thumbs_flag:
             export_thumbnails(images_dir, thumbs_dir)
-        metadata: dict[str, Any] = {
-            "input": str(input_pdf),
-            "output": str(output_pdf.resolve()) if not no_pdf_flag else None,
-            "doi": [],
-        }
+        metadata: dict[str, Any] = {"input": str(input_pdf), "output": None, "doi": []}
         if export_json_flag or get_doi_flag:
-            metadata["pages"] = build_page_metadata(
-                result_pdf, pages_to_keep, pages_to_skip
-            )
+            metadata["pages"] = build_page_metadata(input_pdf, pages_to_keep, [])
         if export_texts_flag or get_doi_flag:
-            texts_dir = (
-                output_dir / f"{txt_dir}_{input_pdf.stem}"
-                if export_texts_flag
-                else workspace / "doi_texts"
-            )
-            texts = export_text(result_pdf, texts_dir)
+            texts_dir = texts_out if export_texts_flag else workspace / "doi_texts"
+            texts = export_text(input_pdf, texts_dir)
             if export_texts_flag:
                 with (output_dir / f"{input_pdf.stem}.txt").open(
                     "w", encoding="utf-8"
@@ -595,10 +732,57 @@ def process_pdf(
         if export_json_flag or get_doi_flag:
             write_json(metadata, output_dir / f"{input_pdf.stem}.meta.json")
         if staged_units is not None:
-            publish_unit_directory(
-                staged_units, output_dir / f"_units_{input_pdf.stem}"
-            )
-        if not no_pdf_flag:
-            _publish_pdf(pdf_result, output_pdf)
-        job_log.info("PDF processing completed.")
+            publish_unit_directory(staged_units, units_dir)
+        job_log.info("Export completed.")
         return llm_report
+
+
+OPERATIONS: dict[str, Callable[..., Any]] = {
+    COMMAND_ANALYZE: analyze_pdf,
+    COMMAND_ENHANCE: enhance_pdf,
+    COMMAND_PARTITION: partition_pdf,
+    COMMAND_EXPORT: export_pdf,
+}
+
+
+def _inactive(value: object) -> bool:
+    return value is None or value is False or value == () or value == ""
+
+
+def process_pdf(
+    input_pdf: str | Path,
+    output_dir: str | Path | None,
+    *,
+    command: str = COMMAND_ENHANCE,
+    config: AppConfig | None = None,
+    partition_flag: bool = False,
+    **options: Any,
+) -> AnalysisResult | EnhanceResult | Path | LLMReport | None:
+    """Dispatch to one operation. Kept for compatibility with older callers.
+
+    ``partition_flag=True`` selects partitioning. An option that the selected
+    operation does not accept is rejected unless it has an inactive value.
+    """
+    if partition_flag:
+        if command not in (COMMAND_ENHANCE, COMMAND_PARTITION):
+            raise ValueError("partition_flag cannot be combined with this command.")
+        command = COMMAND_PARTITION
+    if options.pop("born_digital_flag", False):
+        # Older callers used born_digital_flag for pdf_type="born-digital".
+        if options.get("pdf_type", "auto") == "scanned":
+            raise ValueError(
+                "born_digital_flag cannot be combined with pdf_type scanned."
+            )
+        options["pdf_type"] = "born-digital"
+    operation = OPERATIONS.get(command)
+    if operation is None:
+        raise ValueError(f"Unknown command '{command}'.")
+    accepted = inspect.signature(operation).parameters
+    for name, value in list(options.items()):
+        if name not in accepted:
+            if not _inactive(value):
+                raise ValueError(
+                    f"Option '{name}' is not supported by the '{command}' command."
+                )
+            del options[name]
+    return operation(input_pdf, output_dir, config=config, **options)

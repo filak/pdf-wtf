@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from PIL import Image
 import pymupdf as fitz
 import pytest
@@ -12,6 +14,7 @@ from pdfwtf.utils.common import (
     get_output_dir_final,
     images_to_pdf,
     parse_page_ranges,
+    replace_file,
 )
 
 
@@ -235,3 +238,50 @@ def test_rgba_thumbnail_export(tmp_path):
     export_thumbnails(images, output)
     with Image.open(output / "page.jpg") as image:
         assert image.mode == "RGB"
+
+
+def _flaky_replace(monkeypatch, failures):
+    calls = []
+    original = Path.replace
+
+    def replace(self, target):
+        calls.append(target)
+        if len(calls) <= failures:
+            raise PermissionError(13, "locked", str(target))
+        return original(self, target)
+
+    monkeypatch.setattr(Path, "replace", replace)
+    monkeypatch.setattr("pdfwtf.utils.common.time.sleep", lambda _delay: None)
+    monkeypatch.setattr("pdfwtf.utils.common.sys.platform", "win32")
+    return calls
+
+
+def test_replace_file_retries_short_windows_lock(tmp_path, monkeypatch):
+    source = tmp_path / "staged.pdf"
+    destination = tmp_path / "prepared.pdf"
+    source.write_bytes(b"new")
+    destination.write_bytes(b"old")
+    calls = _flaky_replace(monkeypatch, failures=2)
+    replace_file(source, destination)
+    assert len(calls) == 3
+    assert destination.read_bytes() == b"new"
+    assert not source.exists()
+
+
+def test_replace_file_raises_persistent_lock(tmp_path, monkeypatch):
+    source = tmp_path / "staged.pdf"
+    source.write_bytes(b"new")
+    calls = _flaky_replace(monkeypatch, failures=99)
+    with pytest.raises(PermissionError):
+        replace_file(source, tmp_path / "prepared.pdf", attempts=3)
+    assert len(calls) == 3
+
+
+def test_replace_file_does_not_retry_outside_windows(tmp_path, monkeypatch):
+    source = tmp_path / "staged.pdf"
+    source.write_bytes(b"new")
+    calls = _flaky_replace(monkeypatch, failures=99)
+    monkeypatch.setattr("pdfwtf.utils.common.sys.platform", "linux")
+    with pytest.raises(PermissionError):
+        replace_file(source, tmp_path / "prepared.pdf")
+    assert len(calls) == 1

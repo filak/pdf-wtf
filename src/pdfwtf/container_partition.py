@@ -1,4 +1,4 @@
-"""Born-digital container analysis, reviewed plans, and unit HTML export."""
+"""Born-digital container partition, reviewed plans, and unit HTML export."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ import pymupdf as fitz
 from .page_metadata import build_page_metadata
 from .utils.common import _extract_doi_candidates
 
-SCHEMA_VERSION = "1.3"
+SCHEMA_VERSION = "1.4"
 DOCUMENT_TYPES = {
     "unit",
     "journal-issue",
@@ -923,7 +923,7 @@ def _candidate_starts(
     return sorted(candidates.values(), key=lambda item: item["input_page"])
 
 
-def analyze_container(pdf_path: Path, requested_type: str) -> dict[str, Any]:
+def partition_container(pdf_path: Path, requested_type: str) -> dict[str, Any]:
     """Create conservative whole-page unit proposals with review evidence."""
     if requested_type not in {
         "unit",
@@ -1027,7 +1027,7 @@ def analyze_container(pdf_path: Path, requested_type: str) -> dict[str, Any]:
     }
     return {
         "schema_version": SCHEMA_VERSION,
-        "kind": "analysis",
+        "kind": "partition",
         "source": source,
         "document_type": document_type,
         "coordinate_system": structure["coordinate_system"],
@@ -1111,6 +1111,11 @@ def validate_plan(
         errors.append("source must be an object.")
     else:
         if source.get("sha256") != actual_source["sha256"]:
+            # Identity uses content, not paths, so a moved or renamed PDF passes.
+            errors.append(
+                "The plan was created for a different PDF. Partition the PDF "
+                "that you export, normally the prepared PDF."
+            )
             errors.append("source.sha256 does not match the input PDF.")
         if source.get("page_count") != actual_source["page_count"]:
             errors.append("source.page_count does not match the input PDF.")
@@ -1325,15 +1330,15 @@ def validate_plan(
 
 def direct_unit_plan(pdf_path: Path) -> dict[str, Any]:
     """Build confirmed instructions for direct single-unit processing."""
-    analysis = analyze_container(pdf_path, "unit")
-    identity = analysis["source"]
-    unit = analysis["units"][0]
+    partition = partition_container(pdf_path, "unit")
+    identity = partition["source"]
+    unit = partition["units"][0]
     return {
         "schema_version": SCHEMA_VERSION,
         "kind": "plan",
         "source": identity,
         "document_type": "unit",
-        "pages": [{**page, "selected": True} for page in analysis["pages"]],
+        "pages": [{**page, "selected": True} for page in partition["pages"]],
         "units": [
             {
                 **unit,
