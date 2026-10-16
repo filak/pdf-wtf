@@ -1484,12 +1484,201 @@ def _bbox_matches(first: list[float], second: list[float]) -> bool:
     )
 
 
+def _text_style(block: dict[str, Any]) -> tuple[float, float]:
+    """Return character-weighted dominant size and bold fraction."""
+    sizes: Counter[float] = Counter()
+    bold_chars = 0
+    for line in block["lines"]:
+        for span in line["spans"]:
+            weight = len(span["text"].strip())
+            sizes[round(span["size"], 1)] += weight
+            if span.get("flags", 0) & 16 or "bold" in span["font"].lower():
+                bold_chars += weight
+    total = sum(sizes.values())
+    return (
+        sizes.most_common(1)[0][0] if total else 0,
+        bold_chars / total if total else 0,
+    )
+
+
+def _unit_body_size(pages: list[dict[str, Any]], running: set[str]) -> float:
+    sizes: Counter[float] = Counter()
+    for page in pages:
+        for block in page["text_blocks"]:
+            text = _block_text(block)
+            margin = (
+                block["bbox"][1] <= page["height"] * 0.1
+                or block["bbox"][3] >= page["height"] * 0.9
+            )
+            if (margin and _normalized_margin_text(text) in running) or _CAPTION.search(
+                text
+            ):
+                continue
+            for line in block["lines"]:
+                for span in line["spans"]:
+                    sizes[round(span["size"], 1)] += len(span["text"].strip())
+    # The most common size by character count is less sensitive to fragmented
+    # title spans and small-font footnotes than an unweighted span median.
+    return sizes.most_common(1)[0][0] if sizes else 0
+
+
+_SECTION_NUMBER = re.compile(r"^\d+(?:\.\d+)*[.)]?\s+\S")
+_SECTION_LABELS = {
+    "abstract",
+    "summary",
+    "introduction",
+    "methods",
+    "materials and methods",
+    "results",
+    "discussion",
+    "conclusion",
+    "conclusions",
+    "references",
+    "acknowledgements",
+    "acknowledgments",
+    "abstrakt",
+    "souhrn",
+    "úvod",
+    "metodika",
+    "výsledky",
+    "diskuse",
+    "diskuze",
+    "závěr",
+    "literatura",
+}
+
+
+def _can_be_unit_title(text: str) -> bool:
+    return (
+        not _SECTION_NUMBER.match(text)
+        and text.strip().casefold().rstrip(":.") not in _SECTION_LABELS
+    )
+
+
+def _export_heading_evidence(
+    block: dict[str, Any], body_size: float, before_gap: float, after_gap: float
+) -> list[str]:
+    text = _block_text(block)
+    size, bold = _text_style(block)
+    if (
+        not text
+        or len(text) > 180
+        or len(block["lines"]) > 3
+        or not body_size
+        or text.isdigit()
+        or _CAPTION.search(text)
+        or _ISSN.search(text)
+        or _ISBN.search(text)
+        or "@" in text
+        or re.match(r"^(?:https?://|doi\s*:)", text, re.I)
+    ):
+        return []
+    evidence = []
+    if size >= body_size * 1.15:
+        evidence.append("larger than unit body text")
+    if bold >= 0.8:
+        evidence.append("predominantly bold")
+    if _SECTION_NUMBER.match(text):
+        evidence.append("section numbering")
+    if before_gap >= size * 0.5 and before_gap > after_gap * 1.2:
+        evidence.append("spacing before exceeds spacing after")
+    # Bold body sentences and isolated inline emphasis are weak evidence.
+    typography = size >= body_size * 1.15 or bold >= 0.8
+    if not typography or (
+        text.endswith((".", "!", "?", ";")) and size < body_size * 1.35
+    ):
+        return []
+    return evidence if len(evidence) >= 2 or size >= body_size * 1.35 else []
+
+
+def _resolve_unit_headings(
+    blocks: list[dict[str, Any]], unit_title: str, body_size: float
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """Merge wrapped automatic headings and assign hierarchy across pages."""
+    merged: list[dict[str, Any]] = []
+    warnings = []
+    for block in blocks:
+        previous = merged[-1] if merged else None
+        if (
+            previous is not None
+            and previous["kind"] == block["kind"] == "heading"
+            and not previous.get("_reviewed")
+            and not block.get("_reviewed")
+            and previous["input_page"] == block["input_page"]
+            and previous["_style"] == block["_style"]
+            and abs(previous["bbox"][0] - block["bbox"][0]) <= body_size * 0.5
+            and 0 <= block["bbox"][1] - previous["bbox"][3] <= body_size * 0.35
+            and len(previous["text"]) + len(block["text"]) < 180
+            and not previous["text"].endswith((".", ":", "!", "?"))
+            and not _SECTION_NUMBER.match(block["text"])
+        ):
+            previous["text"] += " " + block["text"]
+            previous["bbox"] = list(
+                fitz.Rect(previous["bbox"]) | fitz.Rect(block["bbox"])
+            )
+            previous["heading_evidence"].append("merged adjacent wrapped heading")
+            continue
+        merged.append(block)
+    headings = [b for b in merged if b["kind"] == "heading"]
+    automatic = [b for b in headings if not b.get("_reviewed")]
+    title = None
+    if not any(b.get("_reviewed") and b["level"] == 1 for b in headings):
+        normalized_title = " ".join(unit_title.casefold().split())
+        title = next(
+            (
+                b
+                for b in automatic
+                if " ".join(b["text"].casefold().split()) == normalized_title
+                and _can_be_unit_title(b["text"])
+            ),
+            None,
+        )
+        if title is None and automatic:
+            first_page = next(b["input_page"] for b in merged if "input_page" in b)
+            first_content = next(
+                (b for b in merged if b["kind"] != "page_marker"), None
+            )
+            if (
+                first_content is automatic[0]
+                and first_content["input_page"] == first_page
+                and first_content["_style"][0] >= body_size * 1.35
+                and _can_be_unit_title(first_content["text"])
+            ):
+                title = first_content
+    styles = sorted({b["_style"] for b in automatic if b is not title}, reverse=True)
+    for block in automatic:
+        block["level"] = (
+            1 if block is title else min(6, 2 + styles.index(block["_style"]))
+        )
+    previous = None
+    for block in merged:
+        if block["kind"] == "page_marker":
+            continue
+        if (
+            previous is not None
+            and previous["kind"] == block["kind"] == "heading"
+            and block["level"] <= previous["level"]
+        ):
+            warnings.append(
+                f"Input page {block['input_page']} has consecutive headings without "
+                "a subordinate hierarchy; review their classification."
+            )
+        previous = block
+    for block in merged:
+        block.pop("_style", None)
+        block.pop("_reviewed", None)
+    return merged, warnings
+
+
 def _page_blocks_for_export(
     page: dict[str, Any],
     unit_id: str,
     figure_start: int,
     running: set[str],
     reviewed_page: dict[str, Any] | None = None,
+    *,
+    unit_body_size: float | None = None,
+    use_reviewed_headings: bool = True,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str]]:
     semantic = [
         {
@@ -1552,9 +1741,13 @@ def _page_blocks_for_export(
         for span in line["spans"]
         if span["text"].strip()
     ]
-    body_size = median(sizes) if sizes else 0
+    body_size = (
+        unit_body_size
+        if unit_body_size is not None
+        else (median(sizes) if sizes else 0)
+    )
     reviewed_headings = []
-    if reviewed_page is not None:
+    if reviewed_page is not None and use_reviewed_headings:
         main_title = reviewed_page.get("main_title")
         if main_title is not None:
             reviewed_headings.append(
@@ -1597,10 +1790,17 @@ def _page_blocks_for_export(
         text = reviewed_heading["text"] if reviewed_heading else _block_text(item)
         if not text:
             continue
+        before = blocks[index - 1] if index else None
+        after = blocks[index + 1] if index + 1 < len(blocks) else None
+        before_gap = item["bbox"][1] - before["bbox"][3] if before else float("inf")
+        after_gap = after["bbox"][1] - item["bbox"][3] if after else float("inf")
+        evidence = (
+            ["reviewed plan heading"]
+            if reviewed_heading
+            else _export_heading_evidence(item, body_size, before_gap, after_gap)
+        )
         level = (
-            reviewed_heading["level"]
-            if reviewed_heading is not None
-            else _heading_level(item, body_size)
+            reviewed_heading["level"] if reviewed_heading else (2 if evidence else None)
         )
         semantic.append(
             {
@@ -1609,6 +1809,9 @@ def _page_blocks_for_export(
                 "text": text,
                 "input_page": page["input_page"],
                 "bbox": item["bbox"],
+                **({"heading_evidence": evidence} if level else {}),
+                "_style": (_text_style(item)[0], _text_style(item)[1] >= 0.8),
+                "_reviewed": reviewed_heading is not None,
             }
         )
     return semantic, figures, warnings
@@ -1618,6 +1821,8 @@ def reconstruct_unit(
     document: fitz.Document,
     unit: dict[str, Any],
     reviewed_pages: dict[int, dict[str, Any]] | None = None,
+    *,
+    use_reviewed_headings: bool = True,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str]]:
     """Build semantic blocks for one confirmed whole-page unit."""
     start = unit["input_pages"]["start"]
@@ -1633,6 +1838,7 @@ def reconstruct_unit(
         for number in page_numbers
     ]
     running = _running_margin_texts(pages)
+    body_size = _unit_body_size(pages, running)
     semantic = []
     figures = []
     warnings = []
@@ -1644,6 +1850,8 @@ def reconstruct_unit(
             next_figure,
             running,
             reviewed_pages.get(page["input_page"]) if reviewed_pages else None,
+            unit_body_size=body_size,
+            use_reviewed_headings=use_reviewed_headings,
         )
         semantic.extend(page_blocks)
         figures.extend(page_figures)
@@ -1657,6 +1865,10 @@ def reconstruct_unit(
             warnings.append(
                 f"Input page {page['input_page']} contains vector graphics or table rules; review is required."
             )
+    semantic, heading_warnings = _resolve_unit_headings(
+        semantic, unit.get("title", ""), body_size
+    )
+    warnings.extend(heading_warnings)
     return semantic, figures, warnings
 
 
@@ -1708,6 +1920,8 @@ def export_units(
     include_html: bool,
     include_pdf: bool = False,
     extract_doi: bool = False,
+    *,
+    use_reviewed_headings: bool = True,
 ) -> None:
     """Write selected units and a manifest into a separate export directory.
 
@@ -1720,7 +1934,10 @@ def export_units(
     with fitz.open(pdf_path) as document:
         for unit in selected_units:
             blocks, figures, warnings = reconstruct_unit(
-                document, unit, reviewed_pages=reviewed_pages
+                document,
+                unit,
+                reviewed_pages=reviewed_pages,
+                use_reviewed_headings=use_reviewed_headings,
             )
             selected_input_pages = [
                 page

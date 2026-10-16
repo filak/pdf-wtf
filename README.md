@@ -291,6 +291,13 @@ Write partition proposals:
 uv run --locked pdfwtf partition /data/out/issue.prepared.pdf --doc_type journal-issue
 ```
 
+Journal partitioning combines local title, author, affiliation, multilingual
+abstract, keywords, and article DOI evidence. It also checks matching PDF
+bookmarks, linked contents, and printed contents entries. Large titles and
+abstracts are not required. Internal sections and repeated headers do not
+establish starts by themselves. Page warnings report opening decisions and
+evidence. Ambiguous shared-page starts still require review.
+
 Review the proposals in a consuming application, such as the demo GUI.
 Save the confirmed page ranges, unit types, and selections in a separate plan.
 Export the reviewed units as metadata and HTML:

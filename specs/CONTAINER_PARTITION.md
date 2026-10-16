@@ -238,8 +238,11 @@ least 40 pixels. The partitioner retains the full internal structure only while 
 classifies the document and builds the compact partition.
 
 The partitioner combines evidence. A heading or DOI alone does not create a unit.
-A possible start below the top region of a page is written to
-`suspected_shared_page_boundaries`. It is not converted to a proposed boundary.
+For journals and proceedings, a low title position does not establish a shared
+page by itself. Compact branding above a title can precede a whole-page start.
+Substantial preceding text, a reference section, or an unexplained title below
+40 percent of the page height produces a `suspected_shared_page_boundaries`
+entry. It is not converted to a proposed boundary.
 
 Each `units[].doi` value is an array of unverified DOI candidates from that
 unit's proposed page range. The array is empty when no candidate is found. DOI
@@ -375,8 +378,24 @@ two-, and three-column pages. It reads each column from top to bottom before
 moving right. Full-width blocks divide the page into separate column regions.
 Native text blocks that contain separate columns are split at line-level gutters.
 Ambiguous overlaps use top-to-bottom order and require review. It uses native
-font size and font names
-for conservative heading classification. It joins wrapped lines and removes a
+font size, bold character coverage, numbering, and neighbouring spacing
+for conservative HTML heading classification. The body-size baseline is the
+most common font size by character count across the selected unit pages,
+excluding recognized captions and repeated margin text. A single bold span
+does not promote an entire body paragraph to a heading.
+
+Direct unit export reconsiders automatic partition heading guesses. Explicit
+plan headings retain their text and levels. Automatic heading fragments with
+matching styles, aligned left edges, and a very small vertical gap can merge
+on the same page. Numbered successors do not merge. One confident unit title
+can use `h1`; other automatic heading styles map consistently to `h2` through
+`h6` across the unit. A missing confident title does not require an `h1`.
+Consecutive headings at the same or a higher level produce a review warning;
+parent and subordinate headings can remain adjacent. Heading semantic blocks
+include `heading_evidence` describing the classification signals.
+
+Paragraph reconstruction still joins lines only within each native text block.
+It removes a
 hyphen only before a lowercase continuation.
 
 Repeated margin text on two or more pages is treated as a running header or
@@ -419,3 +438,69 @@ an image. The detector checks horizontal alignment, a gap of at most 18 PDF
 points, and text of at most 14 PDF points. It associates each caption line with
 one nearest image and excludes page footers. Academic journal caption rules
 continue to require explicit caption prefixes.
+
+## Academic journal opening detection
+
+`journal-issue` and `proceedings` use local article-opening evidence. The
+magazine detection path is unchanged. Automatic classification uses these
+opening signals before the bookmark-based book fallback.
+
+The detector evaluates title candidates rather than selecting the largest line
+alone. It excludes recurring upper-margin text, internal section labels,
+caption labels, DOI lines, affiliations, and contact credentials. Adjacent lines
+with compatible title typography are combined. A translated title can occur
+between the primary title and its authors without creating a second start.
+
+Each candidate receives these heuristic weights:
+
+| Evidence | Weight |
+| --- | --- |
+| Bold title or title font at least 1.15 times body size | +2 |
+| Nearby compact author byline | +2 |
+| Nearby affiliation | +1 |
+| Nearby abstract label | +2 |
+| Nearby keywords label | +1 |
+| Nearby DOI | +1 |
+| Editorial, letter, correspondence, or book-review label | +2 |
+| Changed explicit article DOI in a margin | +1 |
+| Continuing explicit article DOI without a new abstract | -3 |
+| References on the previous page, with other opening evidence | +1 |
+
+The body size is the character-weighted median font size on the page. Opening
+evidence is limited to the next 230 PDF points or 35 percent of page height,
+whichever is smaller. Byline evidence must occur within 60 points of the title
+and among the first three following lines. Reference sections stop the evidence
+window. Candidates inside references require title typography and a new
+abstract or affiliation.
+
+A score of at least 4 proposes a start when title typography, an abstract, or
+an affiliation also supports it. No author, DOI, or abstract signal is mandatory.
+Scores describe heuristic support. They are not calibrated probabilities.
+Labels include `Abstract`, `Abstrakt`, `Souhrn`, `Súhrn`, `Résumé`, `Summary`,
+`Keywords`, `Klíèová slova`, and `K¾úèové slová`. Label matches are anchored to
+the start of a line. Byline checks support Unicode names. A mention of `and`
+in prose is not byline evidence.
+
+PDF bookmarks and links from recognized contents pages can recover a start
+without opening typography. The normalized navigation title must match up to
+four consecutive lines in the top 60 percent of the destination page. Known
+internal section labels do not establish navigation boundaries. The matched
+destination text supplies the title and its position. A matched navigation
+entry contributes 4 points and can independently support a proposal.
+
+Printed contents detection recognizes single-line entries with a title, optional
+leader dots, and a final printed page number. The number must map to exactly
+one detected input page. The destination title must also match. Missing or
+ambiguous mappings do not create boundaries. Multiline contents entries and
+unrecognized labels still require review.
+
+Each journal page records a compact opening diagnostic in `pages[].warnings`:
+the best candidate score, the accepted or insufficient-evidence decision, and
+the supporting or opposing signals. Accepted boundaries retain their evidence
+in `units[].boundary_evidence`. Shared-page candidates retain their evidence
+separately. No extracted body text is persisted. The existing JSON schema and
+reviewed whole-page plan contract remain unchanged.
+
+Use manually reviewed scientific issues to assess boundary precision and recall
+before tuning these weights. The synthetic regression cases verify individual
+signals; they do not establish accuracy across publishers or historical issues.

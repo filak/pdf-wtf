@@ -696,6 +696,7 @@ def export_pdf(
                 selected_units,
                 staged_units,
                 include_html=export_html_flag,
+                use_reviewed_headings=plan_path is not None,
                 include_pdf=export_unit_pdfs_flag,
                 extract_doi=unit_doi_flag or get_doi_flag,
             )

@@ -165,7 +165,10 @@ and combined text. `--get-thumb` also writes page images.
 
 Born-digital container partitioning describes each input page and proposes
 whole-page unit partitions from text structure, bookmarks, links, and raster
-image occurrences. Page descriptions include printed page numbers, page types,
+image occurrences. Journal and proceedings partitioning combines local opening
+signals and matching contents navigation. It does not require a large title,
+author, abstract, or DOI individually. Ambiguous shared-page starts require
+review. The container specification defines the evidence and diagnostics. Page descriptions include printed page numbers, page types,
 titles, sections, substantive figure positions, captions, bibliographic source
 metadata, and unit links. Each proposed unit includes DOI candidates extracted
 from the pages in its proposed range. Extracted strings use Unicode compatibility
