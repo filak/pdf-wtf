@@ -1,22 +1,32 @@
-"""Born-digital container partition, reviewed plans, and unit HTML export."""
+"""Born-digital container partition, reviewed plans, and unit export."""
 
 from __future__ import annotations
 
 from collections import Counter
 from datetime import datetime, UTC
 from hashlib import sha256
-from html import escape, unescape
 import json
 import math
 from pathlib import Path
 import re
 import shutil
 from statistics import median
-from typing import Any, Iterable
-import unicodedata
+from typing import Any
 
 import pymupdf as fitz
 
+from .html_extraction import reconstruct_pages, render_html
+from .page_layout import (
+    _CAPTION,
+    _ISBN,
+    _ISSN,
+    _block_text,
+    _extract_page,
+    _normalize_text,
+    _ordered_blocks,
+    _page_figures,
+    _rect,
+)
 from .page_metadata import build_page_metadata
 from .utils.common import _extract_doi_candidates
 
@@ -58,35 +68,12 @@ _AUTHOR = re.compile(
     r"(?:\b(?i:and|et al\.?|university|institute)\b|@|"
     r"[A-Z][a-z]+(?:[-'][A-Za-z]+)?\s+[A-Z][a-z]+(?:[-'][A-Za-z]+)?)"
 )
-_CAPTION = re.compile(r"^(?:fig(?:ure)?\.?\s*\d+|image\s*\d+)\b", re.IGNORECASE)
 _CHAPTER = re.compile(r"^(?:chapter|part)\s+(?:\d+|[ivxlcdm]+)\b", re.IGNORECASE)
-_ISSN = re.compile(r"\bISSN\s*:?[\s-]*(\d{4})[\s-]*(\d{3}[\dX])\b", re.IGNORECASE)
-_ISBN = re.compile(
-    r"\bISBN(?:-1[03])?\s*:?[\s-]*((?:97[89][\s-]*)?\d(?:[\s-]*\d){8,11}[\s-]*[\dX])\b",
-    re.IGNORECASE,
-)
 _YEAR = re.compile(r"\b(?:19|20)\d{2}\b")
 
 
 class PlanValidationError(ValueError):
     """A reviewed plan does not satisfy the processing contract."""
-
-
-def _normalize_text(value: str) -> str:
-    """Normalize extracted PDF text while preserving meaningful Unicode."""
-    value = unescape(value)
-    value = unicodedata.normalize("NFKC", value)
-    characters = []
-    for character in value:
-        category = unicodedata.category(character)
-        if character == "\ufffd" or category in {"Cs", "Co"}:
-            characters.append(" ")
-        elif category in {"Cc", "Cf"}:
-            if character.isspace():
-                characters.append(" ")
-        else:
-            characters.append(character)
-    return " ".join("".join(characters).split())
 
 
 def source_identity(pdf_path: Path) -> dict[str, Any]:
@@ -98,89 +85,6 @@ def source_identity(pdf_path: Path) -> dict[str, Any]:
     with fitz.open(pdf_path) as document:
         page_count = len(document)
     return {"sha256": digest.hexdigest(), "page_count": page_count}
-
-
-def _rect(value: fitz.Rect | Iterable[float]) -> list[float]:
-    rect = fitz.Rect(value)
-    return [round(item, 3) for item in (rect.x0, rect.y0, rect.x1, rect.y1)]
-
-
-def _line_text(line: dict[str, Any]) -> str:
-    return _normalize_text(
-        "".join(span.get("text", "") for span in line.get("spans", []))
-    )
-
-
-def _extract_page(page: fitz.Page, printed_number: str | None) -> dict[str, Any]:
-    blocks = []
-    text_flags = getattr(fitz, "TEXTFLAGS_TEXT", 0)
-    for block in page.get_text("dict", flags=text_flags).get("blocks", []):
-        if block.get("type") != 0:
-            continue
-        lines = []
-        for line in block.get("lines", []):
-            spans = [
-                {
-                    "text": span.get("text", ""),
-                    "bbox": _rect(span["bbox"]),
-                    "font": span.get("font", ""),
-                    "size": round(float(span.get("size", 0)), 3),
-                    "flags": int(span.get("flags", 0)),
-                    "color": int(span.get("color", 0)),
-                }
-                for span in line.get("spans", [])
-                if span.get("text")
-            ]
-            if spans:
-                lines.append(
-                    {
-                        "text": _normalize_text(
-                            "".join(span["text"] for span in spans)
-                        ),
-                        "bbox": _rect(line["bbox"]),
-                        "spans": spans,
-                    }
-                )
-        if lines:
-            # Native blocks can contain separate lines from several columns.
-            for group in _projection_groups(
-                lines, axis=0, min_gap=max(3.0, page.rect.width * 0.01)
-            ):
-                group.sort(key=lambda line: (line["bbox"][1], line["bbox"][0]))
-                blocks.append(
-                    {
-                        "kind": "text",
-                        "bbox": [
-                            min(line["bbox"][0] for line in group),
-                            min(line["bbox"][1] for line in group),
-                            max(line["bbox"][2] for line in group),
-                            max(line["bbox"][3] for line in group),
-                        ],
-                        "lines": group,
-                    }
-                )
-    images = []
-    for occurrence, image in enumerate(page.get_image_info(xrefs=True), start=1):
-        images.append(
-            {
-                "occurrence": occurrence,
-                "xref": int(image.get("xref", 0)),
-                "bbox": _rect(image["bbox"]),
-                "width": int(image.get("width", 0)),
-                "height": int(image.get("height", 0)),
-                "colorspace": int(image.get("colorspace", 0)),
-            }
-        )
-    return {
-        "input_page": page.number + 1,
-        "printed_page_number": printed_number,
-        "width": round(page.rect.width, 3),
-        "height": round(page.rect.height, 3),
-        "text_blocks": _ordered_items(
-            blocks, {"width": page.rect.width, "height": page.rect.height}
-        ),
-        "raster_images": images,
-    }
 
 
 def extract_structure(pdf_path: Path) -> dict[str, Any]:
@@ -906,113 +810,6 @@ def _bibliographic_source(
     return source
 
 
-def _magazine_captions(
-    page: dict[str, Any],
-    images: list[dict[str, Any]],
-) -> dict[int, tuple[str, list[float]]]:
-    """Associate small bold lines below photos with the nearest image."""
-    captions: dict[int, list[dict[str, Any]]] = {}
-    for block in page["text_blocks"]:
-        for line in block["lines"]:
-            spans = [span for span in line["spans"] if span["text"].strip()]
-            if not spans or not any(character.isalpha() for character in line["text"]):
-                continue
-            if line["bbox"][1] >= page["height"] * 0.94:
-                continue
-            if max(span["size"] for span in spans) > 14:
-                continue
-            total = sum(len(span["text"]) for span in spans)
-            bold = sum(
-                len(span["text"])
-                for span in spans
-                if span["flags"] & 16 or "bold" in span["font"].lower()
-            )
-            if bold < total * 0.7:
-                continue
-            candidates = []
-            for index, image in enumerate(images):
-                rect, bbox = image["bbox"], line["bbox"]
-                gap = bbox[1] - rect[3]
-                overlap = min(rect[2], bbox[2]) - max(rect[0], bbox[0])
-                width = min(rect[2] - rect[0], bbox[2] - bbox[0])
-                if 0 <= gap <= 18 and width > 0 and overlap / width >= 0.5:
-                    candidates.append((gap, -overlap, index))
-            if candidates:
-                index = min(candidates)[2]
-                captions.setdefault(index, []).append(line)
-    result = {}
-    for index, lines in captions.items():
-        lines.sort(key=lambda line: (line["bbox"][1], line["bbox"][0]))
-        result[index] = (
-            " ".join(line["text"] for line in lines),
-            [
-                min(line["bbox"][0] for line in lines),
-                min(line["bbox"][1] for line in lines),
-                max(line["bbox"][2] for line in lines),
-                max(line["bbox"][3] for line in lines),
-            ],
-        )
-    return result
-
-
-def _page_figures(
-    page: dict[str, Any], document_type: str | None = None
-) -> list[dict[str, Any]]:
-    """Describe raster figures and associate nearby explicit captions."""
-    blocks = _ordered_blocks(page)
-    caption_indices: set[int] = set()
-    figures = []
-    images = [image for image in page["raster_images"] if _is_figure_image(page, image)]
-    magazine_captions = (
-        _magazine_captions(page, images) if document_type == "magazine-issue" else {}
-    )
-    for number, image in enumerate(images, start=1):
-        caption = None
-        caption_bbox = None
-        for index, block in enumerate(blocks):
-            if index in caption_indices:
-                continue
-            text = _block_text(block)
-            if (
-                _CAPTION.search(text)
-                and block["bbox"][1] >= image["bbox"][3] - 5
-                and block["bbox"][1] <= image["bbox"][3] + 72
-            ):
-                caption = text
-                caption_bbox = block["bbox"]
-                caption_indices.add(index)
-                break
-        if caption is None and number - 1 in magazine_captions:
-            caption, caption_bbox = magazine_captions[number - 1]
-        figures.append(
-            {
-                "id": f"figure-{page['input_page']:03d}-{number:03d}",
-                "bbox": image["bbox"],
-                "xref": image["xref"],
-                "occurrence": image["occurrence"],
-                "width": image["width"],
-                "height": image["height"],
-                "colorspace": image["colorspace"],
-                "caption": caption,
-                "caption_bbox": caption_bbox,
-            }
-        )
-    return figures
-
-
-def _is_figure_image(page: dict[str, Any], image: dict[str, Any]) -> bool:
-    rect = fitz.Rect(image["bbox"])
-    page_area = page["width"] * page["height"]
-    return (
-        page_area > 0
-        and rect.get_area() / page_area >= 0.005
-        and rect.width >= 18
-        and rect.height >= 18
-        and image["width"] >= 40
-        and image["height"] >= 40
-    )
-
-
 def _classify_page(page: dict[str, Any]) -> tuple[str, list[str]]:
     lines = [line for block in page["text_blocks"] for line in block["lines"]]
     text = " ".join(line["text"].strip() for line in lines).strip()
@@ -1724,101 +1521,6 @@ def direct_unit_plan(pdf_path: Path) -> dict[str, Any]:
     }
 
 
-def _normalized_margin_text(text: str) -> str:
-    return re.sub(r"\d+", "#", " ".join(text.lower().split()))
-
-
-def _running_margin_texts(pages: list[dict[str, Any]]) -> set[str]:
-    counts: Counter[str] = Counter()
-    for page in pages:
-        on_page = set()
-        for block in page["text_blocks"]:
-            y0, y1 = block["bbox"][1], block["bbox"][3]
-            if y0 <= page["height"] * 0.1 or y1 >= page["height"] * 0.9:
-                text = " ".join(line["text"] for line in block["lines"]).strip()
-                if text:
-                    on_page.add(_normalized_margin_text(text))
-        counts.update(on_page)
-    return {text for text, count in counts.items() if count >= 2}
-
-
-def _projection_groups(
-    items: list[dict[str, Any]], axis: int, min_gap: float
-) -> list[list[dict[str, Any]]]:
-    """Partition items only at clear whitespace gaps in one axis."""
-    groups: list[list[dict[str, Any]]] = []
-    edge = float("-inf")
-    for item in sorted(items, key=lambda item: item["bbox"][axis]):
-        start = item["bbox"][axis]
-        end = item["bbox"][axis + 2]
-        if not groups or start - edge >= min_gap:
-            groups.append([])
-        groups[-1].append(item)
-        edge = max(edge, end)
-    return groups
-
-
-def _ordered_items(
-    items: list[dict[str, Any]], page: dict[str, Any]
-) -> list[dict[str, Any]]:
-    """Read whitespace-separated columns and horizontal regions recursively."""
-    if len(items) < 2:
-        return list(items)
-    groups = _projection_groups(items, 0, max(3.0, page["width"] * 0.01))
-    if len(groups) > 1:
-        return [item for group in groups for item in _ordered_items(group, page)]
-
-    # Spanning headings and figures divide the page into column regions.
-    # Keep each region together before looking for its column gutters.
-    full = [
-        item
-        for item in items
-        if item["bbox"][2] - item["bbox"][0] >= page["width"] * 0.62
-    ]
-    if full:
-        full.sort(key=lambda item: (item["bbox"][1], item["bbox"][0]))
-        columns = [item for item in items if item not in full]
-        ordered = []
-        band_top = float("-inf")
-        for separator in [*full, None]:
-            band_bottom = separator["bbox"][1] if separator else float("inf")
-            band = [
-                item
-                for item in columns
-                if band_top <= (item["bbox"][1] + item["bbox"][3]) / 2 < band_bottom
-            ]
-            ordered.extend(_ordered_items(band, page))
-            if separator is not None:
-                ordered.append(separator)
-                # Retain items that overlap a separator in the following region.
-                band_top = separator["bbox"][1]
-        return ordered
-
-    groups = _projection_groups(items, 1, max(2.0, page["height"] * 0.005))
-    if len(groups) > 1:
-        return [item for group in groups for item in _ordered_items(group, page)]
-    # Ambiguous overlaps cannot establish a safe column boundary.
-    # Retain every item in a deterministic top-to-bottom order.
-    return sorted(items, key=lambda item: (item["bbox"][1], item["bbox"][0]))
-
-
-def _ordered_blocks(page: dict[str, Any]) -> list[dict[str, Any]]:
-    return _ordered_items(list(page["text_blocks"]), page)
-
-
-def _block_text(block: dict[str, Any]) -> str:
-    result = ""
-    for line in block["lines"]:
-        value = line["text"].strip()
-        if not value:
-            continue
-        if result.endswith("-") and value[0].islower():
-            result = result[:-1] + value
-        else:
-            result = f"{result} {value}".strip()
-    return result
-
-
 def _heading_level(block: dict[str, Any], body_size: float) -> int | None:
     text = _block_text(block)
     if not text or len(text) > 180:
@@ -1839,452 +1541,80 @@ def _heading_level(block: dict[str, Any], body_size: float) -> int | None:
     return None
 
 
-def _overlap_fraction(first: list[float], second: list[float]) -> float:
-    first_rect = fitz.Rect(first)
-    intersection = first_rect & fitz.Rect(second)
-    if first_rect.get_area() <= 0 or intersection.is_empty:
-        return 0.0
-    return intersection.get_area() / first_rect.get_area()
-
-
-def _bbox_matches(first: list[float], second: list[float]) -> bool:
-    first_rect = fitz.Rect(first)
-    second_rect = fitz.Rect(second)
-    intersection = first_rect & second_rect
-    smaller = min(first_rect.get_area(), second_rect.get_area())
-    return (
-        smaller > 0
-        and not intersection.is_empty
-        and intersection.get_area() / smaller >= 0.8
-    )
-
-
-def _text_style(block: dict[str, Any]) -> tuple[float, float]:
-    """Return character-weighted dominant size and bold fraction."""
-    sizes: Counter[float] = Counter()
-    bold_chars = 0
-    for line in block["lines"]:
-        for span in line["spans"]:
-            weight = len(span["text"].strip())
-            sizes[round(span["size"], 1)] += weight
-            if span.get("flags", 0) & 16 or "bold" in span["font"].lower():
-                bold_chars += weight
-    total = sum(sizes.values())
-    return (
-        sizes.most_common(1)[0][0] if total else 0,
-        bold_chars / total if total else 0,
-    )
-
-
-def _unit_body_size(pages: list[dict[str, Any]], running: set[str]) -> float:
-    sizes: Counter[float] = Counter()
-    for page in pages:
-        for block in page["text_blocks"]:
-            text = _block_text(block)
-            margin = (
-                block["bbox"][1] <= page["height"] * 0.1
-                or block["bbox"][3] >= page["height"] * 0.9
-            )
-            if (margin and _normalized_margin_text(text) in running) or _CAPTION.search(
-                text
-            ):
-                continue
-            for line in block["lines"]:
-                for span in line["spans"]:
-                    sizes[round(span["size"], 1)] += len(span["text"].strip())
-    # The most common size by character count is less sensitive to fragmented
-    # title spans and small-font footnotes than an unweighted span median.
-    return sizes.most_common(1)[0][0] if sizes else 0
-
-
-_SECTION_NUMBER = re.compile(r"^\d+(?:\.\d+)*[.)]?\s+\S")
-_SECTION_LABELS = {
-    "abstract",
-    "summary",
-    "introduction",
-    "methods",
-    "materials and methods",
-    "results",
-    "discussion",
-    "conclusion",
-    "conclusions",
-    "references",
-    "acknowledgements",
-    "acknowledgments",
-    "abstrakt",
-    "souhrn",
-    "úvod",
-    "metodika",
-    "výsledky",
-    "diskuse",
-    "diskuze",
-    "závěr",
-    "literatura",
-}
-
-
-def _can_be_unit_title(text: str) -> bool:
-    return (
-        not _SECTION_NUMBER.match(text)
-        and text.strip().casefold().rstrip(":.") not in _SECTION_LABELS
-    )
-
-
-def _export_heading_evidence(
-    block: dict[str, Any], body_size: float, before_gap: float, after_gap: float
-) -> list[str]:
-    text = _block_text(block)
-    size, bold = _text_style(block)
-    if (
-        not text
-        or len(text) > 180
-        or len(block["lines"]) > 3
-        or not body_size
-        or text.isdigit()
-        or _CAPTION.search(text)
-        or _ISSN.search(text)
-        or _ISBN.search(text)
-        or "@" in text
-        or re.match(r"^(?:https?://|doi\s*:)", text, re.I)
-    ):
-        return []
-    evidence = []
-    if size >= body_size * 1.15:
-        evidence.append("larger than unit body text")
-    if bold >= 0.8:
-        evidence.append("predominantly bold")
-    if _SECTION_NUMBER.match(text):
-        evidence.append("section numbering")
-    if before_gap >= size * 0.5 and before_gap > after_gap * 1.2:
-        evidence.append("spacing before exceeds spacing after")
-    # Bold body sentences and isolated inline emphasis are weak evidence.
-    typography = size >= body_size * 1.15 or bold >= 0.8
-    if not typography or (
-        text.endswith((".", "!", "?", ";")) and size < body_size * 1.35
-    ):
-        return []
-    return evidence if len(evidence) >= 2 or size >= body_size * 1.35 else []
-
-
-def _resolve_unit_headings(
-    blocks: list[dict[str, Any]], unit_title: str, body_size: float
-) -> tuple[list[dict[str, Any]], list[str]]:
-    """Merge wrapped automatic headings and assign hierarchy across pages."""
-    merged: list[dict[str, Any]] = []
-    warnings = []
-    for block in blocks:
-        previous = merged[-1] if merged else None
-        if (
-            previous is not None
-            and previous["kind"] == block["kind"] == "heading"
-            and not previous.get("_reviewed")
-            and not block.get("_reviewed")
-            and previous["input_page"] == block["input_page"]
-            and previous["_style"] == block["_style"]
-            and abs(previous["bbox"][0] - block["bbox"][0]) <= body_size * 0.5
-            and 0 <= block["bbox"][1] - previous["bbox"][3] <= body_size * 0.35
-            and len(previous["text"]) + len(block["text"]) < 180
-            and not previous["text"].endswith((".", ":", "!", "?"))
-            and not _SECTION_NUMBER.match(block["text"])
-        ):
-            previous["text"] += " " + block["text"]
-            previous["bbox"] = list(
-                fitz.Rect(previous["bbox"]) | fitz.Rect(block["bbox"])
-            )
-            previous["heading_evidence"].append("merged adjacent wrapped heading")
-            continue
-        merged.append(block)
-    headings = [b for b in merged if b["kind"] == "heading"]
-    automatic = [b for b in headings if not b.get("_reviewed")]
-    title = None
-    if not any(b.get("_reviewed") and b["level"] == 1 for b in headings):
-        normalized_title = " ".join(unit_title.casefold().split())
-        title = next(
-            (
-                b
-                for b in automatic
-                if " ".join(b["text"].casefold().split()) == normalized_title
-                and _can_be_unit_title(b["text"])
-            ),
-            None,
-        )
-        if title is None and automatic:
-            first_page = next(b["input_page"] for b in merged if "input_page" in b)
-            first_content = next(
-                (b for b in merged if b["kind"] != "page_marker"), None
-            )
-            if (
-                first_content is automatic[0]
-                and first_content["input_page"] == first_page
-                and first_content["_style"][0] >= body_size * 1.35
-                and _can_be_unit_title(first_content["text"])
-            ):
-                title = first_content
-    styles = sorted({b["_style"] for b in automatic if b is not title}, reverse=True)
-    for block in automatic:
-        block["level"] = (
-            1 if block is title else min(6, 2 + styles.index(block["_style"]))
-        )
-    previous = None
-    for block in merged:
-        if block["kind"] == "page_marker":
-            continue
-        if (
-            previous is not None
-            and previous["kind"] == block["kind"] == "heading"
-            and block["level"] <= previous["level"]
-        ):
-            warnings.append(
-                f"Input page {block['input_page']} has consecutive headings without "
-                "a subordinate hierarchy; review their classification."
-            )
-        previous = block
-    for block in merged:
-        block.pop("_style", None)
-        block.pop("_reviewed", None)
-    return merged, warnings
-
-
-def _page_blocks_for_export(
-    page: dict[str, Any],
-    unit_id: str,
-    figure_start: int,
-    running: set[str],
-    reviewed_page: dict[str, Any] | None = None,
-    *,
-    unit_body_size: float | None = None,
-    use_reviewed_headings: bool = True,
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str]]:
-    semantic = [
-        {
-            "kind": "page_marker",
-            "input_page": page["input_page"],
-            "printed_page_number": (
-                reviewed_page["printed_page_number"]
-                if reviewed_page is not None
-                else page["printed_page_number"]
-            ),
-        }
-    ]
-    figures = []
-    warnings = []
-    reviewed_figures = reviewed_page.get("figures", []) if reviewed_page else None
-    page_figures = (
-        reviewed_figures if reviewed_figures is not None else _page_figures(page)
-    )
-    blocks = []
-    for block in _ordered_blocks(page):
-        text = _block_text(block)
-        y0, y1 = block["bbox"][1], block["bbox"][3]
-        if (
-            y0 <= page["height"] * 0.1 or y1 >= page["height"] * 0.9
-        ) and _normalized_margin_text(text) in running:
-            continue
-        blocks.append(block)
-    outside_figures = []
-    for block in blocks:
-        if any(
-            _overlap_fraction(block["bbox"], figure["bbox"]) >= 0.8
-            for figure in page_figures
-        ):
-            warnings.append(
-                f"Input page {page['input_page']} has text inside a raster figure; review the figure content."
-            )
-            continue
-        outside_figures.append(block)
-    blocks = outside_figures
-    caption_indices: set[int] = set()
-    for image_number, described in enumerate(page_figures, start=figure_start):
-        caption_bbox = described.get("caption_bbox")
-        if caption_bbox is not None:
-            for index, block in enumerate(blocks):
-                if _bbox_matches(block["bbox"], caption_bbox):
-                    caption_indices.add(index)
-                    break
-        figure = {
-            **described,
-            "kind": "figure",
-            "id": described.get("id", f"{unit_id}-fig-{image_number:03d}"),
-            "input_page": page["input_page"],
-        }
-        figures.append(figure)
-    sizes = [
-        span["size"]
-        for index, block in enumerate(blocks)
-        if index not in caption_indices
-        for line in block["lines"]
-        for span in line["spans"]
-        if span["text"].strip()
-    ]
-    body_size = (
-        unit_body_size
-        if unit_body_size is not None
-        else (median(sizes) if sizes else 0)
-    )
-    reviewed_headings = []
-    if reviewed_page is not None and use_reviewed_headings:
-        main_title = reviewed_page.get("main_title")
-        if main_title is not None:
-            reviewed_headings.append(
-                {"text": main_title["text"], "level": 1, "bbox": main_title["bbox"]}
-            )
-        reviewed_headings.extend(
-            {
-                "text": section["title"],
-                "level": section["level"],
-                "bbox": section["bbox"],
-            }
-            for section in reviewed_page.get("sections", [])
-        )
-    items = [*blocks, *figures]
-    if any(
-        (fitz.Rect(first["bbox"]) & fitz.Rect(second["bbox"])).get_area() > 0
-        for index, first in enumerate(items)
-        for second in items[index + 1 :]
-    ):
-        warnings.append(
-            "Input page {} has overlapping blocks; review the reading order.".format(
-                page["input_page"]
-            )
-        )
-    for item in _ordered_items(items, page):
-        if item.get("kind") == "figure":
-            semantic.append(item)
-            continue
-        index = blocks.index(item)
-        if index in caption_indices:
-            continue
-        reviewed_heading = next(
-            (
-                heading
-                for heading in reviewed_headings
-                if _bbox_matches(item["bbox"], heading["bbox"])
-            ),
-            None,
-        )
-        text = reviewed_heading["text"] if reviewed_heading else _block_text(item)
-        if not text:
-            continue
-        before = blocks[index - 1] if index else None
-        after = blocks[index + 1] if index + 1 < len(blocks) else None
-        before_gap = item["bbox"][1] - before["bbox"][3] if before else float("inf")
-        after_gap = after["bbox"][1] - item["bbox"][3] if after else float("inf")
-        evidence = (
-            ["reviewed plan heading"]
-            if reviewed_heading
-            else _export_heading_evidence(item, body_size, before_gap, after_gap)
-        )
-        level = (
-            reviewed_heading["level"] if reviewed_heading else (2 if evidence else None)
-        )
-        semantic.append(
-            {
-                "kind": "heading" if level else "paragraph",
-                "level": level,
-                "text": text,
-                "input_page": page["input_page"],
-                "bbox": item["bbox"],
-                **({"heading_evidence": evidence} if level else {}),
-                "_style": (_text_style(item)[0], _text_style(item)[1] >= 0.8),
-                "_reviewed": reviewed_heading is not None,
-            }
-        )
-    return semantic, figures, warnings
-
-
-def reconstruct_unit(
+def _write_unit(
     document: fitz.Document,
+    plan_header: dict[str, Any],
     unit: dict[str, Any],
-    reviewed_pages: dict[int, dict[str, Any]] | None = None,
-    *,
-    use_reviewed_headings: bool = True,
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str]]:
-    """Build semantic blocks for one confirmed whole-page unit."""
-    start = unit["input_pages"]["start"]
-    end = unit["input_pages"]["end"]
-    page_metadata = build_page_metadata(Path(document.name), [], [])
-    page_numbers = [
-        number
-        for number in range(start, end + 1)
-        if reviewed_pages is None or reviewed_pages[number]["selected"]
-    ]
-    pages = [
-        _extract_page(document[number - 1], page_metadata[f"page_{number:03d}"]["pgn"])
-        for number in page_numbers
-    ]
-    running = _running_margin_texts(pages)
-    body_size = _unit_body_size(pages, running)
-    semantic = []
-    figures = []
-    warnings = []
-    next_figure = 1
-    for page in pages:
-        page_blocks, page_figures, page_warnings = _page_blocks_for_export(
-            page,
-            unit["id"],
-            next_figure,
-            running,
-            reviewed_pages.get(page["input_page"]) if reviewed_pages else None,
-            unit_body_size=body_size,
-            use_reviewed_headings=use_reviewed_headings,
+    selected_input_pages: list[int],
+    reconstructed: tuple[list[dict[str, Any]], list[dict[str, Any]], list[str]],
+    destination: Path,
+    include_html: bool,
+    include_pdf: bool,
+    extract_doi: bool,
+) -> dict[str, Any]:
+    """Write the files of one unit and return its manifest entry."""
+    blocks, figures, warnings = reconstructed
+    if extract_doi:
+        doi = _extract_doi_candidates(
+            "\n\n".join(document[page - 1].get_text() for page in selected_input_pages)
         )
-        semantic.extend(page_blocks)
-        figures.extend(page_figures)
-        warnings.extend(page_warnings)
-        next_figure += len(page_figures)
-        try:
-            drawings = document[page["input_page"] - 1].get_drawings()
-        except (RuntimeError, ValueError):
-            drawings = []
-        if drawings:
-            warnings.append(
-                f"Input page {page['input_page']} contains vector graphics or table rules; review is required."
-            )
-    semantic, heading_warnings = _resolve_unit_headings(
-        semantic, unit.get("title", ""), body_size
-    )
-    warnings.extend(heading_warnings)
-    return semantic, figures, warnings
+    else:
+        doi = unit.get("doi", [])
+    pdf_name = f"{unit['id']}.pdf" if include_pdf else None
+    if include_pdf:
+        with fitz.open() as unit_pdf:
+            for page in selected_input_pages:
+                unit_pdf.insert_pdf(document, from_page=page - 1, to_page=page - 1)
+            unit_pdf.save(destination / pdf_name)
+    html_name = f"{unit['id']}.html" if include_html else None
+    metadata_name = f"{unit['id']}.metadata.json"
+    metadata = {
+        "schema_version": SCHEMA_VERSION,
+        "kind": "unit-metadata",
+        **plan_header,
+        "unit": {
+            "id": unit["id"],
+            "title": unit["title"],
+            "type": unit["type"],
+            "input_pages": unit["input_pages"],
+            "doi": doi,
+            "selected_input_pages": selected_input_pages,
+        },
+        "figures": figures,
+        "warnings": warnings,
+        "semantic_blocks": blocks,
+    }
+    write_json_document(metadata, destination / metadata_name)
+    if include_html:
+        (destination / html_name).write_text(
+            render_html(blocks, page_marker=True), encoding="utf-8"
+        )
+    return {
+        "id": unit["id"],
+        "title": unit["title"],
+        "type": unit["type"],
+        "input_pages": unit["input_pages"],
+        "doi": doi,
+        "selected_input_pages": selected_input_pages,
+        "html": html_name,
+        "metadata": metadata_name,
+        **({"pdf": pdf_name} if include_pdf else {}),
+    }
 
 
-def render_html(blocks: list[dict[str, Any]], page_marker=False) -> str:
-    """Render a safe UTF-8 HTML fragment with a linked figure list."""
-    output = []
-    figures = []
-    for block in blocks:
-        if block["kind"] == "page_marker":
-            printed = block["printed_page_number"]
-            label = (
-                f"Printed page {printed}"
-                if printed is not None
-                else f"Input page {block['input_page']}"
-            )
-            if page_marker is True:
-                output.append(
-                    f'<p class="page-marker" data-input-page="{block["input_page"]}">{escape(label)}</p>'
-                )
-        elif block["kind"] == "heading":
-            level = min(6, max(1, int(block["level"])))
-            output.append(f"<h{level}>{escape(block['text'])}</h{level}>")
-        elif block["kind"] == "paragraph":
-            output.append(f"<p>{escape(block['text'])}</p>")
-        elif block["kind"] == "figure":
-            anchor = escape(block["id"])
-            figures.append((anchor, block["id"], block.get("caption") or ""))
-            output.append(f'<figure data-figure-id="{escape(block["id"])}">')
-            output.append(
-                f'<div id="{anchor}" class="figure-placeholder">Figure {escape(block["id"])}</div>'
-            )
-            if block.get("caption"):
-                output.append(f"<figcaption>{escape(block['caption'])}</figcaption>")
-            output.append("</figure>")
-    output.extend(['<section class="figures">', "<h2>Figures</h2>", "<ul>"])
-    for anchor, identifier, caption in figures:
-        output.append(
-            f'<li><a href="#{anchor}">{escape(identifier)}</a> -- {escape(caption)}</li>'
-        )
-    output.extend(["</ul>", "</section>"])
-    return "\n".join(output) + "\n"
+def _write_manifest(
+    plan_header: dict[str, Any],
+    manifest_units: list[dict[str, Any]],
+    destination: Path,
+) -> None:
+    manifest = {
+        "schema_version": SCHEMA_VERSION,
+        "kind": "container-manifest",
+        "created": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+        **plan_header,
+        "units": manifest_units,
+    }
+    write_json_document(manifest, destination / "manifest.json")
 
 
 def export_units(
@@ -2304,16 +1634,11 @@ def export_units(
     each unit. Otherwise they come from the plan.
     """
     destination.mkdir(parents=True, exist_ok=True)
+    plan_header = {"source": plan["source"], "document_type": plan["document_type"]}
     manifest_units = []
     reviewed_pages = {page["input_page"]: page for page in plan["pages"]}
     with fitz.open(pdf_path) as document:
         for unit in selected_units:
-            blocks, figures, warnings = reconstruct_unit(
-                document,
-                unit,
-                reviewed_pages=reviewed_pages,
-                use_reviewed_headings=use_reviewed_headings,
-            )
             selected_input_pages = [
                 page
                 for page in range(
@@ -2321,68 +1646,69 @@ def export_units(
                 )
                 if reviewed_pages[page]["selected"]
             ]
-            if extract_doi:
-                doi = _extract_doi_candidates(
-                    "\n\n".join(
-                        document[page - 1].get_text() for page in selected_input_pages
-                    )
-                )
-            else:
-                doi = unit.get("doi", [])
-            pdf_name = f"{unit['id']}.pdf" if include_pdf else None
-            if include_pdf:
-                with fitz.open() as unit_pdf:
-                    for page in selected_input_pages:
-                        unit_pdf.insert_pdf(
-                            document, from_page=page - 1, to_page=page - 1
-                        )
-                    unit_pdf.save(destination / pdf_name)
-            html_name = f"{unit['id']}.html" if include_html else None
-            metadata_name = f"{unit['id']}.metadata.json"
-            metadata = {
-                "schema_version": SCHEMA_VERSION,
-                "kind": "unit-metadata",
-                "source": plan["source"],
-                "document_type": plan["document_type"],
-                "unit": {
-                    "id": unit["id"],
-                    "title": unit["title"],
-                    "type": unit["type"],
-                    "input_pages": unit["input_pages"],
-                    "doi": doi,
-                    "selected_input_pages": selected_input_pages,
-                },
-                "figures": figures,
-                "warnings": warnings,
-                "semantic_blocks": blocks,
-            }
-            write_json_document(metadata, destination / metadata_name)
-            if include_html:
-                (destination / html_name).write_text(
-                    render_html(blocks, page_marker=True), encoding="utf-8"
-                )
-            manifest_units.append(
-                {
-                    "id": unit["id"],
-                    "title": unit["title"],
-                    "type": unit["type"],
-                    "input_pages": unit["input_pages"],
-                    "doi": doi,
-                    "selected_input_pages": selected_input_pages,
-                    "html": html_name,
-                    "metadata": metadata_name,
-                    **({"pdf": pdf_name} if include_pdf else {}),
-                }
+            reconstructed = reconstruct_pages(
+                document,
+                selected_input_pages,
+                id_prefix=unit["id"],
+                title=unit.get("title", ""),
+                reviewed_pages=reviewed_pages,
+                use_reviewed_headings=use_reviewed_headings,
             )
-    manifest = {
-        "schema_version": SCHEMA_VERSION,
-        "kind": "container-manifest",
-        "created": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
-        "source": plan["source"],
-        "document_type": plan["document_type"],
-        "units": manifest_units,
-    }
-    write_json_document(manifest, destination / "manifest.json")
+            manifest_units.append(
+                _write_unit(
+                    document,
+                    plan_header,
+                    unit,
+                    selected_input_pages,
+                    reconstructed,
+                    destination,
+                    include_html,
+                    include_pdf,
+                    extract_doi,
+                )
+            )
+    _write_manifest(plan_header, manifest_units, destination)
+
+
+def export_document_html(pdf_path: Path, destination: Path) -> None:
+    """Write all pages of any PDF as one unit, without partition heuristics.
+
+    The output layout is the same as export_units output for one unit. The unit
+    title is the first level-1 heading. DOI candidates come from the page text.
+    """
+    destination.mkdir(parents=True, exist_ok=True)
+    plan_header = {"source": source_identity(pdf_path), "document_type": "unit"}
+    with fitz.open(pdf_path) as document:
+        page_numbers = list(range(1, len(document) + 1))
+        reconstructed = reconstruct_pages(
+            document, page_numbers, id_prefix="unit-001", use_reviewed_headings=False
+        )
+        title = next(
+            (
+                block["text"]
+                for block in reconstructed[0]
+                if block["kind"] == "heading" and block["level"] == 1
+            ),
+            "",
+        )
+        unit = {
+            "id": "unit-001",
+            "title": title,
+            "type": "unknown",
+            "input_pages": {"start": 1, "end": len(document)},
+        }
+        manifest_unit = _write_unit(
+            document,
+            plan_header,
+            unit,
+            page_numbers,
+            reconstructed,
+            destination,
+            include_html=True,
+            include_pdf=False,
+            extract_doi=True,
+        )
+    _write_manifest(plan_header, [manifest_unit], destination)
 
 
 def publish_unit_directory(staged: Path, destination: Path) -> None:

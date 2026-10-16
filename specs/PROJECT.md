@@ -367,7 +367,9 @@ An older plan without `created` receives both timestamps when it is next saved.
 | `src/pdfwtf/utils/analyze.py` | Identify scanned or hybrid PDF content for enhancement. |
 | `src/pdfwtf/diagnostics.py` | Inspect a PDF read-only and build the `analyze` diagnostic report. |
 | `src/pdfwtf/utils/common.py` | Provide page operations, paths, image preparation, text extraction, thumbnails, and metadata helpers. |
-| `src/pdfwtf/container_partition.py` | Extract born-digital page structure, propose container partitions, validate reviewed plans, reconstruct units, and export unit results. |
+| `src/pdfwtf/page_layout.py` | Extract born-digital page geometry, reading order, and figures. Partition and HTML extraction share these primitives. |
+| `src/pdfwtf/html_extraction.py` | Reconstruct semantic blocks and headings from any PDF pages and render HTML fragments. Do not depend on units or plans. |
+| `src/pdfwtf/container_partition.py` | Extract document structure, propose container partitions, validate reviewed plans, and export unit results. |
 | `src/pdfwtf/llm_tasks.py` | Check LLM task selection and availability, run selected tasks, and record results in the manifest. |
 | `src/pdfwtf/templates/llm/` | Provide `prompt` and `system` text for LLM task templates. |
 | `src/pdfwtf/gui/` | Provide the optional PDF-WTF-GUI blueprint, local host, browser PDF review, and the preparation, partition, and export adapter boundaries. |

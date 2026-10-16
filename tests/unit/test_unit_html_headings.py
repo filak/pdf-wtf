@@ -3,12 +3,11 @@
 import pymupdf as fitz
 import pytest
 
-from pdfwtf.container_partition import (
+from pdfwtf.container_partition import direct_unit_plan, export_units
+from pdfwtf.html_extraction import (
+    _body_size,
     _export_heading_evidence,
     _resolve_unit_headings,
-    _unit_body_size,
-    direct_unit_plan,
-    export_units,
 )
 
 
@@ -87,7 +86,7 @@ def test_unit_baseline_weights_characters_and_excludes_captions_and_headers():
         ],
     }
     running = {"running title " * 99 + "running title"}
-    assert _unit_body_size([page], running) == 10
+    assert _body_size([page], running) == 10
 
 
 def test_wrapped_heading_fragments_merge_and_keep_union_bbox():

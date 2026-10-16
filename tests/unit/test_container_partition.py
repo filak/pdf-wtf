@@ -501,7 +501,7 @@ def test_plan_rejects_case_colliding_unit_ids(tmp_path):
 
 
 def test_reading_order_preserves_overlapping_and_outside_items():
-    from pdfwtf.container_partition import _ordered_items
+    from pdfwtf.page_layout import _ordered_items
 
     items = [
         {"id": "wide", "bbox": [0, 100, 100, 200]},
@@ -887,7 +887,7 @@ def test_book_partition_defaults_units_to_chapters(tmp_path):
 
 def test_html_figure_links_use_figure_ids_and_untrusted_text_is_escaped():
     from html.parser import HTMLParser
-    from pdfwtf.container_partition import render_html
+    from pdfwtf.html_extraction import render_html
 
     class Elements(HTMLParser):
         def __init__(self):
@@ -923,7 +923,7 @@ def test_html_figure_links_use_figure_ids_and_untrusted_text_is_escaped():
 
 
 def test_html_without_figures_has_final_empty_figure_list():
-    from pdfwtf.container_partition import render_html
+    from pdfwtf.html_extraction import render_html
 
     html = render_html([{"kind": "paragraph", "text": "Article content."}])
     assert html.startswith("<p>Article content.</p>")
@@ -936,7 +936,7 @@ def test_html_without_figures_has_final_empty_figure_list():
 
 @pytest.mark.parametrize("column_starts", [(25, 190), (25, 225, 425)])
 def test_column_reading_order_uses_gutters_not_page_midpoint(tmp_path, column_starts):
-    from pdfwtf.container_partition import reconstruct_unit
+    from pdfwtf.html_extraction import reconstruct_pages
 
     source = tmp_path / "column-flow.pdf"
     with fitz.open() as document:
@@ -948,7 +948,9 @@ def test_column_reading_order_uses_gutters_not_page_midpoint(tmp_path, column_st
                 )
         document.save(source)
     with fitz.open(source) as document:
-        blocks, _figures, _warnings = reconstruct_unit(document, unit("article", 1, 1))
+        blocks, _figures, _warnings = reconstruct_pages(
+            document, [1], id_prefix="article"
+        )
     text = " ".join(
         block["text"] for block in blocks if block["kind"] in {"paragraph", "heading"}
     )
@@ -964,7 +966,7 @@ def test_column_reading_order_uses_gutters_not_page_midpoint(tmp_path, column_st
 
 
 def test_three_columns_restart_below_full_width_separator():
-    from pdfwtf.container_partition import _ordered_items
+    from pdfwtf.page_layout import _ordered_items
 
     items = [{"id": "heading", "bbox": [20, 10, 580, 35]}]
     for band, top in (("upper", 60), ("lower", 300)):

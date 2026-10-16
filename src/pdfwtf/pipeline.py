@@ -25,7 +25,7 @@ from .container_partition import (
     SCHEMA_VERSION,
     UNIT_TYPES,
     partition_container,
-    direct_unit_plan,
+    export_document_html,
     export_units,
     load_plan,
     publish_unit_directory,
@@ -680,10 +680,13 @@ def export_pdf(
         if plan_path is not None:
             unit_plan = load_plan(Path(plan_path))
             selected_units = validate_plan(unit_plan, input_pdf, document_type)
-        elif export_html_flag:
-            unit_plan = direct_unit_plan(input_pdf)
-            selected_units = validate_plan(unit_plan, input_pdf, "unit")
         staged_units = None
+        direct_html = unit_plan is None and export_html_flag
+        if direct_html and (not unit_types or "unknown" in unit_types):
+            # Any PDF can give HTML. All pages become one unit of type
+            # "unknown" without partition heuristics.
+            staged_units = workspace / "unit_exports"
+            export_document_html(input_pdf, staged_units)
         if unit_plan is not None and selected_units is not None:
             if unit_types:
                 selected_units = [
@@ -705,11 +708,12 @@ def export_pdf(
             llm_report = run_after_unit_html(selected_tasks, staged_units)
             if not llm_report.complete:
                 job_log.warning("LLM processing incomplete.")
-        pages_to_keep = (
-            [page["input_page"] for page in unit_plan["pages"] if page["selected"]]
-            if unit_plan is not None
-            else []
-        )
+        if unit_plan is not None:
+            pages_to_keep = [
+                page["input_page"] for page in unit_plan["pages"] if page["selected"]
+            ]
+        else:
+            pages_to_keep = list(range(1, total_pages + 1)) if direct_html else []
         if export_images_flag or export_thumbs_flag:
             export_images(input_pdf, images_dir, dpi=dpi)
         if export_thumbs_flag:

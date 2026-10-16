@@ -30,6 +30,13 @@ Partitioning is optional. `pdfwtf export PDF --doc_type unit --get-html`
 exports the complete PDF as one unit without a plan. Repeat export as
 necessary. It does not repeat enhancement or partitioning.
 
+Direct HTML export does not use partition heuristics. HTML extraction is
+independent of units and can process the pages of any PDF. The direct unit has
+the identifier `unit-001` and the type `unknown`. Its title is the first
+level-1 heading, or an empty string. DOI candidates come from the page text.
+The `source` object has no `bibliographic` data. The output layout is the same
+as for plan export.
+
 A partition proposes units and extracts DOI candidates for each proposed unit.
 It does not generate unit result files. Plan processing never repeats
 partitioning. `--doc_type unit --get-html` can process the complete PDF without a

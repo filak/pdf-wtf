@@ -7,7 +7,7 @@ from PIL import Image
 import pymupdf as fitz
 import pytest
 
-from pdfwtf import pipeline
+from pdfwtf import container_partition, pipeline
 from pdfwtf.configuration import load_config
 from pdfwtf.container_partition import PlanValidationError, write_json_document
 from pdfwtf.llm_tasks import LLMTaskError
@@ -449,6 +449,27 @@ def test_export_alone_writes_direct_unit_html(make_pdf, tmp_path, no_enhancement
     pipeline.export_pdf(source, output, export_html_flag=True, document_type="unit")
     manifest = json.loads((output / "_units_input/manifest.json").read_text())
     assert [item["html"] for item in manifest["units"]] == ["unit-001.html"]
+
+
+def test_direct_html_does_not_use_partition_heuristics(
+    make_pdf, tmp_path, no_enhancement, monkeypatch
+):
+    def fail(*args, **kwargs):
+        raise AssertionError("Direct HTML must not partition the PDF.")
+
+    monkeypatch.setattr(pipeline, "partition_container", fail)
+    monkeypatch.setattr(container_partition, "partition_container", fail)
+    source = make_pdf(["digital", "digital"])
+    output = tmp_path / "out"
+    pipeline.export_pdf(source, output, export_html_flag=True)
+    units = output / "_units_input"
+    manifest = json.loads((units / "manifest.json").read_text())
+    assert manifest["document_type"] == "unit"
+    [entry] = manifest["units"]
+    assert entry["type"] == "unknown"
+    assert entry["input_pages"] == {"start": 1, "end": 2}
+    assert entry["selected_input_pages"] == [1, 2]
+    assert (units / "unit-001.html").read_text("utf-8")
 
 
 def test_export_writes_unit_pdfs_from_plan(tmp_path, no_enhancement):
