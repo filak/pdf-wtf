@@ -28,7 +28,7 @@ def text_hash(text: str) -> str:
 
 @pytest.mark.parametrize(
     "sample_pdf, expected_scan",
-    [("born_digital.pdf", False), ("scan_with_text.pdf", True)],
+    [("born_digital_article.pdf", False), ("scan_with_text.pdf", True)],
     indirect=["sample_pdf"],
 )
 def test_local_sample_classification(sample_pdf, expected_scan):
@@ -36,7 +36,7 @@ def test_local_sample_classification(sample_pdf, expected_scan):
 
 
 @pytest.mark.parametrize(
-    "sample_pdf", ["born_digital.pdf", "scan_with_text.pdf"], indirect=True
+    "sample_pdf", ["born_digital_article.pdf", "scan_with_text.pdf"], indirect=True
 )
 def test_local_pdf_content_and_text_exports(
     sample_pdf, tmp_path, configured_home, monkeypatch
@@ -61,7 +61,7 @@ def test_local_pdf_content_and_text_exports(
 
 
 @pytest.mark.parametrize(
-    "sample_pdf", ["born_digital.pdf", "scan_with_text.pdf"], indirect=True
+    "sample_pdf", ["born_digital_article.pdf", "scan_with_text.pdf"], indirect=True
 )
 def test_local_pdf_page_selection_and_exports(sample_pdf, tmp_path):
     source_hash = sha256(sample_pdf.read_bytes()).hexdigest()

@@ -13,7 +13,7 @@ Rules:
   sentences and coherent paragraphs, including fragments separated
   by <br>, adjacent <p> elements, or page boundaries.
 - Remove a hyphen introduced by line-end word splitting and join
-  the word without a space: "infor-\\nmation" becomes "information".
+  the word without a space - for example: "infor-\\nmation" becomes "information".
 - Preserve genuine hyphens in compound words, identifiers,
   URLs, and other meaningful text.
 - Use a space when joining fragments of different words.

@@ -1587,7 +1587,7 @@ def _write_unit(
     write_json_document(metadata, destination / metadata_name)
     if include_html:
         (destination / html_name).write_text(
-            render_html(blocks, page_marker=True), encoding="utf-8"
+            render_html(blocks, page_marker=False), encoding="utf-8"
         )
     return {
         "id": unit["id"],
