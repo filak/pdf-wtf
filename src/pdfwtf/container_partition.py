@@ -289,6 +289,358 @@ def _page_signals(page: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+# Opening labels are anchored: a mention in ordinary prose is not evidence.
+_ABSTRACT_LABEL = re.compile(
+    r"^(?:abstract|abstrakt|souhrn|súhrn|resumé|résumé|summary)\b", re.I
+)
+_KEYWORDS_LABEL = re.compile(
+    r"^(?:key\s*words|klíčová slova|kľúčové slová|mots[- ]clés)\b", re.I
+)
+_INTERNAL_SECTION = re.compile(
+    r"^(?:\d+(?:\.\d+)*[.)]?\s+)?(?:introduction|background|methods|"
+    r"materials(?: and methods)?|results|discussion|conclusions?|references|"
+    r"bibliography|acknowledg(?:e)?ments|literat[uú]ra|úvod|metodika|výsledky|"
+    r"diskuse|diskusia|závěr|záver)\s*[:.]*$",
+    re.I,
+)
+_CONTRIBUTION = re.compile(
+    r"^(?:editorial|letter(?:s)?(?: to the editor)?|correspondence|"
+    r"book review|recenze|úvodník)\b",
+    re.I,
+)
+_AFFILIATION = re.compile(
+    r"\b(?:university|universit[éy]|institute|department|hospital|univerzita|"
+    r"univerzity|ústav|klinika|fakulta)\b|@",
+    re.I,
+)
+_CONTENTS_LABEL = re.compile(r"\b(?:contents|obsah|sommaire)\b", re.I)
+
+
+def _title_key(text: str) -> str:
+    return " ".join(re.findall(r"[^\W_]+", text.casefold()))
+
+
+def _line_style(line: dict[str, Any]) -> tuple[float, bool]:
+    spans = [span for span in line["spans"] if any(c.isalpha() for c in span["text"])]
+    return (
+        max((span["size"] for span in spans), default=0),
+        any(span["flags"] & 16 or "bold" in span["font"].lower() for span in spans),
+    )
+
+
+def _journal_author(text: str) -> bool:
+    """Recognize compact Unicode bylines without treating 'and' as an author."""
+    words = re.findall(r"[^\W\d_]+(?:[-’'][^\W\d_]+)*", text)
+    return (
+        2 <= len(words) <= 16
+        and len(text) <= 180
+        and sum(word[0].isupper() for word in words) >= 2
+        and not _AFFILIATION.search(text)
+        and not _ABSTRACT_LABEL.match(text)
+        and not _KEYWORDS_LABEL.match(text)
+        and not _DOI.search(text)
+    )
+
+
+def _article_margin_dois(page: dict[str, Any]) -> set[str]:
+    """Use explicit margin DOI labels as weak article identity evidence."""
+    values = set()
+    for block in page["text_blocks"]:
+        for line in block["lines"]:
+            if not (
+                line["bbox"][1] < page["height"] * 0.2
+                or line["bbox"][1] > page["height"] * 0.85
+            ):
+                continue
+            if re.match(r"(?:doi\s*:|https?://(?:dx\.)?doi\.org/)", line["text"], re.I):
+                values.update(
+                    value.casefold() for value in _extract_doi_candidates(line["text"])
+                )
+    return values
+
+
+def _journal_signals(structure: dict[str, Any]) -> list[dict[str, Any]]:
+    """Score local article openings, excluding recurring margin material."""
+    margins: Counter[str] = Counter()
+    for page in structure["pages"]:
+        margins.update(
+            {
+                _title_key(line["text"])
+                for block in page["text_blocks"]
+                for line in block["lines"]
+                if line["bbox"][1] < page["height"] * 0.15
+                or line["bbox"][1] > page["height"] * 0.85
+            }
+        )
+    result = []
+    previous_text = ""
+    previous_dois: set[str] = set()
+    for page in structure["pages"]:
+        signal = _page_signals(page)
+        lines = [line for block in _ordered_blocks(page) for line in block["lines"]]
+        sizes = [
+            span["size"]
+            for line in lines
+            for span in line["spans"]
+            for char in span["text"]
+            if char.isalpha()
+        ]
+        body_size = median(sizes) if sizes else 0
+        page_dois = _article_margin_dois(page)
+        candidates = []
+        for index, line in enumerate(lines):
+            text = line["text"].strip()
+            size, bold = _line_style(line)
+            if (
+                len(text) < 4
+                or len(text) > 220
+                or not size
+                or line["bbox"][1] > page["height"] * 0.75
+                or _INTERNAL_SECTION.fullmatch(text)
+                or _ABSTRACT_LABEL.match(text)
+                or _KEYWORDS_LABEL.match(text)
+                or _CAPTION.match(text)
+                or _DOI.search(text)
+                or _AFFILIATION.search(text)
+                or re.search(r"https?://|www\.", text)
+                or re.search(r"\b(?:prof|mudr|rndr|phdr|drsc|phd|csc)\b", text, re.I)
+            ):
+                continue
+            repeated = margins[_title_key(text)] >= 2 and (
+                line["bbox"][1] < page["height"] * 0.15
+            )
+            # A recurring heading can still introduce short contributions.
+            if repeated and not _CONTRIBUTION.match(text):
+                continue
+            cluster = [line]
+            for following in lines[index + 1 : index + 4]:
+                next_size, next_bold = _line_style(following)
+                gap = following["bbox"][1] - cluster[-1]["bbox"][3]
+                if (
+                    0 <= gap <= max(size, 6)
+                    and abs(next_size - size) <= 0.5
+                    and next_bold == bold
+                    and (bold or size >= body_size * 1.15)
+                    and not _ABSTRACT_LABEL.match(following["text"])
+                    and not _INTERNAL_SECTION.fullmatch(following["text"])
+                    and not _DOI.search(following["text"])
+                    and not _AFFILIATION.search(following["text"])
+                    and abs(following["bbox"][0] - line["bbox"][0]) < 30
+                ):
+                    cluster.append(following)
+                else:
+                    break
+            title = " ".join(item["text"] for item in cluster)
+            bottom = cluster[-1]["bbox"][3]
+            nearby = [
+                item
+                for item in lines
+                if bottom <= item["bbox"][1] <= bottom + min(230, page["height"] * 0.35)
+            ]
+            # Stop at references so bibliography entries cannot supply opening evidence.
+            local = []
+            for item in nearby:
+                if re.match(
+                    r"^(?:references|bibliography|literat[uú]ra)\b", item["text"], re.I
+                ):
+                    break
+                local.append(item)
+            author = any(
+                _journal_author(item["text"]) and item["bbox"][1] - bottom <= 60
+                for item in local[:3]
+            )
+            affiliation = any(_AFFILIATION.search(item["text"]) for item in local[:5])
+            abstract = any(_ABSTRACT_LABEL.match(item["text"]) for item in local)
+            keywords = any(_KEYWORDS_LABEL.match(item["text"]) for item in local)
+            doi = any(_DOI.search(item["text"]) for item in local)
+            styled = bold or size >= body_size * 1.15
+            in_references = any(
+                re.match(
+                    r"^(?:references|bibliography|literat[uú]ra)\b", item["text"], re.I
+                )
+                for item in lines[:index]
+            )
+            if in_references and not (styled and (abstract or affiliation)):
+                continue
+            evidence = []
+            score = 0
+            for present, weight, label in (
+                (styled, 2, "title typography"),
+                (author, 2, "nearby author pattern"),
+                (affiliation, 1, "nearby affiliation"),
+                (abstract, 2, "nearby abstract label"),
+                (keywords, 1, "nearby keywords label"),
+                (doi, 1, "nearby DOI pattern"),
+                (bool(_CONTRIBUTION.match(title)), 2, "short contribution label"),
+            ):
+                if present:
+                    score += weight
+                    evidence.append(label)
+            if page_dois and previous_dois:
+                if page_dois.isdisjoint(previous_dois):
+                    score += 1
+                    evidence.append("changed article margin DOI")
+                elif not abstract:
+                    score -= 3
+                    evidence.append("continuing article margin DOI")
+            if score >= 3 and re.search(
+                r"(?:references|bibliography|literat[uú]ra)",
+                previous_text[-2500:],
+                re.I,
+            ):
+                score += 1
+                evidence.append("previous page contains article-ending references")
+            # Prefer the first title line over an author line or a later translation.
+            candidates.append(
+                (
+                    score,
+                    -line["bbox"][1],
+                    {
+                        "title": title,
+                        "title_bbox": [
+                            min(item["bbox"][0] for item in cluster),
+                            min(item["bbox"][1] for item in cluster),
+                            max(item["bbox"][2] for item in cluster),
+                            bottom,
+                        ],
+                        "title_y": line["bbox"][1],
+                        "prominent_title": styled,
+                        "author_pattern": author,
+                        "abstract_pattern": abstract,
+                        "doi_pattern": doi,
+                        "opening_score": score,
+                        "opening_evidence": evidence,
+                        "opening_accepted": score >= 4
+                        and (styled or abstract or affiliation),
+                    },
+                )
+            )
+        if candidates:
+            signal.update(
+                max(
+                    candidates,
+                    key=lambda item: (item[0], item[2]["author_pattern"], item[1]),
+                )[2]
+            )
+        else:
+            signal.update(opening_score=0, opening_evidence=[], opening_accepted=False)
+        result.append(signal)
+        previous_text = "\n".join(line["text"] for line in lines)
+        if page_dois:
+            previous_dois = page_dois
+    return result
+
+
+def _journal_navigation(structure: dict[str, Any]) -> dict[int, dict[str, Any]]:
+    """Match navigation titles to destination text; do not trust targets alone."""
+    entries = [
+        (item["input_page"], item["title"], "PDF bookmark title match")
+        for item in structure["bookmarks"]
+    ]
+    for link in structure["internal_links"]:
+        source = structure["pages"][link["source_input_page"] - 1]
+        source_lines = [
+            line["text"] for block in source["text_blocks"] for line in block["lines"]
+        ]
+        if not any(
+            _CONTENTS_LABEL.fullmatch(text.strip()) for text in source_lines[:8]
+        ):
+            continue
+        for block in source["text_blocks"]:
+            for line in block["lines"]:
+                if fitz.Rect(line["bbox"]).intersects(fitz.Rect(link["source_bbox"])):
+                    entries.append(
+                        (
+                            link["target_input_page"],
+                            line["text"],
+                            "linked contents title match",
+                        )
+                    )
+    printed: dict[str, list[int]] = {}
+    for page in structure["pages"]:
+        printed.setdefault(str(page["printed_page_number"]), []).append(
+            page["input_page"]
+        )
+    for page in structure["pages"]:
+        lines = [
+            line["text"] for block in page["text_blocks"] for line in block["lines"]
+        ]
+        if not any(_CONTENTS_LABEL.fullmatch(text.strip()) for text in lines[:8]):
+            continue
+        for text in lines:
+            match = re.fullmatch(r"(.{8,}?)\s*[.·… ]+\s+(\d+|[ivxlcdm]+)", text, re.I)
+            if match and len(printed.get(match[2], [])) == 1:
+                entries.append(
+                    (printed[match[2]][0], match[1], "printed contents title match")
+                )
+    matches: dict[int, dict[str, Any]] = {}
+    for number, title, evidence in entries:
+        key = _title_key(title)
+        if len(key) < 8 or _INTERNAL_SECTION.fullmatch(title.strip()):
+            continue
+        page = structure["pages"][number - 1]
+        lines = [
+            line
+            for block in _ordered_blocks(page)
+            for line in block["lines"]
+            if line["bbox"][1] < page["height"] * 0.6
+        ]
+        # Contents page numbers and leader dots are not part of the title.
+        key = re.sub(r"\s+\d+$", "", key)
+        for index, line in enumerate(lines):
+            group = []
+            for item in lines[index : index + 4]:
+                group.append(item)
+                text = _title_key(" ".join(part["text"] for part in group))
+                if text == key:
+                    match = matches.setdefault(
+                        number,
+                        {
+                            "title": " ".join(part["text"] for part in group),
+                            "title_bbox": [
+                                min(part["bbox"][0] for part in group),
+                                min(part["bbox"][1] for part in group),
+                                max(part["bbox"][2] for part in group),
+                                max(part["bbox"][3] for part in group),
+                            ],
+                            "evidence": [],
+                        },
+                    )
+                    if evidence not in match["evidence"]:
+                        match["evidence"].append(evidence)
+                    break
+                if len(text) >= len(key):
+                    break
+    return matches
+
+
+def _journal_shared_start(page: dict[str, Any], candidate: dict[str, Any]) -> bool:
+    """Distinguish modest branding above a title from preceding article content."""
+    y = candidate["y"]
+    if y <= page["height"] * 0.2:
+        return False
+    above = [
+        line
+        for block in page["text_blocks"]
+        for line in block["lines"]
+        if line["bbox"][3] < y and line["text"].strip()
+    ]
+    text = " ".join(line["text"] for line in above)
+    # A very low title with no contextual explanation remains ambiguous.
+    if not above:
+        return y > page["height"] * 0.4
+    return (
+        len(text) > 300
+        or len(above) > 6
+        or any(len(line["text"]) > 100 for line in above)
+        or any(
+            len(line["text"]) > 60 and line["text"].endswith((".", ";"))
+            for line in above
+        )
+        or bool(re.search(r"(?:references|bibliography|literat[uú]ra)\b", text, re.I))
+    )
+
+
 def _magazine_signals(page: dict[str, Any]) -> dict[str, Any]:
     """Use display typography, including lower-page titles, for magazines."""
     signal = _page_signals(page)
@@ -756,17 +1108,18 @@ def _classify_auto(
 ) -> tuple[str, list[str]]:
     top_bookmarks = [item for item in structure["bookmarks"] if item["level"] == 1]
     article_pages = sum(
-        signal["prominent_title"]
-        and signal["author_pattern"]
-        and (signal["abstract_pattern"] or signal["doi_pattern"])
+        signal.get(
+            "opening_accepted",
+            signal["prominent_title"]
+            and signal["author_pattern"]
+            and (signal["abstract_pattern"] or signal["doi_pattern"]),
+        )
         for signal in signals
     )
+    if article_pages >= 2:
+        return "journal-issue", ["Multiple pages contain supported article openings."]
     if len(top_bookmarks) >= 2:
         return "book", ["Multiple top-level PDF bookmarks suggest chapters."]
-    if article_pages >= 2:
-        return "journal-issue", [
-            "Multiple pages combine prominent titles, author evidence, and article evidence."
-        ]
     if article_pages == 1:
         return "unit", [
             "One page combines a prominent title, author evidence, and article evidence."
@@ -878,24 +1231,24 @@ def _candidate_starts(
                 }
                 seen_titles.add(title_key)
     elif document_type in {"journal-issue", "proceedings"}:
+        navigation = _journal_navigation(structure)
         for page, signal in zip(structure["pages"], signals):
-            evidence = []
-            if signal["prominent_title"]:
-                evidence.append("prominent title typography")
-            if signal["author_pattern"]:
-                evidence.append("author pattern")
-            if signal["abstract_pattern"]:
-                evidence.append("abstract label")
-            if signal["doi_pattern"]:
-                evidence.append("DOI pattern")
-            required = signal["prominent_title"] and signal["author_pattern"]
-            if document_type in {"journal-issue", "magazine-issue"}:
-                required = required and (
-                    signal["abstract_pattern"] or signal["doi_pattern"]
+            number = page["input_page"]
+            evidence = list(signal.get("opening_evidence", []))
+            if number in navigation:
+                match = navigation[number]
+                signal.update(
+                    title=match["title"],
+                    title_bbox=match["title_bbox"],
+                    title_y=match["title_bbox"][1],
                 )
-            if required:
-                candidates[page["input_page"]] = {
-                    "input_page": page["input_page"],
+                evidence.extend(match["evidence"])
+                signal["opening_score"] += 4
+                signal["opening_evidence"] = evidence
+                signal["opening_accepted"] = True
+            if signal.get("opening_accepted") or number in navigation:
+                candidates[number] = {
+                    "input_page": number,
                     "title": signal["title"],
                     "evidence": evidence,
                     "y": signal["title_y"],
@@ -936,7 +1289,11 @@ def partition_container(pdf_path: Path, requested_type: str) -> dict[str, Any]:
         raise ValueError("Unsupported document type.")
     identity = source_identity(pdf_path)
     structure = extract_structure(pdf_path)
-    signals = [_page_signals(page) for page in structure["pages"]]
+    signals = (
+        _journal_signals(structure)
+        if requested_type in {"journal-issue", "proceedings", "auto"}
+        else [_page_signals(page) for page in structure["pages"]]
+    )
     warnings: list[str] = []
     classification_evidence: list[str] = []
     document_type = requested_type
@@ -956,7 +1313,12 @@ def partition_container(pdf_path: Path, requested_type: str) -> dict[str, Any]:
     suspected_shared = []
     for candidate in candidates:
         page = structure["pages"][candidate["input_page"] - 1]
-        if candidate["input_page"] > 1 and candidate["y"] > page["height"] * 0.2:
+        shared = (
+            _journal_shared_start(page, candidate)
+            if document_type in {"journal-issue", "proceedings"}
+            else candidate["y"] > page["height"] * 0.2
+        )
+        if candidate["input_page"] > 1 and shared:
             suspected_shared.append(
                 {
                     "input_page": candidate["input_page"],
@@ -1018,7 +1380,20 @@ def partition_container(pdf_path: Path, requested_type: str) -> dict[str, Any]:
                 "sections": _page_sections(page, signal["title_bbox"]),
                 "figures": _page_figures(page, document_type),
                 "unit_ids": page_unit_ids,
-                "warnings": [],
+                "warnings": (
+                    [
+                        f"Article opening score {signal['opening_score']}: "
+                        + (
+                            "accepted"
+                            if signal["opening_accepted"]
+                            else "insufficient evidence"
+                        )
+                        + "; "
+                        + ", ".join(signal["opening_evidence"])
+                    ]
+                    if "opening_score" in signal
+                    else []
+                ),
             }
         )
     source = {
