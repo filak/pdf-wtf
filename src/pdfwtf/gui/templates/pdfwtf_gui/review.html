@@ -39,11 +39,14 @@
       </div>
       {% endif %}
       <div class="d-flex gap-2">
-        <button id="add-unit" class="btn btn-sm btn-outline-primary shadow-sm" type="button">{{ _('Add unit') }}</button>
-        <button id="merge-units" class="btn btn-sm btn-outline-primary shadow-sm" type="button">{{ _('Merge selected') }}</button>
-        <button id="save-plan" class="btn btn-sm {{ 'btn-outline-success' if plan else 'btn-success' }} shadow-sm" type="button">{{ _('Save plan') }}</button>
+        <a class="btn btn-primary" href="{{ url_for('pdfwtf_gui.index') }}" role="button">
+          <i class="bi bi-house" aria-label="{{ _('Intro') }}"></i>
+        </a>
+        <button id="add-unit" class="btn btn-sm btn-outline-primary shadow-sm" type="button" title="{{ _('Add unit') }}">{{ _('Add') }}</button>
+        <button id="merge-units" class="btn btn-sm btn-outline-primary shadow-sm" type="button" title="{{ _('Merge selected units') }}">{{ _('Merge') }}</button>
+        <button id="save-plan" class="btn btn-sm {{ 'btn-outline-success' if plan else 'btn-success' }} shadow-sm" type="button" title="{{ _('Save plan') }}">{{ _('Save') }}</button>
         <details id="review-more" class="position-relative">
-          <summary class="btn btn-sm btn-outline-secondary shadow-sm">{{ _('More') }}</summary>
+          <summary class="btn btn btn-outline-secondary shadow-sm">{{ _('More') }}</summary>
           <div class="btn-group-vertical position-absolute end-0 mt-1 bg-body shadow-sm" role="group" aria-label="{{ _('More') }}">
             <button id="export-units" class="btn btn-sm btn-success" type="button"
                     data-bs-toggle="modal" data-bs-target="#export-options"
