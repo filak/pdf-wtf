@@ -1,49 +1,62 @@
 {% extends config.PDFWTF_GUI_BASE_TEMPLATE %}
-{% block title %}{{ _('Upload & Process') }} | {{ config.APP_NAME }} {% endblock %}
+{% block title %}{{ _("Upload & Process") }} | {{ config.APP_NAME }}{% endblock %}
 {% block content %}
-<div class="row justify-content-center">
-  <div class="col-xl-10 col-lg-10">
-    <div class="card shadow-sm">
-      <div class="card-body p-4">
-        <h1 class="h3">{{ _('Upload PDF') }}</h1>
-        <form
-          class="d-flex flex-wrap align-items-center gap-2 border rounded p-3"
-          action="{{ url_for('pdfwtf_gui.upload_document') }}"
-          method="post"
-          enctype="multipart/form-data"
-          hx-post="{{ url_for('pdfwtf_gui.upload_document') }}"
-          hx-target="#uploaded-files"
-          hx-swap="outerHTML"
-          hx-indicator="#upload-indicator"
-        >
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <label class="visually-hidden" for="document">{{ _('PDF document') }}</label>
-          <div id="document-drop-zone" class="document-drop-zone d-flex flex-wrap align-items-center gap-2 flex-grow-1">
-            <div class="document-picker">
-              <span class="btn btn-outline-secondary shadow-sm" aria-hidden="true">{{ _('Choose file') }}</span>
-              <input id="document" name="document" type="file" accept="application/pdf,.pdf" aria-describedby="document-filename document-drop-hint" required>
+    <div class="row justify-content-center">
+        <div class="col-xl-10 col-lg-10">
+            <div class="card shadow-sm">
+                <div class="card-body p-4">
+                    <h1 class="h3">{{ _("Upload PDF") }}</h1>
+                    <form class="d-flex flex-wrap align-items-center gap-2 border rounded p-3"
+                          action="{{ url_for("pdfwtf_gui.upload_document") }}"
+                          method="post"
+                          enctype="multipart/form-data"
+                          hx-post="{{ url_for("pdfwtf_gui.upload_document") }}"
+                          hx-target="#uploaded-files"
+                          hx-swap="outerHTML"
+                          hx-indicator="#upload-indicator">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <label class="visually-hidden" for="document">{{ _("PDF document") }}</label>
+                        <div id="document-drop-zone"
+                             class="document-drop-zone d-flex flex-wrap align-items-center gap-2 flex-grow-1">
+                            <div class="document-picker">
+                                <span class="btn btn-outline-secondary shadow-sm"
+                                      aria-hidden="true">{{ _("Choose file") }}</span>
+                                <input id="document"
+                                       name="document"
+                                       type="file"
+                                       accept="application/pdf,.pdf"
+                                       aria-describedby="document-filename document-drop-hint"
+                                       required>
+                            </div>
+                            <span id="document-filename"
+                                  class="text-break flex-grow-1"
+                                  aria-live="polite"
+                                  data-empty="{{ _("No file selected") }}">{{ _("No file selected") }}</span>
+                            <span id="document-drop-hint"
+                                  class="text-body-secondary">{{ _("or drop a PDF here") }}</span>
+                        </div>
+                        <div class="d-flex align-items-center gap-2">
+                            <label for="pdf_type" class="text-nowrap">{{ _("PDF type") }}</label>
+                            <select id="pdf_type" name="pdf_type" class="form-select w-auto">
+                                <option value="born-digital" selected>{{ _("Born-digital") }}</option>
+                                <option value="scanned">{{ _("Scanned") }}</option>
+                            </select>
+                            <button class="btn btn-primary shadow-sm" type="submit">{{ _("Upload") }}</button>
+                        </div>
+                        <span id="upload-indicator"
+                              class="htmx-indicator ms-2"
+                              role="status">{{ _("Uploading…") }}</span>
+                    </form>
+                    <div id="upload-error" class="mt-2" aria-live="polite"></div>
+                    {% include "pdfwtf_gui/_uploads.html" %}
+                </div>
             </div>
-            <span id="document-filename" class="text-break flex-grow-1" aria-live="polite" data-empty="{{ _('No file selected') }}">{{ _('No file selected') }}</span>
-            <span id="document-drop-hint" class="text-body-secondary">{{ _('or drop a PDF here') }}</span>
-          </div>
-          <div class="d-flex align-items-center gap-2">
-            <label for="pdf_type" class="text-nowrap">{{ _('PDF type') }}</label>
-            <select id="pdf_type" name="pdf_type" class="form-select w-auto">
-              <option value="born-digital" selected>{{ _('Born-digital') }}</option>
-              <option value="scanned">{{ _('Scanned') }}</option>
-            </select>
-            <button class="btn btn-primary shadow-sm" type="submit">{{ _('Upload') }}</button>
-          </div>
-          <span id="upload-indicator" class="htmx-indicator ms-2" role="status">{{ _('Uploading…') }}</span>
-        </form>
-        <div id="upload-error" class="mt-2" aria-live="polite"></div>
-        {% include "pdfwtf_gui/_uploads.html" %}
-      </div>
+        </div>
     </div>
-  </div>
-</div>
-{% include "pdfwtf_gui/_delete_confirmation.html" %}
-{% include "pdfwtf_gui/_export_options.html" %}
-{% if analyze_enabled %}{% include "pdfwtf_gui/_analysis_modal.html" %}{% endif %}
-<script src="{{ url_for('pdfwtf_gui.static', filename='upload.js') }}" defer></script>
+    {% include "pdfwtf_gui/_delete_confirmation.html" %}
+    {% include "pdfwtf_gui/_export_options.html" %}
+    {% if analyze_enabled %}
+        {% include "pdfwtf_gui/_analysis_modal.html" %}
+    {% endif %}
+    <script src="{{ url_for('pdfwtf_gui.static', filename='upload.js') }}" defer></script>
 {% endblock %}

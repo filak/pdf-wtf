@@ -1,5 +1,7 @@
-<div id="job-state" class="alert alert-danger alert-dismissible fade show" role="alert">
-  <p class="mb-0">{{ message }}</p>
-  {% if detail %}<p class="small mb-0 mt-2">{{ detail }}</p>{% endif %}
-  {% include "pdfwtf_gui/_close_alert.html" %}
+<div id="job-state"
+     class="alert alert-danger alert-dismissible fade show"
+     role="alert">
+    <p class="mb-0">{{ message }}</p>
+    {% if detail %}<p class="small mb-0 mt-2">{{ detail }}</p>{% endif %}
+    {% include "pdfwtf_gui/_close_alert.html" %}
 </div>

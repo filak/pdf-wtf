@@ -18,6 +18,11 @@ from pdfwtf.gui.adapter import DemoPartitionAdapter, JobStatus  # noqa: E402
 from pdfwtf.gui.app import create_app  # noqa: E402
 
 
+def _squash(data: bytes) -> bytes:
+    """Collapse runs of whitespace so assertions ignore template layout."""
+    return re.sub(rb"\s+", b" ", data)
+
+
 class ImmediateAdapter:
     """Run partition immediately to keep route tests deterministic."""
 
@@ -724,7 +729,7 @@ def test_file_link_and_document_type_persistence(gui_app, make_pdf):
     listing = client.get("/").data
     assert (
         f'href="/jobs/{job_id}/document?variant=source" target="_blank"'.encode()
-        in listing
+        in _squash(listing)
     )
     document = client.get(f"/jobs/{job_id}/document")
     assert document.status_code == 200
@@ -741,12 +746,11 @@ def test_file_link_and_document_type_persistence(gui_app, make_pdf):
         assert metadata["document_type"] == document_type
         assert metadata["created"] == created
         assert adapter.result(job_id)["document_type"] == document_type
-        assert (
-            f'<option value="{document_type}" selected>'.encode()
-            in client.get("/").data
+        assert f'<option value="{document_type}" selected>'.encode() in _squash(
+            client.get("/").data
         )
     app.config["PDFWTF_GUI_PARTITION_ADAPTER"] = ImmediateAdapter()
-    assert b'<option value="journal-issue" selected>' in client.get("/").data
+    assert b'<option value="journal-issue" selected>' in _squash(client.get("/").data)
     client.post(f"/jobs/{job_id}/partition", data={"document_type": "invalid"})
     assert (
         json.loads(metadata_path.read_text(encoding="utf-8"))["document_type"]
@@ -843,7 +847,9 @@ def test_completion_refreshes_document_type_selector(
     assert response.status_code == 200
     assert b"Partition is complete." in response.data
     assert f'id="document-type-{job_id}"'.encode() in response.data
-    assert b'name="document_type" required hx-swap-oob="outerHTML"' in response.data
+    assert b'name="document_type" required hx-swap-oob="outerHTML"' in _squash(
+        response.data
+    )
     assert b'<option value="book" selected>' in response.data
     assert b'<option value="auto" selected>' not in response.data
 

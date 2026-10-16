@@ -1,66 +1,80 @@
 <div class="modal-header">
-  <h2 class="modal-title fs-5" id="analysis-modal-title">{{ _('PDF analysis') }}</h2>
-  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ _('Close') }}"></button>
+    <h2 class="modal-title fs-5" id="analysis-modal-title">{{ _("PDF analysis") }}</h2>
+    <button type="button"
+            class="btn-close"
+            data-bs-dismiss="modal"
+            aria-label="{{ _("Close") }}"></button>
 </div>
 <div class="modal-body" id="analysis-summary-{{ job_id }}">
-  <p class="mb-2">
-    {% if analyzed_pdf == 'prepared' %}{{ _('Analyzed PDF: prepared PDF') }}{% else %}{{ _('Analyzed PDF: original PDF') }}{% endif %}
-    <span class="text-body-secondary small ms-2">{{ report.created_at }}</span>
-  </p>
-  {% if summary.inspection != 'complete' %}
-  <div class="alert alert-warning py-2 alert-dismissible fade show">
-    {{ _('Some pages could not be inspected: %(pages)s', pages=pages(summary.error_pages)) }}
-    {% include "pdfwtf_gui/_close_alert.html" %}
-  </div>
-  {% endif %}
-  <p class="mb-2">
-    {{ _('Pages') }}: <strong>{{ report.document.page_count }}</strong> ·
-    {{ _('Document composition') }}:
-    <strong id="analysis-composition">{{ labels.composition.get(summary.document_composition, summary.document_composition) }}</strong>
-  </p>
-  <div class="row g-3">
-    <div class="col-md-6">
-      <table class="table table-sm mb-0">
-        <caption class="caption-top">{{ _('Pages by composition') }}</caption>
-        <tbody>
-          {% for name, count in summary.pages_by_composition.items() %}
-          <tr><th scope="row" class="fw-normal">{{ labels.composition.get(name, name) }}</th><td class="text-end">{{ count }}</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
+    <p class="mb-2">
+        {% if analyzed_pdf == "prepared" %}{{ _("Analyzed PDF: prepared PDF") }}{% else %}{{ _("Analyzed PDF: original PDF") }}{% endif %}
+        <span class="text-body-secondary small ms-2">{{ report.created_at }}</span>
+    </p>
+    {% if summary.inspection != "complete" %}
+        <div class="alert alert-warning py-2 alert-dismissible fade show">
+            {{ _('Some pages could not be inspected: %(pages)s', pages=pages(summary.error_pages)) }}
+            {% include "pdfwtf_gui/_close_alert.html" %}
+        </div>
+    {% endif %}
+    <p class="mb-2">
+        {{ _("Pages") }}: <strong>{{ report.document.page_count }}</strong> ·
+        {{ _("Document composition") }}:
+        <strong id="analysis-composition">{{ labels.composition.get(summary.document_composition, summary.document_composition) }}</strong>
+    </p>
+    <div class="row g-3">
+        <div class="col-md-6">
+            <table class="table table-sm mb-0">
+                <caption class="caption-top">{{ _("Pages by composition") }}</caption>
+                <tbody>
+                    {% for name, count in summary.pages_by_composition.items() %}
+                        <tr>
+                            <th scope="row" class="fw-normal">{{ labels.composition.get(name, name) }}</th>
+                            <td class="text-end">{{ count }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="col-md-6">
+            <table class="table table-sm mb-0">
+                <caption class="caption-top">{{ _("Pages by OCR need") }}</caption>
+                <tbody>
+                    {% for name, count in summary.pages_by_ocr_need.items() %}
+                        <tr>
+                            <th scope="row" class="fw-normal">{{ labels.need.get(name, name) }}</th>
+                            <td class="text-end">{{ count }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
     </div>
-    <div class="col-md-6">
-      <table class="table table-sm mb-0">
-        <caption class="caption-top">{{ _('Pages by OCR need') }}</caption>
-        <tbody>
-          {% for name, count in summary.pages_by_ocr_need.items() %}
-          <tr><th scope="row" class="fw-normal">{{ labels.need.get(name, name) }}</th><td class="text-end">{{ count }}</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div>
-  <h3 class="fs-6 mt-3">{{ _('Recommendations') }}</h3>
-  {% if summary.recommendations %}
-  <ul id="analysis-recommendations" class="mb-1">
-    {% for item in summary.recommendations %}
-    <li><strong>{{ labels.action.get(item.action, item.action) }}</strong>: {{ _('pages %(pages)s', pages=pages(item.pages)) }}</li>
-    {% endfor %}
-  </ul>
-  {% else %}
-  <p id="analysis-recommendations" class="mb-1">{{ _('No recommendations.') }}</p>
-  {% endif %}
-  <p class="form-text mb-1">{{ _('Recommendations are advisory. The classifications are heuristics.') }}</p>
-  <p class="form-text mb-0">{{ _('Warnings: %(count)s. See the report for details.', count=report.warnings|length) }}</p>
+    <h3 class="fs-6 mt-3">{{ _("Recommendations") }}</h3>
+    {% if summary.recommendations %}
+        <ul id="analysis-recommendations" class="mb-1">
+            {% for item in summary.recommendations %}
+                <li><strong>{{ labels.action.get(item.action, item.action) }}</strong>: {{ _('pages %(pages)s', pages=pages(item.pages)) }}</li>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <p id="analysis-recommendations" class="mb-1">{{ _("No recommendations.") }}</p>
+    {% endif %}
+    <p class="form-text mb-1">{{ _("Recommendations are advisory. The classifications are heuristics.") }}</p>
+    <p class="form-text mb-0">{{ _('Warnings: %(count)s. See the report for details.', count=report.warnings|length) }}</p>
 </div>
 <div class="modal-footer">
-  <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ _('Close') }}</button>
-  <a id="analysis-download" class="btn btn-outline-info" href="{{ url_for('pdfwtf_gui.download_analysis_report', job_id=job_id) }}">{{ _('Download report') }}</a>
-  <form id="analysis-rerun-{{ job_id }}" class="d-inline" method="post"
-        action="{{ url_for('pdfwtf_gui.start_analysis', job_id=job_id) }}"
-        hx-post="{{ url_for('pdfwtf_gui.start_analysis', job_id=job_id) }}"
-        hx-target="#job-state-{{ job_id }}" hx-swap="innerHTML">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <button type="submit" class="btn btn-info" data-bs-dismiss="modal">{{ _('Run again') }}</button>
-  </form>
+    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ _("Close") }}</button>
+    <a id="analysis-download"
+       class="btn btn-outline-info"
+       href="{{ url_for('pdfwtf_gui.download_analysis_report', job_id=job_id) }}">{{ _("Download report") }}</a>
+    <form id="analysis-rerun-{{ job_id }}"
+          class="d-inline"
+          method="post"
+          action="{{ url_for('pdfwtf_gui.start_analysis', job_id=job_id) }}"
+          hx-post="{{ url_for('pdfwtf_gui.start_analysis', job_id=job_id) }}"
+          hx-target="#job-state-{{ job_id }}"
+          hx-swap="innerHTML">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-info" data-bs-dismiss="modal">{{ _("Run again") }}</button>
+    </form>
 </div>

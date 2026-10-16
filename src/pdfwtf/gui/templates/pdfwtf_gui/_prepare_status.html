@@ -1,14 +1,12 @@
-<div
-  id="prepare-state-{{ job_id }}"
-  class="alert alert-info alert-dismissible fade show"
-  hx-get="{{ url_for('pdfwtf_gui.prepare_status', job_id=job_id) }}"
-  hx-trigger="load delay:750ms"
-  hx-swap="outerHTML"
->
-  <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
-  {% if state == 'processing' %}
-    {{ _('Preparing the PDF…') }}
-  {% else %}
-    {{ _('Waiting for preparation…') }}
-  {% endif %}
+<div id="prepare-state-{{ job_id }}"
+     class="alert alert-info alert-dismissible fade show"
+     hx-get="{{ url_for('pdfwtf_gui.prepare_status', job_id=job_id) }}"
+     hx-trigger="load delay:750ms"
+     hx-swap="outerHTML">
+    <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+    {% if state == "processing" %}
+        {{ _("Preparing the PDF…") }}
+    {% else %}
+        {{ _("Waiting for preparation…") }}
+    {% endif %}
 </div>

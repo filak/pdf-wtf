@@ -328,7 +328,7 @@ def test_raster_figure_has_stable_placeholder_and_caption(tmp_path):
     assert html.index("<h2>Figures</h2>") > html.index("</figure>")
     assert html.endswith("</ul>\n</section>\n")
     assert "A navy rectangle" not in html
-    assert "Printed page iv" in html
+    assert "Printed page iv" not in html
     assert "Reviewed figure title" in html
     assert html.index("Reviewed figure title") < html.index("Figure figure-001-001")
     assert metadata["figures"][0]["input_page"] == 1

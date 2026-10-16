@@ -1,5 +1,7 @@
-<div id="analysis-state-{{ job_id }}" class="alert alert-success alert-dismissible fade show" role="alert">
-  <p class="mb-0">{{ _('Analysis is complete. Click the Analyze button to show the report.') }}</p>
-  {% include "pdfwtf_gui/_close_alert.html" %}
+<div id="analysis-state-{{ job_id }}"
+     class="alert alert-success alert-dismissible fade show"
+     role="alert">
+    <p class="mb-0">{{ _("Analysis is complete. Click the Analyze button to show the report.") }}</p>
+    {% include "pdfwtf_gui/_close_alert.html" %}
 </div>
 {% include "pdfwtf_gui/_analyze_button.html" %}

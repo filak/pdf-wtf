@@ -1,134 +1,186 @@
 {% extends config.PDFWTF_GUI_BASE_TEMPLATE %}
-{% block title %}{{ _('Review') }} | {{ config.APP_NAME }}{% endblock %}
+{% block title %}{{ _("Review") }} | {{ config.APP_NAME }}{% endblock %}
 {% block content %}
-<div id="review-app"
-     data-document-url="{{ url_for('pdfwtf_gui.document', job_id=job_id) }}"
-     data-save-url="{{ url_for('pdfwtf_gui.save_plan', job_id=job_id) }}">
-  <div id="review-toolbar" class="sticky-top bg-body-tertiary">
-    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 pb-2">
-      <div>
-        <h1 class="h3 mb-1">{{ _('Review') }}
-
-          {% if partition.pdf_type == 'scanned' %}
-          <i class="bi bi-file-earmark-break-fill" role="img" aria-label="{{ _('Scanned') }}"></i>
-          {% else %}
-          <i class="bi bi-file-pdf-fill" role="img" aria-label="{{ _('Born-digital') }}"></i>
-          {% endif %}
-
-          <span class="fs-6 badge theme-primary">{{ {
-          'auto': _('Automatic'),
-          'unit': _('Single unit'),
-          'journal-issue': _('Journal issue'),
-          'magazine-issue': _('Magazine issue'),
-          'book': _('Book'),
-          'proceedings': _('Proceedings'),
-          'unknown': _('Unknown'),
-        }.get(partition.document_type, partition.document_type) }}</span>
-      </h1>
-      </div>
-      {% if partition.source.bibliographic %}
-      <div class="flex-grow-1 text-center text-break fw-semibold px-2">
-        <span class="badge text-bg-secondary">{{ partition.source.bibliographic.kind }}</span>
-        {{ partition.source.bibliographic.book_title | truncate(30) }}
-        {{ partition.source.bibliographic.journal_title | truncate(30) }}
-        {{ partition.source.bibliographic.year }},
-        {{ partition.source.bibliographic.volume }}
-        ({{ partition.source.bibliographic.issue }})
-        {{ partition.source.bibliographic.issn }}
-        {{ partition.source.bibliographic.isbn }}
-      </div>
-      {% endif %}
-      <div class="d-flex gap-2">
-        <a class="btn btn-primary" href="{{ url_for('pdfwtf_gui.index') }}" role="button">
-          <i class="bi bi-house" aria-label="{{ _('Intro') }}"></i>
-        </a>
-        <button id="add-unit" class="btn btn-sm btn-outline-primary shadow-sm" type="button" title="{{ _('Add unit') }}">{{ _('Add') }}</button>
-        <button id="merge-units" class="btn btn-sm btn-outline-primary shadow-sm" type="button" title="{{ _('Merge selected units') }}">{{ _('Merge') }}</button>
-        <button id="save-plan" class="btn btn-sm {{ 'btn-outline-success' if plan else 'btn-success' }} shadow-sm" type="button" title="{{ _('Save plan') }}">{{ _('Save') }}</button>
-        <details id="review-more" class="position-relative">
-          <summary class="btn btn btn-outline-secondary shadow-sm">{{ _('More') }}</summary>
-          <div class="btn-group-vertical position-absolute end-0 mt-1 bg-body shadow-sm" role="group" aria-label="{{ _('More') }}">
-            <button id="export-units" class="btn btn-sm btn-success" type="button"
-                    data-bs-toggle="modal" data-bs-target="#export-options"
-                    data-export-url="{{ url_for('pdfwtf_gui.start_export', job_id=job_id) }}"
-                    data-export-status-url="{{ url_for('pdfwtf_gui.export_status', job_id=job_id) }}"
-                    data-source-filename="{{ source_filename }}"{% if not plan %} disabled{% endif %}>{{ _('Export') }}</button>
-            <a id="show-partition" class="btn btn-sm btn-outline-primary" href="{{ url_for('pdfwtf_gui.download_partition', job_id=job_id, inline=1) }}" target="_blank" rel="noopener">{{ _('Show partition') }}</a>
-            <a id="show-plan" class="btn btn-sm btn-outline-secondary{% if not plan %} disabled{% endif %}" href="{{ url_for('pdfwtf_gui.download_plan', job_id=job_id, inline=1) }}" target="_blank" rel="noopener"{% if not plan %} aria-disabled="true"{% endif %}>{{ _('Show plan') }}</a>
-            <button id="delete-plan" class="btn btn-sm btn-danger" type="button"
-                    hx-delete="{{ url_for('pdfwtf_gui.delete_plan', job_id=job_id) }}"
-                    hx-confirm="{{ _('Delete the approved plan?') }}"
-                    hx-headers='{{ {"X-CSRFToken": csrf_token()} | tojson }}'
-                    hx-swap="none" hx-disabled-elt="this"{% if not plan %} disabled{% endif %}>{{ _('Delete plan') }}</button>
-          </div>
-        </details>
-      </div>
-    </div>
-  </div>
-
-  {% if partition.suspected_shared_page_boundaries %}
-    <div class="alert alert-warning alert-dismissible fade show">
-      <strong>{{ _('Possible unit boundaries within a page were detected.') }}</strong>
-      {{ _('Check the listed pages. This warning does not prevent saving the plan.') }}
-      <ul class="mb-0 mt-2">
-        {% for boundary in partition.suspected_shared_page_boundaries %}
-        <li>{{ _('Input page %(page)s', page=boundary.input_page) }}</li>
-        {% endfor %}
-      </ul>
-      {% include "pdfwtf_gui/_close_alert.html" %}
-    </div>
-  {% endif %}
-
-  <div id="plan-message" aria-live="polite"></div>
-  <div class="review-layout">
-    <aside class="thumbnail-panel card">
-      <div class="card-header"><h2 class="h5 mb-0">{{ _('Pages') }}</h2></div>
-      <div id="thumbnails" class="card-body p-2"></div>
-    </aside>
-    <section class="preview-panel card">
-      <div class="card-header d-flex flex-wrap align-items-center gap-2">
-        <button id="previous-page" class="btn btn-sm btn-outline-secondary shadow-sm" type="button">{{ _('Previous') }}</button>
-        <label for="preview-page" class="visually-hidden">{{ _('Preview page') }}</label>
-        <input id="preview-page" class="form-control form-control-sm page-number shadow-sm" type="number" min="1" value="1">
-        <span id="page-count"></span>
-        <button id="next-page" class="btn btn-sm btn-outline-secondary shadow-sm" type="button">{{ _('Next') }}</button>
-        <button id="zoom-out" class="btn btn-sm btn-outline-secondary ms-auto shadow-sm" type="button" aria-label="{{ _('Zoom out') }}">−</button>
-        <output id="zoom-level">100%</output>
-        <button id="zoom-in" class="btn btn-sm btn-outline-secondary shadow-sm" type="button" aria-label="{{ _('Zoom in') }}">+</button>
-      </div>
-      <div id="preview-container" class="card-body text-center overflow-auto">
-        <div id="preview-page-view">
-          <canvas id="preview-canvas" aria-label="{{ _('PDF page preview') }}"></canvas>
-          <div id="preview-text-layer" class="pdf-text-layer"></div>
+    <div id="review-app"
+         data-document-url="{{ url_for('pdfwtf_gui.document', job_id=job_id) }}"
+         data-save-url="{{ url_for('pdfwtf_gui.save_plan', job_id=job_id) }}">
+        <div id="review-toolbar" class="sticky-top bg-body-tertiary">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 pb-2">
+                <div>
+                    <h1 class="h3 mb-1">
+                        {{ _("Review") }}
+                        {% if partition.pdf_type == "scanned" %}
+                            <i class="bi bi-file-earmark-break-fill"
+                               role="img"
+                               aria-label="{{ _("Scanned") }}"></i>
+                        {% else %}
+                            <i class="bi bi-file-pdf-fill"
+                               role="img"
+                               aria-label="{{ _("Born-digital") }}"></i>
+                        {% endif %}
+                        <span class="fs-6 badge theme-primary">{{ {
+                            'auto': _("Automatic"),
+                            'unit': _('Single unit'),
+                            'journal-issue': _('Journal issue'),
+                            'magazine-issue': _('Magazine issue'),
+                            'book': _('Book'),
+                            'proceedings': _('Proceedings'),
+                            'unknown': _('Unknown'),
+                        }.get(partition.document_type, partition.document_type) }}</span>
+                    </h1>
+                </div>
+                {% if partition.source.bibliographic %}
+                    <div class="flex-grow-1 text-center text-break fw-semibold px-2">
+                        <span class="badge text-bg-secondary">{{ partition.source.bibliographic.kind }}</span>
+                        {{ partition.source.bibliographic.book_title | truncate(30) }}
+                        {{ partition.source.bibliographic.journal_title | truncate(30) }}
+                        {{ partition.source.bibliographic.year }},
+                        {{ partition.source.bibliographic.volume }}
+                        ({{ partition.source.bibliographic.issue }})
+                        {{ partition.source.bibliographic.issn }}
+                        {{ partition.source.bibliographic.isbn }}
+                    </div>
+                {% endif %}
+                <div class="d-flex gap-2">
+                    <a class="btn btn-primary"
+                       href="{{ url_for("pdfwtf_gui.index") }}"
+                       role="button">
+                        <i class="bi bi-house" aria-label="{{ _("Intro") }}"></i>
+                    </a>
+                    <button id="add-unit"
+                            class="btn btn-sm btn-outline-primary shadow-sm"
+                            type="button"
+                            title="{{ _("Add unit") }}">{{ _("Add") }}</button>
+                    <button id="merge-units"
+                            class="btn btn-sm btn-outline-primary shadow-sm"
+                            type="button"
+                            title="{{ _("Merge selected units") }}">{{ _("Merge") }}</button>
+                    <button id="save-plan"
+                            class="btn btn-sm {{ 'btn-outline-success' if plan else 'btn-success' }} shadow-sm"
+                            type="button"
+                            title="{{ _("Save plan") }}">{{ _("Save") }}</button>
+                    <details id="review-more" class="position-relative">
+                        <summary class="btn btn btn-outline-secondary shadow-sm">{{ _("More") }}</summary>
+                        <div class="btn-group-vertical position-absolute end-0 mt-1 bg-body shadow-sm"
+                             role="group"
+                             aria-label="{{ _("More") }}">
+                            <button id="export-units"
+                                    class="btn btn-sm btn-success"
+                                    type="button"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#export-options"
+                                    data-export-url="{{ url_for('pdfwtf_gui.start_export', job_id=job_id) }}"
+                                    data-export-status-url="{{ url_for('pdfwtf_gui.export_status', job_id=job_id) }}"
+                                    data-source-filename="{{ source_filename }}"
+                                    {% if not plan %} disabled{% endif %}>{{ _("Export") }}</button>
+                            <a id="show-partition"
+                               class="btn btn-sm btn-outline-primary"
+                               href="{{ url_for('pdfwtf_gui.download_partition', job_id=job_id, inline=1) }}"
+                               target="_blank"
+                               rel="noopener">{{ _("Show partition") }}</a>
+                            <a id="show-plan"
+                               class="btn btn-sm btn-outline-secondary{% if not plan %} disabled{% endif %}"
+                               href="{{ url_for('pdfwtf_gui.download_plan', job_id=job_id, inline=1) }}"
+                               target="_blank"
+                               rel="noopener"
+                               {% if not plan %} aria-disabled="true"{% endif %}>{{ _("Show plan") }}</a>
+                            <button id="delete-plan"
+                                    class="btn btn-sm btn-danger"
+                                    type="button"
+                                    hx-delete="{{ url_for('pdfwtf_gui.delete_plan', job_id=job_id) }}"
+                                    hx-confirm="{{ _("Delete the approved plan?") }}"
+                                    hx-headers='{{ {"X-CSRFToken": csrf_token()} | tojson }}'
+                                    hx-swap="none"
+                                    hx-disabled-elt="this"
+                                    {% if not plan %} disabled{% endif %}>{{ _("Delete plan") }}</button>
+                        </div>
+                    </details>
+                </div>
+            </div>
         </div>
-      </div>
-    </section>
-    <section class="units-panel card">
-      <div class="card-header d-flex flex-wrap align-items-center gap-2">
-        <h2 class="h5 mb-0 me-auto">{{ _('Units') }}</h2>
-        <label class="visually-hidden" for="unit-inclusion-scope">{{ _('Apply to units') }}</label>
-        <select id="unit-inclusion-scope" class="form-select form-select-sm w-auto">
-          <option value="all">{{ _('All') }}</option>
-          <option value="selected">{{ _('Selected') }}</option>
-          <option value="included">{{ _('Included') }}</option>
-          <option value="removed">{{ _('Removed') }}</option>
-          <option value="clear-selection">{{ _('Clear selection') }}</option>
-        </select>
-        <div class="form-check form-switch mb-0">
-          <input id="include-units" class="form-check-input" type="checkbox" role="switch" aria-label="{{ _('Include or exclude units') }}">
-          <label id="include-units-label" class="form-check-label small" for="include-units">{{ _('Included') }}</label>
+        {% if partition.suspected_shared_page_boundaries %}
+            <div class="alert alert-warning alert-dismissible fade show">
+                <strong>{{ _("Possible unit boundaries within a page were detected.") }}</strong>
+                {{ _("Check the listed pages. This warning does not prevent saving the plan.") }}
+                <ul class="mb-0 mt-2">
+                    {% for boundary in partition.suspected_shared_page_boundaries %}
+                        <li>{{ _('Input page %(page)s', page=boundary.input_page) }}</li>
+                    {% endfor %}
+                </ul>
+                {% include "pdfwtf_gui/_close_alert.html" %}
+            </div>
+        {% endif %}
+        <div id="plan-message" aria-live="polite"></div>
+        <div class="review-layout">
+            <aside class="thumbnail-panel card">
+                <div class="card-header">
+                    <h2 class="h5 mb-0">{{ _("Pages") }}</h2>
+                </div>
+                <div id="thumbnails" class="card-body p-2"></div>
+            </aside>
+            <section class="preview-panel card">
+                <div class="card-header d-flex flex-wrap align-items-center gap-2">
+                    <button id="previous-page"
+                            class="btn btn-sm btn-outline-secondary shadow-sm"
+                            type="button">{{ _("Previous") }}</button>
+                    <label for="preview-page" class="visually-hidden">{{ _("Preview page") }}</label>
+                    <input id="preview-page"
+                           class="form-control form-control-sm page-number shadow-sm"
+                           type="number"
+                           min="1"
+                           value="1">
+                    <span id="page-count"></span>
+                    <button id="next-page"
+                            class="btn btn-sm btn-outline-secondary shadow-sm"
+                            type="button">{{ _("Next") }}</button>
+                    <button id="zoom-out"
+                            class="btn btn-sm btn-outline-secondary ms-auto shadow-sm"
+                            type="button"
+                            aria-label="{{ _("Zoom out") }}">−</button>
+                    <output id="zoom-level">100%</output>
+                    <button id="zoom-in"
+                            class="btn btn-sm btn-outline-secondary shadow-sm"
+                            type="button"
+                            aria-label="{{ _("Zoom in") }}">+</button>
+                </div>
+                <div id="preview-container" class="card-body text-center overflow-auto">
+                    <div id="preview-page-view">
+                        <canvas id="preview-canvas" aria-label="{{ _("PDF page preview") }}"></canvas>
+                        <div id="preview-text-layer" class="pdf-text-layer"></div>
+                    </div>
+                </div>
+            </section>
+            <section class="units-panel card">
+                <div class="card-header d-flex flex-wrap align-items-center gap-2">
+                    <h2 class="h5 mb-0 me-auto">{{ _("Units") }}</h2>
+                    <label class="visually-hidden" for="unit-inclusion-scope">{{ _("Apply to units") }}</label>
+                    <select id="unit-inclusion-scope" class="form-select form-select-sm w-auto">
+                        <option value="all">{{ _("All") }}</option>
+                        <option value="selected">{{ _("Selected") }}</option>
+                        <option value="included">{{ _("Included") }}</option>
+                        <option value="removed">{{ _("Removed") }}</option>
+                        <option value="clear-selection">{{ _("Clear selection") }}</option>
+                    </select>
+                    <div class="form-check form-switch mb-0">
+                        <input id="include-units"
+                               class="form-check-input"
+                               type="checkbox"
+                               role="switch"
+                               aria-label="{{ _("Include or exclude units") }}">
+                        <label id="include-units-label"
+                               class="form-check-label small"
+                               for="include-units">{{ _("Included") }}</label>
+                    </div>
+                </div>
+                <div id="units" class="card-body"></div>
+            </section>
         </div>
-      </div>
-      <div id="units" class="card-body"></div>
-    </section>
-  </div>
-</div>
-
-{% include "pdfwtf_gui/_delete_confirmation.html" %}
-{% include "pdfwtf_gui/_export_options.html" %}
-<script id="partition-data" type="application/json">{{ partition|tojson }}</script>
-<script id="plan-data" type="application/json">{{ plan|tojson }}</script>
-<script id="gui-messages" type="application/json">{{ {
+    </div>
+    {% include "pdfwtf_gui/_delete_confirmation.html" %}
+    {% include "pdfwtf_gui/_export_options.html" %}
+    <script id="partition-data" type="application/json">{{ partition|tojson }}</script>
+    <script id="plan-data" type="application/json">{{ plan|tojson }}</script>
+    <script id="gui-messages" type="application/json">{{ {
   'add_title': _('New unit'),
   'included': _('Included'),
   'invalid_merge': _('Select at least two adjacent units to merge.'),
@@ -146,10 +198,12 @@
   'delete_plan_error': _('The plan could not be deleted.'),
   'toggle_unit': _('Include or exclude unit'),
   'view_page': _('View input page %(page)s', page='%(page)s'),
-}|tojson }}</script>
-<script id="unit-types" type="application/json">{{ unit_types|tojson }}</script>
-<script id="unit-type-labels" type="application/json">{{ unit_type_labels|tojson }}</script>
+}|tojson }}
+    </script>
+    <script id="unit-types" type="application/json">{{ unit_types|tojson }}</script>
+    <script id="unit-type-labels" type="application/json">{{ unit_type_labels|tojson }}</script>
 {% endblock %}
 {% block scripts %}
-<script type="module" src="{{ url_for('pdfwtf_gui.static', filename='gui.js') }}"></script>
+    <script type="module"
+            src="{{ url_for('pdfwtf_gui.static', filename='gui.js') }}"></script>
 {% endblock %}
