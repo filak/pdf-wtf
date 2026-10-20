@@ -10,7 +10,7 @@ target-version = ["py312"]
 
 [project]
 name = "pdfwtf"
-version = "0.1.7"
+version = "0.1.8"
 description = "Smart PDF parsing pipeline: remove pages, OCR scanned PDFs, export images, text, html ..."
 authors = [
     { name = "Filip Kriz", email = "1353748+filak@users.noreply.github.com" }
@@ -32,6 +32,7 @@ dependencies = [
     "img2pdf==0.6.3",
     "python-dotenv==1.2.4",
     "gemini-call==0.4.0",
+    "beautifulsoup4>=4.14.3",
 ]
 
 [project.scripts]

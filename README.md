@@ -272,7 +272,8 @@ To export text from a scan, enhance it first, then export the prepared PDF.
 | --- | --- |
 | `--get-doi` | DOI candidates and JSON metadata |
 | `--get-format` | Page image format. The only supported format is PNG. |
-| `--get-html` | UTF-8 HTML fragments for selected units |
+| `--get-html` | Extracted UTF-8 HTML fragments for selected units |
+| `--get-html-normalized` | Editorially normalized UTF-8 HTML fragments for selected units |
 | `--get-img` | PNG page images |
 | `--get-meta` | JSON metadata |
 | `--get-text` | Per-page text and combined text |

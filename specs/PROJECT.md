@@ -162,6 +162,8 @@ removes all of its prepared PDF pages.
 
 Optional exports include PNG page images, JPEG thumbnails, per-page text,
 and combined text. `--get-thumb` also writes page images.
+`--get-html` writes extracted HTML without editorial paragraph merging.
+`--get-html-normalized` explicitly requests editorial HTML normalization.
 
 Born-digital container partitioning describes each input page and proposes
 whole-page unit partitions from text structure, bookmarks, links, and raster
@@ -320,7 +322,8 @@ With a saved plan for the active PDF, export uses that plan. Export opens a moda
 `get-meta`, `include-source`, and `debug`. All switches start off each time the modal opens. With all
 switches off,
 export writes one PDF for each included unit and the manifest. `no-pdf-out`
-suppresses unit PDFs. `get-html` adds HTML for included units.
+suppresses unit PDFs. `get-html` adds editorially normalized HTML for included
+units.
 `get-meta` adds unit `*.metadata.json` files. With `get-meta` off, the ZIP
 contains no unit metadata files and manifest `metadata` fields are `null`. Export uses existing PDF text
 and does not run OCR. The saved plan controls page and unit selection.
@@ -410,8 +413,10 @@ packaging. Use versions defined in `pyproject.toml` and `uv.lock`.
 
 The established PDF libraries are pikepdf, PyMuPDF, and OCRmyPDF. Processing
 code also uses pytesseract, Pillow, img2pdf, and cv3. Click provides the CLI.
-Pydantic defines CLI settings. `gemini-call` provides optional Gemini calls
-for LLM tasks. An existing import does not approve a new production dependency. Follow the dependency rules in `AGENTS.md`.
+Pydantic defines CLI settings. Beautiful Soup normalizes extracted HTML.
+`gemini-call` provides optional Gemini calls for LLM tasks. An existing import
+does not approve a new production dependency. Follow the dependency rules in
+`AGENTS.md`.
 
 Flask, Flask-Babel, and Flask-WTF are optional `gui` dependencies. Bootstrap 5,
 HTMX, and PDF.js are browser assets in the GUI package. The PDF.js library and

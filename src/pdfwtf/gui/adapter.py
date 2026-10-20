@@ -601,7 +601,7 @@ class DemoPartitionAdapter:
                     results,
                     plan_path=plan_path,
                     export_unit_pdfs_flag=not no_pdf_out,
-                    export_html_flag=get_html,
+                    export_html_normalized_flag=get_html,
                     unit_doi_flag=True,
                     config=self._config,
                     llm_tasks=llm_tasks,

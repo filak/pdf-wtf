@@ -146,9 +146,30 @@ if (app) {
     }
   }
 
-  function selectPage(pageNumber, scrollUnit = false) {
+  function scrollThumbnailIntoView() {
+    const thumbnails = document.querySelector("#thumbnails");
+    const thumbnail = thumbnails.querySelector(`[data-page="${state.currentPage}"]`);
+    if (!thumbnail) return;
+    const panelBounds = thumbnails.getBoundingClientRect();
+    const thumbnailBounds = thumbnail.getBoundingClientRect();
+    thumbnails.scrollTo({
+      top: thumbnails.scrollTop + thumbnailBounds.top - panelBounds.top
+        - thumbnails.clientTop - (thumbnails.clientHeight - thumbnailBounds.height) / 2,
+      left: thumbnails.scrollLeft + thumbnailBounds.left - panelBounds.left
+        - thumbnails.clientLeft - (thumbnails.clientWidth - thumbnailBounds.width) / 2,
+    });
+  }
+
+  function selectPage(pageNumber, { scrollUnit = false, scrollThumbnail = false } = {}) {
+    if (!state.document) return;
+    if (!Number.isInteger(pageNumber)) {
+      previewInput.value = state.currentPage;
+      return;
+    }
     state.currentPage = Math.max(1, Math.min(state.document.numPages, pageNumber));
+    previewInput.value = state.currentPage;
     synchronizeUnit(scrollUnit);
+    if (scrollThumbnail) scrollThumbnailIntoView();
     renderPreview().catch(() => showMessage(messages.loading_error));
   }
 
@@ -215,7 +236,7 @@ if (app) {
       const printedNumber = reviewData.pages[pageNumber - 1]?.printed_page_number;
       button.querySelector("span").textContent = printedNumber
         ? `${pageNumber} [${printedNumber}]` : String(pageNumber);
-      button.addEventListener("click", () => selectPage(pageNumber, true));
+      button.addEventListener("click", () => selectPage(pageNumber, { scrollUnit: true }));
       container.append(button);
       observer.observe(button);
     }
@@ -378,17 +399,7 @@ if (app) {
         if (!state.document || !Number.isInteger(startPage) || startPage < 1) return;
         if (startPage !== state.currentPage) selectPage(startPage);
         else synchronizeUnit();
-        const thumbnails = document.querySelector("#thumbnails");
-        const thumbnail = thumbnails.querySelector(`[data-page="${state.currentPage}"]`);
-        if (!thumbnail) return;
-        const panelBounds = thumbnails.getBoundingClientRect();
-        const thumbnailBounds = thumbnail.getBoundingClientRect();
-        thumbnails.scrollTo({
-          top: thumbnails.scrollTop + thumbnailBounds.top - panelBounds.top
-            - thumbnails.clientTop - (thumbnails.clientHeight - thumbnailBounds.height) / 2,
-          left: thumbnails.scrollLeft + thumbnailBounds.left - panelBounds.left
-            - thumbnails.clientLeft - (thumbnails.clientWidth - thumbnailBounds.width) / 2,
-        });
+        scrollThumbnailIntoView();
       });
       container.append(card);
     });
@@ -604,9 +615,13 @@ if (app) {
     if (event.key === "Escape") document.querySelector("#review-more").open = false;
   });
 
-  document.querySelector("#previous-page").addEventListener("click", () => selectPage(state.currentPage - 1));
-  document.querySelector("#next-page").addEventListener("click", () => selectPage(state.currentPage + 1));
-  previewInput.addEventListener("change", () => selectPage(Number(previewInput.value)));
+  const navigationScroll = { scrollUnit: true, scrollThumbnail: true };
+  document.querySelector("#previous-page").addEventListener(
+    "click", () => selectPage(state.currentPage - 1, navigationScroll));
+  document.querySelector("#next-page").addEventListener(
+    "click", () => selectPage(state.currentPage + 1, navigationScroll));
+  previewInput.addEventListener(
+    "change", () => selectPage(Number(previewInput.value || NaN), navigationScroll));
   document.querySelector("#zoom-in").addEventListener("click", () => {
     state.scale = Math.min(3, state.scale + 0.25);
     renderPreview().catch(() => showMessage(messages.loading_error));

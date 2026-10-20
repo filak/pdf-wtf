@@ -320,13 +320,14 @@ def test_raster_figure_has_stable_placeholder_and_caption(tmp_path):
     metadata = json.loads((destination / "article.metadata.json").read_text("utf-8"))
     assert "Figure figure-001-001" in html
     assert "<figcaption>Figure 1. Reviewed caption.</figcaption>" in html
-    assert '<div id="figure-001-001" class="figure-placeholder">' in html
+    assert 'id="figure-001-001"' in html
+    assert 'class="figure-placeholder"' in html
     assert (
         '<li><a href="#figure-001-001">figure-001-001</a> -- Figure 1. Reviewed caption.</li>'
         in html
     )
     assert html.index("<h2>Figures</h2>") > html.index("</figure>")
-    assert html.endswith("</ul>\n</section>\n")
+    assert html.rstrip().endswith("</section>")
     assert "A navy rectangle" not in html
     assert "Printed page iv" not in html
     assert "Reviewed figure title" in html
@@ -382,6 +383,382 @@ def test_partition_flags_possible_start_within_page(tmp_path):
     ] == [2]
     assert len(partition["units"]) == 1
     assert partition["units"][0]["input_pages"] == {"start": 1, "end": 2}
+
+
+def test_journal_tables_figures_and_bilingual_references_are_not_starts(tmp_path):
+    source = tmp_path / "labels.pdf"
+    with fitz.open() as document:
+        first = document.new_page(width=400, height=500)
+        first.insert_text((30, 40), "First article title", fontsize=18)
+        first.insert_text((30, 70), "Alice Smith", fontsize=10)
+        first.insert_text((30, 100), "Abstract", fontsize=10)
+        for label in (
+            "Table 2: Baseline values",
+            "Fig. 1a: Study population",
+            "References | Literatúra",
+        ):
+            page = document.new_page(width=400, height=500)
+            page.insert_text((30, 40), label, fontsize=14)
+            page.insert_text((30, 70), "Control Group Values", fontsize=10)
+        document.save(source)
+    partition = partition_container(source, "journal-issue")
+    assert [unit["input_pages"]["start"] for unit in partition["units"]] == [1]
+    assert partition["suspected_shared_page_boundaries"] == []
+
+
+def test_journal_study_name_below_section_heading_is_not_a_byline(tmp_path):
+    source = tmp_path / "section.pdf"
+    with fitz.open() as document:
+        first = document.new_page(width=500, height=700)
+        first.insert_text((30, 40), "Article title", fontsize=18)
+        first.insert_text((30, 70), "Alice Smith", fontsize=10)
+        first.insert_text((30, 100), "Abstract", fontsize=10)
+        section = document.new_page(width=500, height=700)
+        section.insert_text(
+            (30, 80), "Results from intensive treatment studies", fontsize=11
+        )
+        section.insert_text(
+            (30, 110), "Preterax and Diamicron Modified Release Controlled", fontsize=9
+        )
+        section.insert_text((30, 125), "Evaluation of clinical outcomes.", fontsize=9)
+        document.save(source)
+    partition = partition_container(source, "journal-issue")
+    assert [unit["input_pages"]["start"] for unit in partition["units"]] == [1]
+
+
+def test_journal_display_title_can_repeat_as_small_running_header(tmp_path):
+    source = tmp_path / "running-title.pdf"
+    with fitz.open() as document:
+        first = document.new_page(width=500, height=700)
+        first.insert_text((30, 40), "First article", fontsize=18)
+        first.insert_text((30, 70), "Alice Smith", fontsize=10)
+        first.insert_text((30, 100), "Abstract", fontsize=10)
+        article = document.new_page(width=500, height=700)
+        article.insert_text((30, 60), "Second article title", fontsize=20)
+        article.insert_text((30, 105), "Bob Jones", fontsize=10)
+        article.insert_text((30, 135), "University Hospital", fontsize=9)
+        article.insert_text((30, 165), "Abstract", fontsize=9)
+        for number in range(12):
+            article.insert_text(
+                (30, 200 + number * 12), "Article body text continues.", fontsize=9
+            )
+        continuation = document.new_page(width=500, height=700)
+        continuation.insert_text((30, 35), "Second article title", fontsize=8)
+        for number in range(12):
+            continuation.insert_text(
+                (30, 80 + number * 12), "Article body text continues.", fontsize=9
+            )
+        document.save(source)
+    partition = partition_container(source, "journal-issue")
+    assert [unit["input_pages"]["start"] for unit in partition["units"]] == [1, 2]
+    assert partition["units"][1]["title"] == "Second article title"
+
+
+def test_journal_isbn_citation_proposes_book_review(tmp_path):
+    source = tmp_path / "book-review.pdf"
+    with fitz.open() as document:
+        first = document.new_page(width=600, height=700)
+        first.insert_text((30, 40), "Previous contribution", fontsize=18)
+        first.insert_text((30, 70), "Alice Smith", fontsize=10)
+        first.insert_text((30, 100), "Abstract", fontsize=10)
+        review = document.new_page(width=600, height=700)
+        review.insert_text((500, 35), "from the press", fontsize=8)
+        review.insert_text(
+            (30, 60), "Boris Krahulec, Lubomira Fabryova, Pavol Holeczy,", fontsize=20
+        )
+        review.insert_text(
+            (30, 82), "Iwar Klimes (eds). Clinical Obesitology.", fontsize=20
+        )
+        review.insert_text(
+            (30, 125),
+            "First edition. Facta Medica: Brno 2013. ISBN 978-80-904731-7-1.",
+            fontsize=14,
+        )
+        for number in range(12):
+            review.insert_text(
+                (30, 175 + number * 12), "Book review body text continues.", fontsize=9
+            )
+        document.save(source)
+    partition = partition_container(source, "journal-issue")
+    assert [unit["input_pages"]["start"] for unit in partition["units"]] == [1, 2]
+    assert partition["units"][1]["type"] == "book-review"
+    assert partition["units"][1]["title"] == (
+        "Boris Krahulec, Lubomira Fabryova, Pavol Holeczy, "
+        "Iwar Klimes (eds). Clinical Obesitology."
+    )
+
+
+def test_journal_contents_infers_well_supported_printed_page_offset(
+    tmp_path, monkeypatch
+):
+    source = tmp_path / "inferred-contents.pdf"
+    with fitz.open() as document:
+        contents = document.new_page(width=500, height=700)
+        contents.insert_text((30, 40), "CONTENTS", fontsize=18)
+        contents.insert_text((30, 80), "First research article ........ 2", fontsize=10)
+        contents.insert_text(
+            (30, 100), "Second research article ........ 4", fontsize=10
+        )
+        for number in range(2, 7):
+            page = document.new_page(width=500, height=700)
+            if number in (3, 5):
+                page.insert_text((30, 40), "Introduction", fontsize=12)
+            for line in range(12):
+                page.insert_text(
+                    (30, 80 + line * 12), "Article body text continues.", fontsize=9
+                )
+        document.save(source)
+    printed = {2: "1", 4: "3", 6: "5"}
+    monkeypatch.setattr(
+        "pdfwtf.container_partition.build_page_metadata",
+        lambda *_args, **_kwargs: {
+            f"page_{number:03d}": {"pgn": printed.get(number)} for number in range(1, 7)
+        },
+    )
+    partition = partition_container(source, "journal-issue")
+    assert [unit["input_pages"]["start"] for unit in partition["units"]] == [1, 3, 5]
+    assert partition["units"][0]["type"] == "table-of-contents"
+    assert [unit["title"] for unit in partition["units"][1:]] == [
+        "First research article",
+        "Second research article",
+    ]
+
+
+def test_journal_contribution_label_precedes_larger_main_title(tmp_path):
+    source = tmp_path / "editorial-title.pdf"
+    with fitz.open() as document:
+        first = document.new_page(width=500, height=700)
+        first.insert_text((30, 40), "Previous article", fontsize=18)
+        first.insert_text((30, 70), "Alice Smith", fontsize=10)
+        first.insert_text((30, 100), "Abstract", fontsize=10)
+        editorial = document.new_page(width=500, height=700)
+        editorial.insert_text((220, 50), "Úvodník", fontsize=10, fontname="hebo")
+        editorial.insert_text(
+            (170, 72), "Na aktuálnu tému", fontsize=18, fontname="hebo"
+        )
+        for number in range(12):
+            editorial.insert_text(
+                (30, 120 + number * 12), "Editorial body text continues.", fontsize=9
+            )
+        document.save(source)
+    partition = partition_container(source, "journal-issue")
+    assert [unit["input_pages"]["start"] for unit in partition["units"]] == [1, 2]
+    assert partition["units"][1]["title"] == "Na aktuálnu tému"
+    assert partition["units"][1]["type"] == "editorial"
+
+
+def test_journal_prefers_larger_primary_title_before_translation(tmp_path):
+    source = tmp_path / "translated-title.pdf"
+    with fitz.open() as document:
+        first = document.new_page(width=600, height=700)
+        first.insert_text((30, 40), "Previous article", fontsize=18)
+        first.insert_text((30, 70), "Alice Smith", fontsize=10)
+        first.insert_text((30, 100), "Abstract", fontsize=10)
+        article = document.new_page(width=600, height=700)
+        article.insert_text(
+            (30, 60), "Primary article title in local language", fontsize=18
+        )
+        article.insert_text((30, 100), "Translated article title", fontsize=16)
+        article.insert_text((30, 145), "Bob Jones", fontsize=10)
+        article.insert_text((30, 170), "University Hospital", fontsize=9)
+        article.insert_text((30, 200), "Abstract", fontsize=9)
+        for number in range(12):
+            article.insert_text(
+                (30, 230 + number * 12), "Article body text continues.", fontsize=9
+            )
+        document.save(source)
+    partition = partition_container(source, "journal-issue")
+    assert [unit["input_pages"]["start"] for unit in partition["units"]] == [1, 2]
+    assert partition["units"][1]["title"] == ("Primary article title in local language")
+
+
+def test_journal_prefers_large_month_heading_over_calendar_entry(tmp_path):
+    source = tmp_path / "calendar.pdf"
+    with fitz.open() as document:
+        first = document.new_page(width=600, height=700)
+        first.insert_text((30, 40), "Previous article", fontsize=18)
+        first.insert_text((30, 70), "Alice Smith", fontsize=10)
+        first.insert_text((30, 100), "Abstract", fontsize=10)
+        calendar = document.new_page(width=600, height=700)
+        calendar.insert_text((200, 80), "SEPTEMBER 2022", fontsize=20, fontname="hebo")
+        for number in range(3):
+            calendar.insert_text(
+                (30, 120 + number * 15), "Calendar introduction", fontsize=8
+            )
+        calendar.insert_text(
+            (200, 210), "Clinical pharmacy symposium", fontsize=9, fontname="hebo"
+        )
+        calendar.insert_text(
+            (200, 230), "Main organizer: University Hospital", fontsize=8
+        )
+        calendar.insert_text((200, 245), "Organizacne zabezpecenie", fontsize=8)
+        for number in range(12):
+            calendar.insert_text(
+                (30, 300 + number * 12), "Calendar information continues.", fontsize=8
+            )
+        continuation = document.new_page(width=600, height=700)
+        continuation.insert_text(
+            (30, 50), "Main organizer: University Hospital", fontsize=8
+        )
+        continuation.insert_text((30, 70), "Organizacne zabezpecenie", fontsize=8)
+        continuation.insert_text(
+            (30, 100), "Another professional meeting", fontsize=9, fontname="hebo"
+        )
+        october = document.new_page(width=600, height=700)
+        october.insert_text((30, 50), "Calendar continuation text.", fontsize=8)
+        october.insert_text((30, 200), "OKTOBER 2022", fontsize=20, fontname="hebo")
+        october.insert_text(
+            (30, 240), "Main organizer: University Hospital", fontsize=8
+        )
+        october.insert_text((30, 260), "Organizacne zabezpecenie", fontsize=8)
+        document.save(source)
+    partition = partition_container(source, "journal-issue")
+    assert [unit["input_pages"]["start"] for unit in partition["units"]] == [1, 2, 4]
+    assert partition["units"][1]["title"] == "SEPTEMBER 2022"
+    assert partition["units"][2]["title"] == "OKTOBER 2022"
+    assert partition["pages"][2]["main_title"] is None
+
+
+def test_journal_prefers_article_title_after_smaller_section_label(tmp_path):
+    source = tmp_path / "section-label.pdf"
+    with fitz.open() as document:
+        previous = document.new_page(width=600, height=700)
+        previous.insert_text((40, 60), "Previous article", fontsize=18, fontname="hebo")
+        previous.insert_text((40, 90), "Alice Smith", fontsize=10)
+        previous.insert_text((40, 120), "Abstract", fontsize=10)
+        page = document.new_page(width=600, height=700)
+        page.insert_text((40, 60), "History of medicine", fontsize=15, fontname="hebo")
+        page.insert_text(
+            (40, 95), "Memories of Professor", fontsize=19, fontname="hebo"
+        )
+        page.insert_text((40, 117), "Theodore Schwarz", fontsize=19, fontname="hebo")
+        page.insert_text((40, 139), "(130th anniversary)", fontsize=16, fontname="hebo")
+        for number in range(12):
+            page.insert_text(
+                (40, 180 + number * 14), "Article body text continues.", fontsize=9
+            )
+        document.save(source)
+    partition = partition_container(source, "journal-issue")
+    assert [unit["input_pages"]["start"] for unit in partition["units"]] == [1, 2]
+    assert partition["units"][1]["title"] == (
+        "Memories of Professor Theodore Schwarz (130th anniversary)"
+    )
+
+
+def test_journal_shared_start_ignores_text_in_another_column(tmp_path):
+    source = tmp_path / "columns.pdf"
+    with fitz.open() as document:
+        first = document.new_page(width=600, height=700)
+        first.insert_text((30, 40), "First article title", fontsize=18)
+        first.insert_text((30, 70), "Alice Smith", fontsize=10)
+        first.insert_text((30, 100), "Abstract", fontsize=10)
+        second = document.new_page(width=600, height=700)
+        for number in range(12):
+            second.insert_text(
+                (30, 40 + number * 14),
+                "Previous article continues in this column.",
+                fontsize=9,
+            )
+        second.insert_text((330, 240), "Second article title", fontsize=18)
+        second.insert_text((330, 270), "Bob Jones", fontsize=10)
+        second.insert_text((330, 300), "Abstract", fontsize=10)
+        document.save(source)
+    partition = partition_container(source, "journal-issue")
+    assert [unit["input_pages"]["start"] for unit in partition["units"]] == [1, 2]
+    assert partition["suspected_shared_page_boundaries"] == []
+
+
+def test_journal_prefers_larger_title_after_numbered_references(tmp_path):
+    source = tmp_path / "references-before-title.pdf"
+    with fitz.open() as document:
+        first = document.new_page(width=600, height=700)
+        first.insert_text((30, 40), "Previous article", fontsize=18, fontname="hebo")
+        first.insert_text((30, 70), "Alice Smith", fontsize=10)
+        first.insert_text((30, 600), "References", fontsize=12, fontname="hebo")
+        second = document.new_page(width=600, height=700)
+        second.insert_text(
+            (30, 50),
+            "14. Greipp PR, San Miguel JF, et al.",
+            fontsize=8,
+            fontname="hebo",
+        )
+        second.insert_text(
+            (30, 75),
+            "15. Greipp PR, San Miguel JF, et al.",
+            fontsize=8,
+            fontname="hebo",
+        )
+        second.insert_text(
+            (30, 240),
+            "Compound heterozygosity of novel missense mutations",
+            fontsize=14,
+            fontname="hebo",
+        )
+        second.insert_text(
+            (30, 257),
+            "causes hereditary combined factor deficiency",
+            fontsize=14,
+            fontname="hebo",
+        )
+        second.insert_text((30, 285), "Bob Jones", fontsize=9)
+        document.save(source)
+    partition = partition_container(source, "journal-issue")
+    assert [unit["input_pages"]["start"] for unit in partition["units"]] == [1, 2]
+    assert partition["units"][1]["title"] == (
+        "Compound heterozygosity of novel missense mutations "
+        "causes hereditary combined factor deficiency"
+    )
+
+
+def test_journal_prefers_main_title_before_smaller_subtitle(tmp_path):
+    source = tmp_path / "subtitle.pdf"
+    with fitz.open() as document:
+        contents = document.new_page(width=500, height=700)
+        contents.insert_text((30, 40), "CONTENTS", fontsize=18)
+        article = document.new_page(width=500, height=700)
+        article.insert_text(
+            (30, 60), "Treatment of type 2 diabetes: How low do you go?", fontsize=20
+        )
+        article.insert_text((30, 100), "Treat early, treat safely!", fontsize=14)
+        article.insert_text((30, 145), "Alice Smith", fontsize=10)
+        article.insert_text((30, 175), "University Hospital", fontsize=9)
+        article.insert_text((30, 205), "Abstract", fontsize=9)
+        document.save(source)
+    partition = partition_container(source, "journal-issue")
+    assert [unit["input_pages"]["start"] for unit in partition["units"]] == [1, 2]
+    assert (
+        partition["units"][1]["title"]
+        == "Treatment of type 2 diabetes: How low do you go?"
+    )
+
+
+def test_journal_uses_multiline_event_title_before_date_location(tmp_path):
+    source = tmp_path / "event-title.pdf"
+    with fitz.open() as document:
+        document.new_page(width=700, height=700).insert_text(
+            (30, 40), "CONTENTS", fontsize=18
+        )
+        article = document.new_page(width=700, height=700)
+        article.insert_text(
+            (30, 60),
+            "49th Annual Meeting European Association for the Study",
+            fontsize=20,
+        )
+        article.insert_text((30, 81), "of Diabetes (EASD)", fontsize=20)
+        article.insert_text((30, 120), "23.–27. 9. 2013, Barcelona", fontsize=14)
+        article.insert_text((30, 165), "Alice Smith", fontsize=10)
+        for number in range(10):
+            article.insert_text(
+                (30, 200 + number * 12),
+                "Conference report body text continues on this page.",
+                fontsize=9,
+            )
+        document.save(source)
+    partition = partition_container(source, "journal-issue")
+    assert [unit["input_pages"]["start"] for unit in partition["units"]] == [1, 2]
+    assert partition["units"][1]["title"] == (
+        "49th Annual Meeting European Association for the Study of Diabetes (EASD)"
+    )
 
 
 def test_cli_end_to_end_partition_plan_and_html(make_pdf, tmp_path):
@@ -919,7 +1296,7 @@ def test_html_figure_links_use_figure_ids_and_untrusted_text_is_escaped():
     assert "-- &lt;script&gt;unsafe&lt;/script&gt;</li>" in html
     assert "other&quot;&lt;&amp;</a> -- </li>" in html
     assert html.index("<h2>Figures</h2>") > html.index("Last content paragraph.")
-    assert html.endswith("</ul>\n</section>\n")
+    assert html.rstrip().endswith("</section>")
 
 
 def test_html_without_figures_has_final_empty_figure_list():
@@ -988,3 +1365,46 @@ def test_three_columns_restart_below_full_width_separator():
     assert [
         item["id"] for item in _ordered_items(items, {"width": 600, "height": 600})
     ] == expected
+
+
+def test_html_export_normalizes_rendered_fragment_when_requested(tmp_path, monkeypatch):
+    from pdfwtf.html_normalize import NormalizationResult
+
+    source = make_structured_pdf(tmp_path / "source.pdf", 1)
+    plan = reviewed_plan(source, [unit("article", 1, 1)], "unit")
+    destination = tmp_path / "units"
+    monkeypatch.setattr(
+        "pdfwtf.container_partition.normalize_extracted_html",
+        lambda _html: NormalizationResult("<p>Normalized HTML.</p>"),
+    )
+
+    export_units(
+        source,
+        plan,
+        validate_plan(plan, source),
+        destination,
+        include_html=True,
+        normalize_html=True,
+    )
+
+    assert (destination / "article.html").read_text(encoding="utf-8") == (
+        "<p>Normalized HTML.</p>"
+    )
+
+
+def test_html_export_does_not_normalize_by_default(tmp_path, monkeypatch):
+    source = make_structured_pdf(tmp_path / "source.pdf", 1)
+    plan = reviewed_plan(source, [unit("article", 1, 1)], "unit")
+
+    def fail(_html):
+        raise AssertionError("Normalizing HTML requires an explicit request.")
+
+    monkeypatch.setattr("pdfwtf.container_partition.normalize_extracted_html", fail)
+
+    export_units(
+        source,
+        plan,
+        validate_plan(plan, source),
+        tmp_path / "units",
+        include_html=True,
+    )

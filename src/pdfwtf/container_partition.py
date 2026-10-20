@@ -16,6 +16,7 @@ from typing import Any
 import pymupdf as fitz
 
 from .html_extraction import reconstruct_pages, render_html
+from .html_normalize import normalize_extracted_html
 from .page_layout import (
     _CAPTION,
     _ISBN,
@@ -218,6 +219,26 @@ _AFFILIATION = re.compile(
     re.I,
 )
 _CONTENTS_LABEL = re.compile(r"\b(?:contents|obsah|sommaire)\b", re.I)
+_TABLE_OR_FIGURE_LABEL = re.compile(
+    r"^(?:(?:tab(?:le)?|fig(?:ure)?)\.?\s*\d+[A-Za-z]?\b)", re.I
+)
+_ARTICLE_KIND_LABEL = re.compile(
+    r"^(?:original article|historical article|brief communication|case report)\s*$",
+    re.I,
+)
+_CALENDAR_MONTH = re.compile(
+    r"^(?:january|february|march|april|may|june|july|august|september|"
+    r"october|oktober|november|december|január|február|marec|apríl|máj|jún|júl|"
+    r"august|september|október|november|december|leden|únor|březen|duben|"
+    r"květen|červen|červenec|srpen|září|říjen|listopad|prosinec)\s+"
+    r"(?:19|20)\d{2}$",
+    re.I,
+)
+_CALENDAR_DETAIL = re.compile(
+    r"(?:hlavn[ýí]\s+organizátor|organizačn[éěo]|odborn[éeý]\s+podujat|"
+    r"organizační\s+zajištění|main\s+organi[sz]er|organi[sz]acne)",
+    re.I,
+)
 
 
 def _title_key(text: str) -> str:
@@ -235,15 +256,40 @@ def _line_style(line: dict[str, Any]) -> tuple[float, bool]:
 def _journal_author(text: str) -> bool:
     """Recognize compact Unicode bylines without treating 'and' as an author."""
     words = re.findall(r"[^\W\d_]+(?:[-’'][^\W\d_]+)*", text)
+    connectors = {"and", "et", "al", "a", "i", "und", "y"}
+    name_words = [word for word in words if word.casefold() not in connectors]
+    capitalized = sum(word[0].isupper() for word in name_words)
+    coordinated = re.split(r"\b(?:and|a|i|und|y)\b", text, flags=re.I)
+    coordinated_names = [
+        re.findall(r"[^\W\d_]+(?:[-’'][^\W\d_]+)*", part) for part in coordinated
+    ]
     return (
-        2 <= len(words) <= 16
+        2 <= len(name_words) <= 16
         and len(text) <= 180
-        and sum(word[0].isupper() for word in words) >= 2
+        and capitalized >= 2
+        and capitalized / len(name_words) >= 0.6
+        and (
+            len(coordinated_names) == 1
+            or all(
+                len(group) >= 2
+                and sum(word[0].isupper() for word in group) / len(group) >= 0.6
+                for group in coordinated_names
+            )
+        )
+        and not re.search(
+            r"[:;!?]|\b(?:the|this|that|these|those|with|from|into)\b", text, re.I
+        )
         and not _AFFILIATION.search(text)
         and not _ABSTRACT_LABEL.match(text)
         and not _KEYWORDS_LABEL.match(text)
         and not _DOI.search(text)
     )
+
+
+def _journal_internal_section(text: str) -> bool:
+    """Recognize one or more translated section labels on the same line."""
+    parts = [part.strip() for part in re.split(r"\s*[|/]\s*", text) if part.strip()]
+    return bool(parts) and all(_INTERNAL_SECTION.fullmatch(part) for part in parts)
 
 
 def _article_margin_dois(page: dict[str, Any]) -> set[str]:
@@ -281,7 +327,18 @@ def _journal_signals(structure: dict[str, Any]) -> list[dict[str, Any]]:
     previous_dois: set[str] = set()
     for page in structure["pages"]:
         signal = _page_signals(page)
-        lines = [line for block in _ordered_blocks(page) for line in block["lines"]]
+        lines = []
+        seen_lines = set()
+        for block in _ordered_blocks(page):
+            for line in block["lines"]:
+                key = (line["text"], tuple(round(value, 3) for value in line["bbox"]))
+                if key in seen_lines:
+                    continue
+                seen_lines.add(key)
+                lines.append(line)
+        contents_pattern = any(
+            _CONTENTS_LABEL.fullmatch(line["text"].strip()) for line in lines
+        )
         sizes = [
             span["size"]
             for line in lines
@@ -290,6 +347,9 @@ def _journal_signals(structure: dict[str, Any]) -> list[dict[str, Any]]:
             if char.isalpha()
         ]
         body_size = median(sizes) if sizes else 0
+        calendar_page = (
+            sum(bool(_CALENDAR_DETAIL.search(line["text"])) for line in lines) >= 2
+        )
         page_dois = _article_margin_dois(page)
         candidates = []
         for index, line in enumerate(lines):
@@ -300,10 +360,12 @@ def _journal_signals(structure: dict[str, Any]) -> list[dict[str, Any]]:
                 or len(text) > 220
                 or not size
                 or line["bbox"][1] > page["height"] * 0.75
-                or _INTERNAL_SECTION.fullmatch(text)
+                or _journal_internal_section(text)
                 or _ABSTRACT_LABEL.match(text)
                 or _KEYWORDS_LABEL.match(text)
                 or _CAPTION.match(text)
+                or _TABLE_OR_FIGURE_LABEL.match(text)
+                or _ARTICLE_KIND_LABEL.match(text)
                 or _DOI.search(text)
                 or _AFFILIATION.search(text)
                 or re.search(r"https?://|www\.", text)
@@ -313,28 +375,36 @@ def _journal_signals(structure: dict[str, Any]) -> list[dict[str, Any]]:
             repeated = margins[_title_key(text)] >= 2 and (
                 line["bbox"][1] < page["height"] * 0.15
             )
-            # A recurring heading can still introduce short contributions.
-            if repeated and not _CONTRIBUTION.match(text):
+            # A large article title can recur later as a small running header.
+            display_title = body_size > 0 and size >= body_size * 1.5
+            if repeated and not (_CONTRIBUTION.match(text) or display_title):
                 continue
             cluster = [line]
             for following in lines[index + 1 : index + 4]:
                 next_size, next_bold = _line_style(following)
                 gap = following["bbox"][1] - cluster[-1]["bbox"][3]
                 if (
-                    0 <= gap <= max(size, 6)
+                    -size * 0.4 <= gap <= max(size, 6)
                     and abs(next_size - size) <= 0.5
                     and next_bold == bold
                     and (bold or size >= body_size * 1.15)
                     and not _ABSTRACT_LABEL.match(following["text"])
-                    and not _INTERNAL_SECTION.fullmatch(following["text"])
+                    and not _journal_internal_section(following["text"])
                     and not _DOI.search(following["text"])
                     and not _AFFILIATION.search(following["text"])
                     and abs(following["bbox"][0] - line["bbox"][0]) < 30
+                    and len(" ".join(item["text"] for item in cluster + [following]))
+                    <= 220
                 ):
                     cluster.append(following)
                 else:
                     break
             title = " ".join(item["text"] for item in cluster)
+            calendar_month = bool(_CALENDAR_MONTH.fullmatch(title)) and (
+                body_size > 0 and size >= body_size * 1.5
+            )
+            if calendar_page and not calendar_month:
+                continue
             bottom = cluster[-1]["bbox"][3]
             nearby = [
                 item
@@ -344,9 +414,7 @@ def _journal_signals(structure: dict[str, Any]) -> list[dict[str, Any]]:
             # Stop at references so bibliography entries cannot supply opening evidence.
             local = []
             for item in nearby:
-                if re.match(
-                    r"^(?:references|bibliography|literat[uú]ra)\b", item["text"], re.I
-                ):
+                if _journal_internal_section(item["text"]):
                     break
                 local.append(item)
             author = any(
@@ -357,12 +425,15 @@ def _journal_signals(structure: dict[str, Any]) -> list[dict[str, Any]]:
             abstract = any(_ABSTRACT_LABEL.match(item["text"]) for item in local)
             keywords = any(_KEYWORDS_LABEL.match(item["text"]) for item in local)
             doi = any(_DOI.search(item["text"]) for item in local)
+            book_review = any(_ISBN.search(item["text"]) for item in local[:5])
             styled = bold or size >= body_size * 1.15
+            dominant_top_title = (
+                body_size > 0
+                and size >= body_size * 1.6
+                and line["bbox"][1] < page["height"] * 0.2
+            )
             in_references = any(
-                re.match(
-                    r"^(?:references|bibliography|literat[uú]ra)\b", item["text"], re.I
-                )
-                for item in lines[:index]
+                _journal_internal_section(item["text"]) for item in lines[:index]
             )
             if in_references and not (styled and (abstract or affiliation)):
                 continue
@@ -370,12 +441,15 @@ def _journal_signals(structure: dict[str, Any]) -> list[dict[str, Any]]:
             score = 0
             for present, weight, label in (
                 (styled, 2, "title typography"),
+                (dominant_top_title, 2, "dominant top-page title"),
                 (author, 2, "nearby author pattern"),
                 (affiliation, 1, "nearby affiliation"),
                 (abstract, 2, "nearby abstract label"),
                 (keywords, 1, "nearby keywords label"),
                 (doi, 1, "nearby DOI pattern"),
+                (book_review, 2, "nearby ISBN book citation"),
                 (bool(_CONTRIBUTION.match(title)), 2, "short contribution label"),
+                (calendar_month, 4, "calendar month heading"),
             ):
                 if present:
                     score += weight
@@ -408,10 +482,15 @@ def _journal_signals(structure: dict[str, Any]) -> list[dict[str, Any]]:
                             bottom,
                         ],
                         "title_y": line["bbox"][1],
+                        "title_size": size,
                         "prominent_title": styled,
                         "author_pattern": author,
                         "abstract_pattern": abstract,
                         "doi_pattern": doi,
+                        "book_review_pattern": book_review,
+                        "contribution_label": (
+                            title if _CONTRIBUTION.match(title) else None
+                        ),
                         "opening_score": score,
                         "opening_evidence": evidence,
                         "opening_accepted": score >= 4
@@ -420,14 +499,166 @@ def _journal_signals(structure: dict[str, Any]) -> list[dict[str, Any]]:
                 )
             )
         if candidates:
-            signal.update(
-                max(
-                    candidates,
-                    key=lambda item: (item[0], item[2]["author_pattern"], item[1]),
-                )[2]
+            selected = max(
+                candidates,
+                key=lambda item: (
+                    item[0],
+                    item[2].get("book_review_pattern", False)
+                    and item[2]["prominent_title"],
+                    item[2]["title_size"],
+                    item[2]["author_pattern"],
+                    item[1],
+                ),
             )
+            selected_signal = selected[2]
+            preceding_contribution_labels = [
+                item
+                for item in candidates
+                if item[2].get("contribution_label")
+                and -item[2]["title_size"] * 0.4
+                <= selected_signal["title_y"] - item[2]["title_bbox"][3]
+                <= 30
+                and abs(
+                    (item[2]["title_bbox"][0] + item[2]["title_bbox"][2]) / 2
+                    - (
+                        selected_signal["title_bbox"][0]
+                        + selected_signal["title_bbox"][2]
+                    )
+                    / 2
+                )
+                < 60
+            ]
+            if preceding_contribution_labels:
+                label = min(
+                    preceding_contribution_labels,
+                    key=lambda item: abs(
+                        selected_signal["title_y"] - item[2]["title_bbox"][3]
+                    ),
+                )[2]
+                selected_signal = {
+                    **selected_signal,
+                    "contribution_label": label["contribution_label"],
+                }
+            preceding_main_titles = [
+                item
+                for item in candidates
+                if item[2]["prominent_title"]
+                and item[0] >= selected[0] - 3
+                and item[2]["title_size"] >= selected_signal["title_size"] * 1.08
+                and (
+                    0 <= selected_signal["title_y"] - item[2]["title_bbox"][3] <= 30
+                    or (
+                        item[2]["title_size"] >= selected_signal["title_size"] * 1.5
+                        and item[2]["title_y"] < page["height"] * 0.25
+                    )
+                )
+                and (
+                    abs(item[2]["title_bbox"][0] - selected_signal["title_bbox"][0])
+                    < 30
+                    or (
+                        item[2]["title_size"] >= selected_signal["title_size"] * 1.5
+                        and item[2]["title_y"] < page["height"] * 0.25
+                    )
+                )
+            ]
+            if preceding_main_titles:
+                main_title = max(
+                    preceding_main_titles,
+                    key=lambda item: (item[2]["title_size"], item[0], item[1]),
+                )
+                selected_signal = {
+                    **selected_signal,
+                    "title": main_title[2]["title"],
+                    "title_bbox": main_title[2]["title_bbox"],
+                    "title_y": main_title[2]["title_y"],
+                    "title_size": main_title[2]["title_size"],
+                    "prominent_title": True,
+                }
+            following_main_titles = [
+                item
+                for item in candidates
+                if (
+                    selected_signal.get("contribution_label")
+                    or len(selected_signal["title"]) <= 80
+                )
+                and item[2]["prominent_title"]
+                and item[2]["title_size"] >= selected_signal["title_size"] * 1.15
+                and -selected_signal["title_size"] * 0.4
+                <= item[2]["title_y"] - selected_signal["title_bbox"][3]
+                <= 30
+                and abs(
+                    (item[2]["title_bbox"][0] + item[2]["title_bbox"][2]) / 2
+                    - (
+                        selected_signal["title_bbox"][0]
+                        + selected_signal["title_bbox"][2]
+                    )
+                    / 2
+                )
+                < 60
+            ]
+            if following_main_titles:
+                main_title = max(
+                    following_main_titles,
+                    key=lambda item: (item[2]["title_size"], item[0], item[1]),
+                )
+                selected_signal = {
+                    **selected_signal,
+                    "title": main_title[2]["title"],
+                    "title_bbox": main_title[2]["title_bbox"],
+                    "title_y": main_title[2]["title_y"],
+                    "title_size": main_title[2]["title_size"],
+                    "prominent_title": True,
+                }
+            parenthetical_continuations = [
+                item
+                for item in candidates
+                if item[2]["title"].startswith("(")
+                and item[2]["prominent_title"]
+                and item[2]["title_size"] >= selected_signal["title_size"] * 0.75
+                and -selected_signal["title_size"] * 0.4
+                <= item[2]["title_y"] - selected_signal["title_bbox"][3]
+                <= 20
+                and abs(
+                    (item[2]["title_bbox"][0] + item[2]["title_bbox"][2]) / 2
+                    - (
+                        selected_signal["title_bbox"][0]
+                        + selected_signal["title_bbox"][2]
+                    )
+                    / 2
+                )
+                < 60
+            ]
+            if parenthetical_continuations:
+                continuation = min(
+                    parenthetical_continuations,
+                    key=lambda item: item[2]["title_y"],
+                )[2]
+                selected_signal = {
+                    **selected_signal,
+                    "title": f'{selected_signal["title"]} {continuation["title"]}',
+                    "title_bbox": [
+                        min(
+                            selected_signal["title_bbox"][0],
+                            continuation["title_bbox"][0],
+                        ),
+                        selected_signal["title_bbox"][1],
+                        max(
+                            selected_signal["title_bbox"][2],
+                            continuation["title_bbox"][2],
+                        ),
+                        continuation["title_bbox"][3],
+                    ],
+                }
+            signal.update(selected_signal)
         else:
-            signal.update(opening_score=0, opening_evidence=[], opening_accepted=False)
+            signal.update(
+                title_bbox=None if calendar_page else signal["title_bbox"],
+                prominent_title=False if calendar_page else signal["prominent_title"],
+                opening_score=0,
+                opening_evidence=[],
+                opening_accepted=False,
+            )
+        signal["contents_pattern"] = contents_pattern
         result.append(signal)
         previous_text = "\n".join(line["text"] for line in lines)
         if page_dois:
@@ -435,7 +666,64 @@ def _journal_signals(structure: dict[str, Any]) -> list[dict[str, Any]]:
     return result
 
 
-def _journal_navigation(structure: dict[str, Any]) -> dict[int, dict[str, Any]]:
+def _inferred_printed_page_offset(pages: list[dict[str, Any]]) -> int | None:
+    """Infer one well-supported input-page offset from numeric printed pages."""
+    offsets = Counter()
+    anchors = 0
+    for page in pages:
+        printed = page.get("printed_page_number")
+        if printed is None or not str(printed).isdigit():
+            continue
+        anchors += 1
+        offsets[page["input_page"] - int(printed)] += 1
+    if anchors < 3 or not offsets:
+        return None
+    offset, support = offsets.most_common(1)[0]
+    if support < 3 or support / anchors < 0.8:
+        return None
+    return offset
+
+
+def _inferred_navigation_supported(
+    structure: dict[str, Any], signals: list[dict[str, Any]], number: int
+) -> bool:
+    """Require local opening evidence before trusting an inferred destination."""
+    if signals[number - 1].get("opening_accepted"):
+        return True
+    page = structure["pages"][number - 1]
+    lines = [
+        line
+        for block in _ordered_blocks(page)
+        for line in block["lines"]
+        if line["bbox"][1] < page["height"] * 0.25
+    ]
+    if any(
+        re.match(r"^(?:introduction|úvod)\s*[:.]*$", line["text"], re.I)
+        for line in lines
+    ):
+        return True
+    if number <= 1:
+        return False
+    previous = structure["pages"][number - 2]
+    previous_text = "\n".join(
+        line["text"] for block in previous["text_blocks"] for line in block["lines"]
+    )
+    if len(previous_text.strip()) <= 20:
+        return True
+    if len(re.findall(r"(?m)^\s*\d+\.\s+", previous_text)) >= 3:
+        return True
+    return bool(
+        re.search(
+            r"(?:references|bibliography|literat[uú]ra)",
+            previous_text[-2500:],
+            re.I,
+        )
+    )
+
+
+def _journal_navigation(
+    structure: dict[str, Any], signals: list[dict[str, Any]]
+) -> dict[int, dict[str, Any]]:
     """Match navigation titles to destination text; do not trust targets alone."""
     entries = [
         (item["input_page"], item["title"], "PDF bookmark title match")
@@ -462,21 +750,46 @@ def _journal_navigation(structure: dict[str, Any]) -> dict[int, dict[str, Any]]:
                     )
     printed: dict[str, list[int]] = {}
     for page in structure["pages"]:
-        printed.setdefault(str(page["printed_page_number"]), []).append(
-            page["input_page"]
-        )
+        if page["printed_page_number"] is not None:
+            printed.setdefault(str(page["printed_page_number"]), []).append(
+                page["input_page"]
+            )
+    inferred_offset = _inferred_printed_page_offset(structure["pages"])
+    inferred_entries = []
     for page in structure["pages"]:
         lines = [
-            line["text"] for block in page["text_blocks"] for line in block["lines"]
+            line["text"] for block in _ordered_blocks(page) for line in block["lines"]
         ]
-        if not any(_CONTENTS_LABEL.fullmatch(text.strip()) for text in lines[:8]):
+        if not any(_CONTENTS_LABEL.fullmatch(text.strip()) for text in lines):
             continue
-        for text in lines:
-            match = re.fullmatch(r"(.{8,}?)\s*[.·… ]+\s+(\d+|[ivxlcdm]+)", text, re.I)
-            if match and len(printed.get(match[2], [])) == 1:
+        for index, text in enumerate(lines):
+            match = re.fullmatch(r"(.{8,}?)\s*[.·…]{2,}\s*(\d+|[ivxlcdm]+)", text, re.I)
+            if not match:
+                continue
+            printed_number = match[2]
+            title = match[1].strip()
+            if title[:1].islower() and index + 1 < len(lines):
+                title = f"{lines[index + 1]} {title}"
+            elif _journal_author(title):
+                parts = []
+                for following in lines[index + 1 : index + 3]:
+                    if _CONTRIBUTION.match(following) or _CONTENTS_LABEL.fullmatch(
+                        following.strip()
+                    ):
+                        break
+                    parts.append(following)
+                if parts:
+                    title = " ".join(reversed(parts))
+            if len(printed.get(printed_number, [])) == 1:
                 entries.append(
-                    (printed[match[2]][0], match[1], "printed contents title match")
+                    (printed[printed_number][0], title, "printed contents title match")
                 )
+            elif inferred_offset is not None and printed_number.isdigit():
+                number = int(printed_number) + inferred_offset
+                if 1 <= number <= len(
+                    structure["pages"]
+                ) and _inferred_navigation_supported(structure, signals, number):
+                    inferred_entries.append((number, title))
     matches: dict[int, dict[str, Any]] = {}
     for number, title, evidence in entries:
         key = _title_key(title)
@@ -515,21 +828,50 @@ def _journal_navigation(structure: dict[str, Any]) -> dict[int, dict[str, Any]]:
                     break
                 if len(text) >= len(key):
                     break
+    for number, title in inferred_entries:
+        matches.setdefault(
+            number,
+            {
+                "title": title,
+                "title_bbox": [0.0, 0.0, 0.0, 0.0],
+                "evidence": ["inferred printed contents title match"],
+            },
+        )
     return matches
 
 
 def _journal_shared_start(page: dict[str, Any], candidate: dict[str, Any]) -> bool:
     """Distinguish modest branding above a title from preceding article content."""
+    if _CALENDAR_MONTH.fullmatch(candidate["title"]):
+        return False
     y = candidate["y"]
     if y <= page["height"] * 0.2:
         return False
+    candidate_box = candidate.get("title_bbox")
     above = [
         line
         for block in page["text_blocks"]
         for line in block["lines"]
-        if line["bbox"][3] < y and line["text"].strip()
+        if line["bbox"][3] < y
+        and line["text"].strip()
+        and (
+            not candidate_box
+            or min(line["bbox"][2], candidate_box[2])
+            - max(line["bbox"][0], candidate_box[0])
+            > 0
+        )
     ]
     text = " ".join(line["text"] for line in above)
+    reference_lines = [
+        line for line in above if re.match(r"^\s*\d+[.)]\s+", line["text"])
+    ]
+    reference_sizes = [_line_style(line)[0] for line in reference_lines]
+    if (
+        len(reference_lines) >= 2
+        and reference_sizes
+        and candidate.get("title_size", 0) > max(reference_sizes) * 1.1
+    ):
+        return False
     # A very low title with no contextual explanation remains ambiguous.
     if not above:
         return y > page["height"] * 0.4
@@ -876,15 +1218,22 @@ def _unit_type(
     document_type: str, candidate: dict[str, Any], signal: dict[str, Any]
 ) -> str:
     title = candidate["title"].strip().lower()
+    if signal.get("contents_pattern"):
+        return "table-of-contents"
     if re.search(r"\b(preface|foreword)\b", title):
         return "preface"
     if re.search(r"\beditorial\b", title):
+        return "editorial"
+    contribution_label = str(signal.get("contribution_label") or "")
+    if re.search(r"\b(?:editorial|úvodník)\b", contribution_label, re.I):
         return "editorial"
     if re.search(r"\b(table of contents|contents)\b", title):
         return "table-of-contents"
     if re.search(r"\b(programme|program|schedule)\b", title):
         return "programme"
     if re.search(r"\bbook reviews?\b", title):
+        return "book-review"
+    if signal.get("book_review_pattern"):
         return "book-review"
     if re.search(r"\bposters?\b", title):
         return "poster"
@@ -1028,7 +1377,7 @@ def _candidate_starts(
                 }
                 seen_titles.add(title_key)
     elif document_type in {"journal-issue", "proceedings"}:
-        navigation = _journal_navigation(structure)
+        navigation = _journal_navigation(structure, signals)
         for page, signal in zip(structure["pages"], signals):
             number = page["input_page"]
             evidence = list(signal.get("opening_evidence", []))
@@ -1047,6 +1396,8 @@ def _candidate_starts(
                 candidates[number] = {
                     "input_page": number,
                     "title": signal["title"],
+                    "title_bbox": signal.get("title_bbox"),
+                    "title_size": signal.get("title_size", 0),
                     "evidence": evidence,
                     "y": signal["title_y"],
                 }
@@ -1549,6 +1900,7 @@ def _write_unit(
     reconstructed: tuple[list[dict[str, Any]], list[dict[str, Any]], list[str]],
     destination: Path,
     include_html: bool,
+    normalize_html: bool,
     include_pdf: bool,
     extract_doi: bool,
 ) -> dict[str, Any]:
@@ -1586,9 +1938,10 @@ def _write_unit(
     }
     write_json_document(metadata, destination / metadata_name)
     if include_html:
-        (destination / html_name).write_text(
-            render_html(blocks, page_marker=False), encoding="utf-8"
-        )
+        rendered_html = render_html(blocks, page_marker=False)
+        if normalize_html:
+            rendered_html = normalize_extracted_html(rendered_html).html
+        (destination / html_name).write_text(rendered_html, encoding="utf-8")
     return {
         "id": unit["id"],
         "title": unit["title"],
@@ -1627,6 +1980,7 @@ def export_units(
     extract_doi: bool = False,
     *,
     use_reviewed_headings: bool = True,
+    normalize_html: bool = False,
 ) -> None:
     """Write selected units and a manifest into a separate export directory.
 
@@ -1663,6 +2017,7 @@ def export_units(
                     reconstructed,
                     destination,
                     include_html,
+                    normalize_html,
                     include_pdf,
                     extract_doi,
                 )
@@ -1670,7 +2025,9 @@ def export_units(
     _write_manifest(plan_header, manifest_units, destination)
 
 
-def export_document_html(pdf_path: Path, destination: Path) -> None:
+def export_document_html(
+    pdf_path: Path, destination: Path, *, normalize_html: bool = False
+) -> None:
     """Write all pages of any PDF as one unit, without partition heuristics.
 
     The output layout is the same as export_units output for one unit. The unit
@@ -1705,6 +2062,7 @@ def export_document_html(pdf_path: Path, destination: Path) -> None:
             reconstructed,
             destination,
             include_html=True,
+            normalize_html=normalize_html,
             include_pdf=False,
             extract_doi=True,
         )

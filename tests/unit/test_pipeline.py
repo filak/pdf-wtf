@@ -451,6 +451,31 @@ def test_export_alone_writes_direct_unit_html(make_pdf, tmp_path, no_enhancement
     assert [item["html"] for item in manifest["units"]] == ["unit-001.html"]
 
 
+def test_export_alone_writes_normalized_direct_unit_html(
+    make_pdf, tmp_path, no_enhancement, monkeypatch
+):
+    from pdfwtf.html_normalize import NormalizationResult
+
+    monkeypatch.setattr(
+        container_partition,
+        "normalize_extracted_html",
+        lambda _html: NormalizationResult("<p>Normalized HTML.</p>"),
+    )
+    source = make_pdf(["digital"])
+    output = tmp_path / "out"
+
+    pipeline.export_pdf(
+        source,
+        output,
+        export_html_normalized_flag=True,
+        document_type="unit",
+    )
+
+    assert (output / "_units_input/unit-001.html").read_text("utf-8") == (
+        "<p>Normalized HTML.</p>"
+    )
+
+
 def test_direct_html_does_not_use_partition_heuristics(
     make_pdf, tmp_path, no_enhancement, monkeypatch
 ):

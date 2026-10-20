@@ -1475,7 +1475,7 @@ def test_cli_and_gui_llm_results_match(llm_home, gui_app, make_pdf, fake_gemini)
             str(output),
             "--plan",
             str(plan),
-            "--get-html",
+            "--get-html-normalized",
             "--llm-task",
             "clean_html",
         ],

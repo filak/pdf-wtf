@@ -20,6 +20,7 @@ from test_container_partition import make_structured_pdf
         ["--get-thumb"],
         ["--get-doi"],
         ["--get-html"],
+        ["--get-html-normalized"],
         ["--get-unit-pdf"],
         ["--doc_type", "unit"],
         ["--plan", "plan.json"],

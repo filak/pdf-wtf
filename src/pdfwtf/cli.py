@@ -511,7 +511,13 @@ def partition(
     "--get-html",
     "export_html_flag",
     is_flag=True,
-    help="Write a UTF-8 HTML fragment for each selected unit.",
+    help="Write an extracted UTF-8 HTML fragment for each selected unit.",
+)
+@click.option(
+    "--get-html-normalized",
+    "export_html_normalized_flag",
+    is_flag=True,
+    help="Write an editorially normalized UTF-8 HTML fragment for each selected unit.",
 )
 @click.option(
     "--get-unit-pdf",

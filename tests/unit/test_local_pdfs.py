@@ -109,3 +109,14 @@ def test_magazine_display_titles_propose_article_boundaries(sample_pdf):
     ]
     assert photo_captions
     assert all(figure["caption_bbox"] is not None for figure in photo_captions)
+
+
+@pytest.mark.parametrize(
+    "sample_pdf", ["born_digital_issue_academic.pdf"], indirect=True
+)
+def test_academic_issue_uses_inferred_contents_boundaries(sample_pdf):
+    from pdfwtf.container_partition import partition_container
+
+    partition = partition_container(sample_pdf, "journal-issue")
+    starts = [unit["input_pages"]["start"] for unit in partition["units"]]
+    assert starts == [1, 5, 15, 21, 25, 29, 31, 37]

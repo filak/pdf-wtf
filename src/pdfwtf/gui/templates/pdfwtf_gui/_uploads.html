@@ -34,8 +34,6 @@
                         hx-disabled-elt="#upload-form-{{ upload.job_id }} button, #upload-form-{{ upload.job_id }} select">{{ _("Delete") }}</button>
                 {# Mark the prepared PDF only. Without it, the original PDF is active. #}
                 {% if upload.active_pdf == "prepared" %}
-                    <span id="active-pdf-{{ upload.job_id }}"
-                          class="badge text-bg-success">{{ _("Active: prepared PDF") }}</span>
                     <a class="small me-auto"
                        href="{{ url_for('pdfwtf_gui.document', job_id=upload.job_id, variant='prepared') }}"
                        target="_blank"

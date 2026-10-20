@@ -604,6 +604,7 @@ def export_pdf(
     document_type: str | None = None,
     plan_path: str | Path | None = None,
     export_html_flag: bool = False,
+    export_html_normalized_flag: bool = False,
     export_unit_pdfs_flag: bool = False,
     unit_doi_flag: bool = False,
     unit_types: tuple[str, ...] = (),
@@ -619,13 +620,19 @@ def export_pdf(
     """
     if export_unit_pdfs_flag and plan_path is None:
         raise ProcessingError("Unit PDF export requires a reviewed plan.")
-    unit_workflow = plan_path is not None or export_html_flag
+    include_html = export_html_flag or export_html_normalized_flag
+    unit_workflow = plan_path is not None or include_html
     if set(unit_types) - UNIT_TYPES:
         raise ProcessingError("Unknown unit type in --unit_type.")
     if unit_types and not unit_workflow:
         raise ProcessingError("--unit_type requires --plan or --get-html for export.")
-    if export_html_flag and plan_path is None and document_type not in (None, "unit"):
-        raise ValueError("Direct --get-html processing requires --doc_type unit.")
+    if include_html and plan_path is None and document_type not in (None, "unit"):
+        option = (
+            "--get-html-normalized"
+            if export_html_normalized_flag and not export_html_flag
+            else "--get-html"
+        )
+        raise ValueError(f"Direct {option} processing requires --doc_type unit.")
     derivatives = any(
         (
             export_json_flag,
@@ -638,7 +645,7 @@ def export_pdf(
     if not derivatives and not unit_workflow:
         raise ValueError(
             "No output selected. Select --get-meta, --get-doi, --get-img, "
-            "--get-text, --get-thumb, --plan, or --get-html."
+            "--get-text, --get-thumb, --plan, --get-html, or --get-html-normalized."
         )
     if export_format != "png":
         raise ValueError("Unsupported page image format.")
@@ -646,7 +653,7 @@ def export_pdf(
     _check_dir_names(txt_dir, img_dir, thumb_dir)
     config = config or load_config()
     selected_tasks = validate_task_selection(
-        config, llm_tasks, COMMAND_EXPORT, get_html=export_html_flag
+        config, llm_tasks, COMMAND_EXPORT, get_html=include_html
     )
     input_pdf = _resolve_input(input_pdf)
     output_dir = _final_output_dir(output_dir, input_pdf, input_path_prefix, config)
@@ -681,12 +688,16 @@ def export_pdf(
             unit_plan = load_plan(Path(plan_path))
             selected_units = validate_plan(unit_plan, input_pdf, document_type)
         staged_units = None
-        direct_html = unit_plan is None and export_html_flag
+        direct_html = unit_plan is None and include_html
         if direct_html and (not unit_types or "unknown" in unit_types):
             # Any PDF can give HTML. All pages become one unit of type
             # "unknown" without partition heuristics.
             staged_units = workspace / "unit_exports"
-            export_document_html(input_pdf, staged_units)
+            export_document_html(
+                input_pdf,
+                staged_units,
+                normalize_html=export_html_normalized_flag,
+            )
         if unit_plan is not None and selected_units is not None:
             if unit_types:
                 selected_units = [
@@ -698,7 +709,8 @@ def export_pdf(
                 unit_plan,
                 selected_units,
                 staged_units,
-                include_html=export_html_flag,
+                include_html=include_html,
+                normalize_html=export_html_normalized_flag,
                 use_reviewed_headings=plan_path is not None,
                 include_pdf=export_unit_pdfs_flag,
                 extract_doi=unit_doi_flag or get_doi_flag,

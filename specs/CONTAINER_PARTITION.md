@@ -483,8 +483,8 @@ abstract or affiliation.
 A score of at least 4 proposes a start when title typography, an abstract, or
 an affiliation also supports it. No author, DOI, or abstract signal is mandatory.
 Scores describe heuristic support. They are not calibrated probabilities.
-Labels include `Abstract`, `Abstrakt`, `Souhrn`, `S˙hrn`, `RÈsumÈ`, `Summary`,
-`Keywords`, `KlÌËov· slova`, and `Kæ˙ËovÈ slov·`. Label matches are anchored to
+Labels include `Abstract`, `Abstrakt`, `Souhrn`, `S√∫hrn`, `R√©sum√©`, `Summary`,
+`Keywords`, `Kl√≠ƒçov√° slova`, and `Kƒæ√∫ƒçov√© slov√°`. Label matches are anchored to
 the start of a line. Byline checks support Unicode names. A mention of `and`
 in prose is not byline evidence.
 
@@ -495,11 +495,21 @@ internal section labels do not establish navigation boundaries. The matched
 destination text supplies the title and its position. A matched navigation
 entry contributes 4 points and can independently support a proposal.
 
-Printed contents detection recognizes single-line entries with a title, optional
-leader dots, and a final printed page number. The number must map to exactly
-one detected input page. The destination title must also match. Missing or
-ambiguous mappings do not create boundaries. Multiline contents entries and
-unrecognized labels still require review.
+Printed contents detection recognizes entries with a title, optional leader
+dots, and a final printed page number. It joins a wrapped title when the final
+line starts with a lowercase continuation, or when an editor or author line
+carries the page number after the title. An exact printed-page mapping still
+requires one detected input page and a matching destination title.
+
+When some printed numbers are missing, the detector can infer one linear offset
+between printed pages and input pages. At least three numeric page anchors must
+agree on the offset, and at least 80 percent of numeric anchors must support it.
+An inferred destination does not require extractable destination-title text,
+but it must contain independent opening evidence: an accepted local opening,
+an `Introduction` label near the top, article-ending references on the previous
+page, or a preceding page with almost no extractable text. Ambiguous offsets,
+unsupported destinations, and unrecognized contents layouts do not create
+boundaries.
 
 Each journal page records a compact opening diagnostic in `pages[].warnings`:
 the best candidate score, the accepted or insufficient-evidence decision, and
