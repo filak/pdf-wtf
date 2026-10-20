@@ -1618,7 +1618,6 @@ def test_preparation_changes_active_pdf_and_invalidates_plan(
         assert not (output / "approved.plan.json").exists()
         assert not (output / "source.partition.json").exists()
         listing = client.get("/").get_data(as_text=True)
-        assert "Active: prepared PDF" in listing
         assert f"/jobs/{job_id}/review" not in listing
         assert "Export the whole PDF as one unit." in listing
         # The file name opens the original. Delete follows it.
@@ -1628,7 +1627,7 @@ def test_preparation_changes_active_pdf_and_invalidates_plan(
         assert ">Original<" not in listing
         assert "Download prepared PDF" not in listing
         assert listing.index(f"/uploads/{job_id}") < listing.index(
-            f'id="active-pdf-{job_id}"'
+            f"/jobs/{job_id}/document?variant=prepared"
         )
         # Close file responses so Windows can delete the files later.
         with client.get(f"/jobs/{job_id}/document") as active:

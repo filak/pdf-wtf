@@ -33,7 +33,9 @@ LLM_STAGES: Dict[str, frozenset[str]] = {
 }
 # Output suffixes that each stage requires.
 LLM_STAGE_SUFFIXES: Dict[str, str] = {"after_unit_html": ".html"}
-LLM_TASK_KEYS = frozenset({"description", "commands", "stage", "template", "output"})
+LLM_TASK_KEYS = frozenset(
+    {"description", "commands", "stage", "provider", "template", "output"}
+)
 _TASK_NAME = re.compile(r"[a-z][a-z0-9_-]{0,63}\Z")
 _TEMPLATE_NAME = re.compile(r"[a-z][a-z0-9_]{0,63}\Z")
 _OUTPUT_SUFFIX = re.compile(r"\.[a-z0-9]+(?:[.-][a-z0-9]+)*\Z")
@@ -52,6 +54,7 @@ class LLMTaskConfig:
     description: Dict[str, str]
     commands: tuple[str, ...]
     stage: str
+    provider: str
     template: str
     output_suffix: str
     prompt: str
@@ -128,7 +131,17 @@ class LLMTaskConfig:
                 f"{sorted(unsupported)}. Allowed values: {sorted(LLM_STAGES[stage])}"
             )
 
-        # 4. Validate 'output'
+        # 4. Validate 'provider' against the llm-call provider names
+        from llm_call import PROVIDERS
+
+        provider = data["provider"]
+        if not isinstance(provider, str) or provider not in PROVIDERS:
+            raise ConfigurationError(
+                f"LLM task '{name}': unknown provider '{provider}'. "
+                f"Allowed values: {sorted(PROVIDERS)}"
+            )
+
+        # 5. Validate 'output'
         output = data["output"]
         if not isinstance(output, dict) or set(output) != {"suffix"}:
             raise ConfigurationError(
@@ -150,7 +163,7 @@ class LLMTaskConfig:
                 f"'{required_end}' and differs from '{required_end}'."
             )
 
-        # 5. Validate 'template' & load prompt/system strings from module
+        # 6. Validate 'template' & load prompt/system strings from module
         template_name = data["template"]
         if not isinstance(template_name, str) or not _TEMPLATE_NAME.match(
             template_name
@@ -184,6 +197,7 @@ class LLMTaskConfig:
             description=dict(description),
             commands=tuple(commands),
             stage=stage,
+            provider=provider,
             template=template_name,
             output_suffix=suffix,
             prompt=prompt.strip(),
@@ -298,9 +312,9 @@ class AppConfig:
 
     @property
     def gemini_api_key_present(self) -> bool:
-        """Report whether gemini-call can find the key in the process environment.
+        """Report whether llm-call can find the key in the process environment.
 
-        gemini-call reads only ``os.environ``. A key only in ``.env`` is not enough.
+        llm-call reads only ``os.environ``. A key only in ``.env`` is not enough.
         The key value is never returned.
         """
         return self.gemini_api_key_loaded and bool(

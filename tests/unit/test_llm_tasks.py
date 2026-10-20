@@ -20,7 +20,7 @@ from pdfwtf.llm_tasks import (
 from test_container_partition import make_structured_pdf, reviewed_plan, unit
 
 # The conftest guard replaces this wrapper in every test.
-_REAL_CALL_GEMINI = llm_tasks._call_gemini
+_REAL_CALL_LLM = llm_tasks._call_llm
 
 
 def _staged_units(tmp_path, unit_ids=("unit-001", "unit-002")):
@@ -136,8 +136,8 @@ def test_malformed_responses_are_rejected(envelope):
         parse_response(envelope)
 
 
-def test_gemini_call_uses_json_response_format(llm_home, monkeypatch, tmp_path):
-    import gemini_call
+def test_llm_call_uses_json_response_format(llm_home, monkeypatch, tmp_path):
+    from llm_call import PROVIDERS
 
     received = {}
 
@@ -145,10 +145,10 @@ def test_gemini_call_uses_json_response_format(llm_home, monkeypatch, tmp_path):
         received.update(kwargs, prompt=prompt)
         return {"response": "<p>ok</p>", "usage": {}}
 
-    monkeypatch.setattr(gemini_call, "call", fake_call)
+    monkeypatch.setitem(PROVIDERS, "gemini", fake_call)
     task = load_config().llm_tasks["clean_html"]
     html_path = tmp_path / "unit.html"
-    _REAL_CALL_GEMINI(task, html_path)
+    _REAL_CALL_LLM(task, html_path)
     assert received["response_format"] == "json"
     assert received["files"] == [str(html_path)]
     assert received["system"] == task.system

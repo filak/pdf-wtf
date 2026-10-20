@@ -740,14 +740,6 @@ wheels = [
 ]
 
 [[package]]
-name = "gemini-call"
-version = "0.4.0"
-source = { git = "https://github.com/filak/gemini-call.git#df6e8b6fb7668ce22c25034bc849bfd8cc57878f" }
-dependencies = [
-    { name = "google-genai" },
-]
-
-[[package]]
 name = "google-auth"
 version = "2.62.0"
 source = { registry = "https://pypi.org/simple" }
@@ -933,6 +925,14 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/40/71/d89bb0e71b1415453980fd32315f2a037aad9f7f70f695c7cec7035feb13/license_expression-30.4.4.tar.gz", hash = "sha256:73448f0aacd8d0808895bdc4b2c8e01a8d67646e4188f887375398c761f340fd", size = 186402, upload-time = "2025-07-22T11:13:32.17Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/af/40/791891d4c0c4dab4c5e187c17261cedc26285fd41541577f900470a45a4d/license_expression-30.4.4-py3-none-any.whl", hash = "sha256:421788fdcadb41f049d2dc934ce666626265aeccefddd25e162a26f23bcbf8a4", size = 120615, upload-time = "2025-07-22T11:13:31.217Z" },
+]
+
+[[package]]
+name = "llm-call"
+version = "0.5.0"
+source = { git = "https://github.com/filak/llm-call.git#ce7b5123ad88aef3d88f4a7c4143359968e11155" }
+dependencies = [
+    { name = "google-genai" },
 ]
 
 [[package]]
@@ -1449,8 +1449,8 @@ dependencies = [
     { name = "beautifulsoup4" },
     { name = "click" },
     { name = "cv3" },
-    { name = "gemini-call" },
     { name = "img2pdf" },
+    { name = "llm-call" },
     { name = "ocrmypdf" },
     { name = "pikepdf" },
     { name = "pillow" },
@@ -1486,8 +1486,8 @@ requires-dist = [
     { name = "flask", marker = "extra == 'gui'", specifier = ">=3.1.2,<4.0.0" },
     { name = "flask-babel", marker = "extra == 'gui'", specifier = ">=4.0.0,<5.0.0" },
     { name = "flask-wtf", marker = "extra == 'gui'", specifier = ">=1.2.2,<2.0.0" },
-    { name = "gemini-call", git = "https://github.com/filak/gemini-call.git" },
     { name = "img2pdf", specifier = "==0.6.3" },
+    { name = "llm-call", git = "https://github.com/filak/llm-call.git" },
     { name = "ocrmypdf", specifier = ">=17.12.0" },
     { name = "pikepdf", specifier = ">=10.13.0" },
     { name = "pillow", specifier = "==12.3.0" },

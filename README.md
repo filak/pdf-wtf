@@ -333,7 +333,7 @@ All actions, including `analyze`, accept `--llm-task` and
 the only action with an implemented LLM stage. If you select a task that
 an action cannot run, the action stops before processing starts.
 
-`gemini-call` reads `GEMINI_API_KEY` only from the operating-system
+`llm-call` reads `GEMINI_API_KEY` only from the operating-system
 environment. It does not read `.env`. If the key is only in
 `PDFWTF_HOME/.env`, LLM tasks are not available.
 

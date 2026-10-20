@@ -193,7 +193,7 @@ scope and architecture change.
 ### LLM tasks
 
 Configured LLM tasks are optional post-processing steps. They send unit HTML
-to Gemini through the `gemini-call` dependency. `specs/CONFIGURATION.md`
+to Gemini through the `llm-call` dependency. `specs/CONFIGURATION.md`
 defines the `LLM_TASKS` configuration and the API key requirements.
 
 A task runs only when it is explicitly selected. Every action accepts the
@@ -219,7 +219,7 @@ publication or ZIP creation. It makes one call for each exported unit and task.
 It does not split input, retry calls, or run calls concurrently. Unit HTML
 larger than 500 000 bytes is rejected for that unit.
 
-The runner calls `gemini-call` with `response_format="json"`. It reads the
+The runner calls `llm-call` with `response_format="json"`. It reads the
 response text and the token usage separately. A response must contain
 non-empty HTML with at least one element and no Markdown fence. The runner
 rejects other responses. It writes `<unit-id><suffix>`, for example
@@ -414,7 +414,7 @@ packaging. Use versions defined in `pyproject.toml` and `uv.lock`.
 The established PDF libraries are pikepdf, PyMuPDF, and OCRmyPDF. Processing
 code also uses pytesseract, Pillow, img2pdf, and cv3. Click provides the CLI.
 Pydantic defines CLI settings. Beautiful Soup normalizes extracted HTML.
-`gemini-call` provides optional Gemini calls for LLM tasks. An existing import
+`llm-call` provides optional Gemini calls for LLM tasks. An existing import
 does not approve a new production dependency. Follow the dependency rules in
 `AGENTS.md`.
 

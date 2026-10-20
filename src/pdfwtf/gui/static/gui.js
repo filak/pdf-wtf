@@ -5,8 +5,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   import.meta.url,
 ).href;
 
-const app = document.querySelector("#review-app");
-if (app) {
+function initReviewApp(app) {
   const partition = JSON.parse(document.querySelector("#partition-data").textContent);
   const plan = JSON.parse(document.querySelector("#plan-data").textContent);
   const reviewData = plan || partition;
@@ -684,3 +683,6 @@ if (app) {
     })
     .catch(() => showMessage(messages.loading_error));
 }
+
+const app = document.querySelector("#review-app");
+if (app) initReviewApp(app);

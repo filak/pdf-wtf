@@ -55,7 +55,7 @@ def unavailable_reason(config: AppConfig) -> str | None:
         return "GEMINI_API_KEY is not set."
     if not config.gemini_api_key_present:
         return (
-            "GEMINI_API_KEY is only in .env. gemini-call reads only the process "
+            "GEMINI_API_KEY is only in .env. llm-call reads only the process "
             "environment. Set GEMINI_API_KEY in the operating-system environment."
         )
     return None
@@ -111,11 +111,11 @@ def validate_task_selection(
     return tuple(tasks)
 
 
-def _call_gemini(task: LLMTaskConfig, html_path: Path) -> Any:
-    """Send one unit HTML file to Gemini. gemini-call reads the API key itself."""
-    from gemini_call import call
+def _call_llm(task: LLMTaskConfig, html_path: Path) -> Any:
+    """Send one unit HTML file to the task provider. llm-call reads the API key."""
+    from llm_call import PROVIDERS
 
-    return call(
+    return PROVIDERS[task.provider](
         task.prompt,
         files=[str(html_path)],
         system=task.system,
@@ -157,7 +157,7 @@ def _run_unit(task: LLMTaskConfig, unit_id: str, html_path: Path) -> dict[str, A
         raise LLMResponseError(
             f"The unit HTML is larger than {MAX_LLM_INPUT_BYTES} bytes."
         )
-    html, usage = parse_response(_call_gemini(task, html_path))
+    html, usage = parse_response(_call_llm(task, html_path))
     output_name = f"{unit_id}{task.output_suffix}"
     (html_path.parent / output_name).write_text(html + "\n", encoding="utf-8")
     return {"status": "complete", "output": output_name, "usage": usage, "error": None}

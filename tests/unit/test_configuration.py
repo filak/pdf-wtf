@@ -135,6 +135,7 @@ def _task(**changes):
         "description": {"en": "Clean HTML output", "cs": "Vyčistit HTML výstup"},
         "commands": ["export"],
         "stage": "after_unit_html",
+        "provider": "gemini",
         "template": "wp_html",
         "output": {"suffix": ".clean.html"},
     }
@@ -147,6 +148,7 @@ def test_valid_llm_task():
     task = validated["clean_html"]
     assert task.commands == ("export",)
     assert task.stage == "after_unit_html"
+    assert task.provider == "gemini"
     assert task.output_suffix == ".clean.html"
     assert task.label("cs") == "Vyčistit HTML výstup"
     assert task.label("de") == "Clean HTML output"
@@ -174,6 +176,8 @@ def test_valid_llm_task():
         ({"output": {"suffix": ".metadata.json"}}, "unsafe output suffix"),
         ({"output": {"suffix": ".clean.html", "dir": "x"}}, "only 'suffix'"),
         ({"description": {"cs": "Jen česky"}}, "must contain an 'en' entry"),
+        ({"provider": "openai"}, "unknown provider 'openai'"),
+        ({"provider": None}, "unknown provider"),
         ({"template": "../wp_html"}, "valid module name"),
         ({"template": "non_existent_template"}, "not found"),
     ],

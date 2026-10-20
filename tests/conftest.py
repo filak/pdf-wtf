@@ -13,6 +13,7 @@ LLM_TASKS = {
         "description": {"en": "Clean HTML output", "cs": "Vyčistit HTML výstup"},
         "commands": ["export"],
         "stage": "after_unit_html",
+        "provider": "gemini",
         "template": "wp_html",
         "output": {"suffix": ".clean.html"}
     }
@@ -40,7 +41,7 @@ def no_real_gemini_calls(monkeypatch: pytest.MonkeyPatch) -> None:
     def blocked(*_args: object, **_kwargs: object) -> None:
         raise AssertionError("Tests must mock Gemini calls.")
 
-    monkeypatch.setattr("pdfwtf.llm_tasks._call_gemini", blocked)
+    monkeypatch.setattr("pdfwtf.llm_tasks._call_llm", blocked)
 
 
 @pytest.fixture
@@ -70,7 +71,7 @@ def fake_gemini(monkeypatch: pytest.MonkeyPatch):
             "usage": {"prompt_token_count": 10, "total_token_count": 15},
         }
 
-    monkeypatch.setattr("pdfwtf.llm_tasks._call_gemini", call)
+    monkeypatch.setattr("pdfwtf.llm_tasks._call_llm", call)
     return calls, behaviour
 
 

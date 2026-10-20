@@ -148,6 +148,7 @@ LLM_TASKS = {
         "description": {"en": "Clean HTML output", "cs": "Vyčistit HTML výstup"},
         "commands": ["export"],
         "stage": "after_unit_html",
+        "provider": "gemini",
         "template": "wp_html",
         "output": {"suffix": ".clean.html"}
     }
@@ -162,6 +163,8 @@ LLM_TASKS = {
   implemented LLM stage. `enhance` and `partition` accept `--llm-task`, but
   no task can run for them yet. A configuration that lists `enhance` for
   `after_unit_html` is invalid. Change it to `["export"]`.
+- `provider` is the `llm-call` provider name. pdf-wtf passes it to
+  `llm_call.PROVIDERS`. The only provider is `gemini`.
 - `template` names a module in `src/pdfwtf/templates/llm/`. The module must
   define non-empty `prompt` and `system` strings.
 - `output` contains only `suffix`. The suffix uses lowercase letters, digits,
@@ -176,15 +179,15 @@ with a configuration error.
 The Gemini API key is a secret. Do not put it in the INI file. Configuration
 loading reads `GEMINI_API_KEY` from the process environment or from
 `PDFWTF_HOME/.env`. pdf-wtf uses the loaded key only to check that a key
-exists. It does not pass the key to `gemini-call` and does not change the
+exists. It does not pass the key to `llm-call` and does not change the
 process environment.
 
-`gemini-call` gets the key independently. It reads `GEMINI_API_KEY`, or
+`llm-call` gets the key independently. It reads `GEMINI_API_KEY`, or
 `GOOGLE_API_KEY` as a fallback, from the process environment only. It does
 not read `.env`. Because of this, a key that exists only in `PDFWTF_HOME/.env`
 does not make tasks available. Set `GEMINI_API_KEY` in the operating-system
 environment. `GEMINI_MODEL` in the process environment can select the model.
-Otherwise `gemini-call` uses its default model.
+Otherwise `llm-call` uses its default model.
 
 A task is available when `LLM_TASKS` is valid and `GEMINI_API_KEY` is set both
 in loaded configuration and in the process environment. Without a key,

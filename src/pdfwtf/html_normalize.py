@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Normalize PDF-extracted HTML for web publishing (Python 3.10+).
 
 Usage:
@@ -28,7 +27,15 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
-from bs4 import BeautifulSoup, Comment, NavigableString, Tag
+from bs4 import BeautifulSoup, NavigableString, Tag
+from bs4.element import (
+    PreformattedString,
+    RubyParenthesisString,
+    RubyTextString,
+    Script,
+    Stylesheet,
+    TemplateString,
+)
 
 # Deliberately preserve NBSP and other meaningful Unicode spacing.
 _SPACE = re.compile(r"[ \t\r\n\f]+")
@@ -57,6 +64,20 @@ _SPECIAL = re.compile(
 )
 _LABEL = re.compile(r"^(?:fig(?:ure)?\.?|table|plate|obr\.?|obrázek|tab\.?)\s*\d", re.I)
 _DEFAULT_PROTECTED = '[data-no-merge], [data-preserve], [contenteditable="true"]'
+# Comments, doctypes, script/style text, and similar strings are not prose.
+_SPECIAL_STRINGS = (
+    PreformattedString,
+    Script,
+    Stylesheet,
+    TemplateString,
+    RubyTextString,
+    RubyParenthesisString,
+)
+
+
+def _is_plain_text(node: object) -> bool:
+    """Return True for a plain text node, not a special string subclass."""
+    return isinstance(node, NavigableString) and not isinstance(node, _SPECIAL_STRINGS)
 
 
 @dataclass
@@ -150,7 +171,7 @@ def normalize_extracted_html(
 
     # Resolve line-end hyphens before collapsing source newlines.
     for node in list(soup.find_all(string=True)):
-        if isinstance(node, Comment) or type(node) is not NavigableString:
+        if not _is_plain_text(node):
             continue
         if blocked(node.parent):
             continue
@@ -169,9 +190,7 @@ def normalize_extracted_html(
             changes.append("Normalized whitespace or soft hyphens in a text node")
 
     def text_nodes(tag: Tag) -> list[NavigableString]:
-        return [
-            n for n in tag.descendants if type(n) is NavigableString and str(n).strip()
-        ]
+        return [n for n in tag.descendants if _is_plain_text(n) and str(n).strip()]
 
     def special_paragraph(p: Tag) -> bool:
         if blocked(p, structural=True):
@@ -201,7 +220,7 @@ def normalize_extracted_html(
             # Whitespace siblings do not separate consecutive <br> elements.
             def neighbor(step: str):
                 item = getattr(br, step)
-                while type(item) is NavigableString and not str(item).strip():
+                while _is_plain_text(item) and not str(item).strip():
                     item = getattr(item, step)
                 return item
 
@@ -215,7 +234,7 @@ def normalize_extracted_html(
             for n in p.descendants:
                 if n is br:
                     seen = True
-                elif type(n) is NavigableString and str(n).strip():
+                elif _is_plain_text(n) and str(n).strip():
                     (after if seen else before).append(n)
             if not before or not after:
                 continue
@@ -233,7 +252,7 @@ def normalize_extracted_html(
                     between = True
                 elif n is b:
                     break
-                elif between and type(n) is NavigableString and not str(n).strip():
+                elif between and _is_plain_text(n) and not str(n).strip():
                     n.extract()
             a.replace_with(NavigableString(left))
             b.replace_with(NavigableString(right))
@@ -242,7 +261,7 @@ def normalize_extracted_html(
 
     def next_paragraph(p: Tag) -> Tag | None:
         sibling = p.next_sibling
-        while type(sibling) is NavigableString and not str(sibling).strip():
+        while _is_plain_text(sibling) and not str(sibling).strip():
             sibling = sibling.next_sibling
         return sibling if isinstance(sibling, Tag) and sibling.name == "p" else None
 
@@ -267,12 +286,12 @@ def normalize_extracted_html(
         for node in list(p.find_all(string=True))[::-1]:
             if node is a:
                 break
-            if type(node) is NavigableString and not str(node).strip():
+            if _is_plain_text(node) and not str(node).strip():
                 node.extract()
         for node in list(q.find_all(string=True)):
             if node is b:
                 break
-            if type(node) is NavigableString and not str(node).strip():
+            if _is_plain_text(node) and not str(node).strip():
                 node.extract()
         a.replace_with(NavigableString(edge_left))
         b.replace_with(NavigableString(edge_right))
@@ -319,7 +338,7 @@ def normalize_extracted_html(
 
     # Remove any remaining discretionary soft hyphens after boundary handling.
     for node in list(soup.find_all(string=True)):
-        if type(node) is NavigableString and not blocked(node.parent):
+        if _is_plain_text(node) and not blocked(node.parent):
             if "\u00ad" in str(node):
                 node.replace_with(NavigableString(str(node).replace("\u00ad", "")))
                 changes.append("Removed a discretionary soft hyphen")
