@@ -31,7 +31,7 @@ dependencies = [
     "Pillow==12.3.0",
     "img2pdf==0.6.3",
     "python-dotenv==1.2.4",
-    "llm-call==0.5.0",
+    "llm-call==0.6.0",
     "beautifulsoup4>=4.14.3",
 ]
 

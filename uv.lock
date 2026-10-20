@@ -929,8 +929,8 @@ wheels = [
 
 [[package]]
 name = "llm-call"
-version = "0.5.0"
-source = { git = "https://github.com/filak/llm-call.git#ce7b5123ad88aef3d88f4a7c4143359968e11155" }
+version = "0.6.0"
+source = { git = "https://github.com/filak/llm-call.git#11f407bd7c6538877bde1004fccf2621845f6ede" }
 dependencies = [
     { name = "google-genai" },
 ]

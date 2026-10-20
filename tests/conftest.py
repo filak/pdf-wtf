@@ -59,7 +59,7 @@ def fake_gemini(monkeypatch: pytest.MonkeyPatch):
     calls: list[tuple[str, Path]] = []
     behaviour: dict[str, object] = {"fail_units": set(), "response": None}
 
-    def call(task, html_path: Path):
+    def call(task, html_path: Path, timeout: float):
         calls.append((task.name, html_path))
         unit_id = html_path.name.removesuffix(".html")
         if unit_id in behaviour["fail_units"]:

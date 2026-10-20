@@ -148,7 +148,8 @@ def test_llm_call_uses_json_response_format(llm_home, monkeypatch, tmp_path):
     monkeypatch.setitem(PROVIDERS, "gemini", fake_call)
     task = load_config().llm_tasks["clean_html"]
     html_path = tmp_path / "unit.html"
-    _REAL_CALL_LLM(task, html_path)
+    _REAL_CALL_LLM(task, html_path, 42.0)
+    assert received["timeout"] == 42.0
     assert received["response_format"] == "json"
     assert received["files"] == [str(html_path)]
     assert received["system"] == task.system
@@ -213,6 +214,35 @@ def test_runner_records_partial_failure(llm_home, fake_gemini, tmp_path, caplog)
         "Unit=unit-001 Error=RuntimeError: Gemini API Error: simulated"
         in record.getMessage()
         for record in caplog.records
+    )
+
+
+def test_runner_passes_timeout_and_logs_progress(
+    llm_home, tmp_path, monkeypatch, caplog
+):
+    timeouts = []
+
+    def call(task, html_path, timeout):
+        timeouts.append(timeout)
+        if html_path.name == "unit-001.html":
+            raise RuntimeError("Gemini request timed out after 30.0 s")
+        return {"response": "<p>ok</p>", "usage": {}}
+
+    monkeypatch.setattr(llm_tasks, "_call_llm", call)
+    caplog.set_level("INFO", logger="pdfwtf.llm_tasks")
+    staged = _staged_units(tmp_path)
+    tasks = validate_task_selection(
+        load_config(), ["clean_html"], "export", get_html=True
+    )
+    report = run_after_unit_html(tasks, staged, timeout=30.0)
+    assert timeouts == [30.0, 30.0]
+    assert report.failed_units == {"clean_html": ["unit-001"]}
+    assert "timed out after 30.0 s" in report.errors[0][2]
+    messages = [record.getMessage() for record in caplog.records]
+    assert "LLM task started. Task=clean_html Unit=unit-002 (2/2)" in messages
+    assert any(
+        message.startswith("LLM task complete. Task=clean_html Unit=unit-002")
+        for message in messages
     )
 
 

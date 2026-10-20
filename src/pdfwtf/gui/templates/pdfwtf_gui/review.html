@@ -205,5 +205,5 @@
 {% endblock %}
 {% block scripts %}
     <script type="module"
-            src="{{ url_for('pdfwtf_gui.static', filename='gui.js') }}"></script>
+            src="{{ url_for('pdfwtf_gui.static', filename='gui.js') }}?v={{ config.PDFWTF_GUI_VERSION }}"></script>
 {% endblock %}

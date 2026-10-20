@@ -18,6 +18,7 @@ from .configuration import (
     COMMAND_ENHANCE,
     COMMAND_EXPORT,
     COMMAND_PARTITION,
+    DEFAULT_LLM_TIMEOUT,
     load_config,
     AppConfig,
 )
@@ -655,6 +656,8 @@ def export_pdf(
     selected_tasks = validate_task_selection(
         config, llm_tasks, COMMAND_EXPORT, get_html=include_html
     )
+    # Read the timeout before processing so an invalid value stops early.
+    llm_timeout = config.llm_timeout if selected_tasks else DEFAULT_LLM_TIMEOUT
     input_pdf = _resolve_input(input_pdf)
     output_dir = _final_output_dir(output_dir, input_pdf, input_path_prefix, config)
     units_dir = output_dir / f"_units_{input_pdf.stem}"
@@ -717,7 +720,9 @@ def export_pdf(
             )
         llm_report = None
         if selected_tasks and staged_units is not None:
-            llm_report = run_after_unit_html(selected_tasks, staged_units)
+            llm_report = run_after_unit_html(
+                selected_tasks, staged_units, timeout=llm_timeout
+            )
             if not llm_report.complete:
                 job_log.warning("LLM processing incomplete.")
         if unit_plan is not None:

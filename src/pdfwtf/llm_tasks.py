@@ -3,11 +3,18 @@
 import json
 import logging
 import re
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable
 
-from .configuration import COMMANDS, LLM_STAGES, LLMTaskConfig, AppConfig
+from .configuration import (
+    COMMANDS,
+    DEFAULT_LLM_TIMEOUT,
+    LLM_STAGES,
+    LLMTaskConfig,
+    AppConfig,
+)
 from .container_partition import write_json_document
 
 log = logging.getLogger(__name__)
@@ -111,7 +118,7 @@ def validate_task_selection(
     return tuple(tasks)
 
 
-def _call_llm(task: LLMTaskConfig, html_path: Path) -> Any:
+def _call_llm(task: LLMTaskConfig, html_path: Path, timeout: float) -> Any:
     """Send one unit HTML file to the task provider. llm-call reads the API key."""
     from llm_call import PROVIDERS
 
@@ -120,6 +127,7 @@ def _call_llm(task: LLMTaskConfig, html_path: Path) -> Any:
         files=[str(html_path)],
         system=task.system,
         response_format="json",
+        timeout=timeout,
     )
 
 
@@ -152,32 +160,50 @@ def describe_error(error: Exception) -> str:
     return f"{type(error).__name__}: {text}"
 
 
-def _run_unit(task: LLMTaskConfig, unit_id: str, html_path: Path) -> dict[str, Any]:
+def _run_unit(
+    task: LLMTaskConfig, unit_id: str, html_path: Path, timeout: float
+) -> dict[str, Any]:
     if html_path.stat().st_size > MAX_LLM_INPUT_BYTES:
         raise LLMResponseError(
             f"The unit HTML is larger than {MAX_LLM_INPUT_BYTES} bytes."
         )
-    html, usage = parse_response(_call_llm(task, html_path))
+    html, usage = parse_response(_call_llm(task, html_path, timeout))
     output_name = f"{unit_id}{task.output_suffix}"
     (html_path.parent / output_name).write_text(html + "\n", encoding="utf-8")
     return {"status": "complete", "output": output_name, "usage": usage, "error": None}
 
 
 def run_after_unit_html(
-    tasks: tuple[LLMTaskConfig, ...], staged_units: Path
+    tasks: tuple[LLMTaskConfig, ...],
+    staged_units: Path,
+    *,
+    timeout: float = DEFAULT_LLM_TIMEOUT,
 ) -> LLMReport:
     """Run tasks sequentially, one call per unit, and record results in the manifest."""
     manifest_path = staged_units / "manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     report = LLMReport(tuple(task.name for task in tasks))
+    html_units = [unit for unit in manifest["units"] if unit.get("html")]
     for task in tasks:
         failed = report.failed_units.setdefault(task.name, [])
-        for unit in manifest["units"]:
-            if not unit.get("html"):
-                continue
+        for index, unit in enumerate(html_units, start=1):
             unit_id = unit["id"]
+            log.info(
+                "LLM task started. Task=%s Unit=%s (%d/%d)",
+                task.name,
+                unit_id,
+                index,
+                len(html_units),
+            )
+            started = time.monotonic()
             try:
-                result = _run_unit(task, unit_id, staged_units / unit["html"])
+                result = _run_unit(task, unit_id, staged_units / unit["html"], timeout)
+                log.info(
+                    "LLM task complete. Task=%s Unit=%s Seconds=%.1f",
+                    task.name,
+                    unit_id,
+                    time.monotonic() - started,
+                )
             except Exception as error:
                 # Log identifiers and the bounded error text, never payloads.
                 message = (

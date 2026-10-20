@@ -70,7 +70,7 @@ This section limits token usage and tool execution.
 - Keep tool calls small and focused. Do not combine verification, linting, and Git inspection in one call.
 - Limit exploration to 15 tool invocations. If the task is not clear after 15 invocations, stop and report findings.
 - Run only relevant tests: `uv run --locked pytest tests/unit/<affected_module>`. Do not run full test suite unless the task requires it.
-- Run one verification command per invocation: Black, then Flake8, then pytest. Do not batch them.
+- Run one verification command per invocation: Black, then Flake8, then djLint for changed templates, then pytest. Do not batch them.
 - If a command fails twice with the same error, stop and report. Do not loop.
 
 ### Chat efficiency
@@ -133,6 +133,7 @@ correlation identifier fields when available.
 
 - Format Python with Black.
 - Check Python with Flake8.
+- After you change a Jinja template, run `uv run --locked djlint <template_path> --reformat`.
 - Use `pytest` for automated testing.
 - Use `pip-audit` for dependency vulnerability checks.
 - Add type annotations to new public functions.
@@ -196,9 +197,10 @@ After an implementation change:
 
 1. Format Python with Black.
 2. Run Flake8.
-3. Run the relevant automated tests when they exist.
-4. Report checks that could not run.
-5. Summarize changed files and important decisions.
+3. If a Jinja template changed, run `uv run --locked djlint <template_path> --reformat`.
+4. Run the relevant automated tests when they exist.
+5. Report checks that could not run.
+6. Summarize changed files and important decisions.
 
 ## Change control
 

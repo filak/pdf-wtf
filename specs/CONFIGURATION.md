@@ -189,6 +189,13 @@ does not make tasks available. Set `GEMINI_API_KEY` in the operating-system
 environment. `GEMINI_MODEL` in the process environment can select the model.
 Otherwise `llm-call` uses its default model.
 
+`LLM_TIMEOUT` in the `[pdf-wtf]` INI section sets the timeout for one LLM
+request in seconds. `PDFWTF_LLM_TIMEOUT` can override it. The value must be a
+positive number. The default is `180`. pdf-wtf passes the value to `llm-call`.
+When a request times out, the unit is recorded as failed and the export
+continues with the next unit. An invalid value stops an export that selects
+an LLM task before processing starts.
+
 A task is available when `LLM_TASKS` is valid and `GEMINI_API_KEY` is set both
 in loaded configuration and in the process environment. Without a key,
 ordinary processing continues, and a selected task is rejected before

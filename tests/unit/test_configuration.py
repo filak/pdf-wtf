@@ -114,6 +114,19 @@ def test_runtime_directories_and_explicit_output(configured_home):
     assert explicit.is_dir()
 
 
+def test_llm_timeout_default_and_override(configured_home, monkeypatch):
+    assert load_config().llm_timeout == 180.0
+    monkeypatch.setenv("PDFWTF_LLM_TIMEOUT", "45")
+    assert load_config().llm_timeout == 45.0
+
+
+@pytest.mark.parametrize("value", ["0", "-5", "true", "slow"])
+def test_invalid_llm_timeout(configured_home, monkeypatch, value):
+    monkeypatch.setenv("PDFWTF_LLM_TIMEOUT", value)
+    with pytest.raises(ConfigurationError, match="PDFWTF_LLM_TIMEOUT"):
+        load_config().llm_timeout
+
+
 def test_runtime_path_cannot_be_a_file(configured_home, monkeypatch):
     file = configured_home / "file"
     file.write_text("content")

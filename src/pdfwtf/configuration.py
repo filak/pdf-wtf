@@ -33,6 +33,8 @@ LLM_STAGES: Dict[str, frozenset[str]] = {
 }
 # Output suffixes that each stage requires.
 LLM_STAGE_SUFFIXES: Dict[str, str] = {"after_unit_html": ".html"}
+# Seconds for one LLM request. The google-genai client has no default timeout.
+DEFAULT_LLM_TIMEOUT = 180
 LLM_TASK_KEYS = frozenset(
     {"description", "commands", "stage", "provider", "template", "output"}
 )
@@ -303,6 +305,16 @@ class AppConfig:
         ):
             return validate_llm_tasks(tasks)
         return tasks
+
+    @property
+    def llm_timeout(self) -> float:
+        """Get the timeout in seconds for one LLM request."""
+        value = self.values.get("llm_timeout", DEFAULT_LLM_TIMEOUT)
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or value <= 0:
+            raise ConfigurationError(
+                "PDFWTF_LLM_TIMEOUT must be a positive number of seconds."
+            )
+        return float(value)
 
     @property
     def gemini_api_key_loaded(self) -> bool:

@@ -58,5 +58,6 @@
     {% if analyze_enabled %}
         {% include "pdfwtf_gui/_analysis_modal.html" %}
     {% endif %}
-    <script src="{{ url_for('pdfwtf_gui.static', filename='upload.js') }}" defer></script>
+    <script src="{{ url_for('pdfwtf_gui.static', filename='upload.js') }}?v={{ config.PDFWTF_GUI_VERSION }}"
+            defer></script>
 {% endblock %}

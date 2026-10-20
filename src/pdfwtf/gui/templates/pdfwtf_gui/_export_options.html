@@ -97,4 +97,5 @@
         </form>
     </div>
 </div>
-<script src="{{ url_for('pdfwtf_gui.static', filename='export.js') }}" defer></script>
+<script src="{{ url_for('pdfwtf_gui.static', filename='export.js') }}?v={{ config.PDFWTF_GUI_VERSION }}"
+        defer></script>

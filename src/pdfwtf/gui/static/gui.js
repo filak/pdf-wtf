@@ -5,6 +5,18 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   import.meta.url,
 ).href;
 
+function format(template, values) {
+  return Object.entries(values).reduce(
+    (text, [key, value]) => text.replace(`%(${key})s`, value),
+    template,
+  );
+}
+
+function compareUnitPages(first, second) {
+  return first.input_pages.start - second.input_pages.start
+    || first.input_pages.end - second.input_pages.end;
+}
+
 function initReviewApp(app) {
   const partition = JSON.parse(document.querySelector("#partition-data").textContent);
   const plan = JSON.parse(document.querySelector("#plan-data").textContent);
@@ -47,23 +59,16 @@ function initReviewApp(app) {
   const previewInput = document.querySelector("#preview-page");
   const pageCount = document.querySelector("#page-count");
 
-  function format(template, values) {
-    return Object.entries(values).reduce(
-      (text, [key, value]) => text.replace(`%(${key})s`, value),
-      template,
-    );
-  }
-
-  function showMessage(text, kind = "danger") {
+  const showMessage = (text, kind = "danger") => {
     const target = document.querySelector("#plan-message");
     target.replaceChildren();
     const alert = document.createElement("div");
     alert.className = `alert alert-${kind}`;
     alert.textContent = text;
     target.append(alert);
-  }
+  };
 
-  async function renderPreview() {
+  const renderPreview = async () => {
     if (!state.document) return;
     const generation = ++state.previewGeneration;
     const pageNumber = state.currentPage;
@@ -117,9 +122,9 @@ function initReviewApp(app) {
     document.querySelectorAll(".thumbnail-button").forEach((button) => {
       button.classList.toggle("active", Number(button.dataset.page) === pageNumber);
     });
-  }
+  };
 
-  function synchronizeUnit(scroll = false) {
+  const synchronizeUnit = (scroll = false) => {
     updateThumbnailInclusion();
     const cards = [...document.querySelectorAll(".unit-card")];
     const containsPage = (card) => Number(card.querySelector('[name="start"]').value) <= state.currentPage
@@ -143,9 +148,9 @@ function initReviewApp(app) {
     if (scroll && activeCard) {
       activeCard.scrollIntoView({ block: "nearest", inline: "nearest" });
     }
-  }
+  };
 
-  function scrollThumbnailIntoView() {
+  const scrollThumbnailIntoView = () => {
     const thumbnails = document.querySelector("#thumbnails");
     const thumbnail = thumbnails.querySelector(`[data-page="${state.currentPage}"]`);
     if (!thumbnail) return;
@@ -157,9 +162,9 @@ function initReviewApp(app) {
       left: thumbnails.scrollLeft + thumbnailBounds.left - panelBounds.left
         - thumbnails.clientLeft - (thumbnails.clientWidth - thumbnailBounds.width) / 2,
     });
-  }
+  };
 
-  function selectPage(pageNumber, { scrollUnit = false, scrollThumbnail = false } = {}) {
+  const selectPage = (pageNumber, { scrollUnit = false, scrollThumbnail = false } = {}) => {
     if (!state.document) return;
     if (!Number.isInteger(pageNumber)) {
       previewInput.value = state.currentPage;
@@ -170,9 +175,9 @@ function initReviewApp(app) {
     synchronizeUnit(scrollUnit);
     if (scrollThumbnail) scrollThumbnailIntoView();
     renderPreview().catch(() => showMessage(messages.loading_error));
-  }
+  };
 
-  async function renderThumbnail(canvas, pageNumber) {
+  const renderThumbnail = async (canvas, pageNumber) => {
     state.activeThumbnails += 1;
     let page = null;
     let task = null;
@@ -194,9 +199,9 @@ function initReviewApp(app) {
       page?.cleanup();
       drainThumbnailQueue();
     }
-  }
+  };
 
-  function drainThumbnailQueue() {
+  const drainThumbnailQueue = () => {
     while (
       state.activeThumbnails < state.maxThumbnailConcurrency &&
       state.thumbnailQueue.length
@@ -206,9 +211,9 @@ function initReviewApp(app) {
         item.canvas.closest("button").disabled = true;
       });
     }
-  }
+  };
 
-  function buildThumbnails() {
+  const buildThumbnails = () => {
     const container = document.querySelector("#thumbnails");
     const observer = new IntersectionObserver(
       (entries) => {
@@ -239,17 +244,17 @@ function initReviewApp(app) {
       container.append(button);
       observer.observe(button);
     }
-  }
+  };
 
-  function option(value, selected) {
+  const option = (value, selected) => {
     const item = document.createElement("option");
     item.value = value;
     item.textContent = unitTypeLabels.get(value) ?? value;
     item.selected = value === selected;
     return item;
-  }
+  };
 
-  function unitField(label, name, value, type = "text") {
+  const unitField = (label, name, value, type = "text") => {
     const column = document.createElement("div");
     column.className = name === "title" ? "col-12" : "col-6";
     const labelElement = document.createElement("label");
@@ -264,9 +269,9 @@ function initReviewApp(app) {
     labelElement.append(input);
     column.append(labelElement);
     return column;
-  }
+  };
 
-  function inclusionTargets() {
+  const inclusionTargets = () => {
     const cards = [...document.querySelectorAll(".unit-card")];
     const scope = document.querySelector("#unit-inclusion-scope").value;
     return cards.filter((card) => {
@@ -276,9 +281,9 @@ function initReviewApp(app) {
       if (scope === "removed") return !included;
       return true;
     });
-  }
+  };
 
-  function updateThumbnailInclusion() {
+  const updateThumbnailInclusion = () => {
     const ranges = [...document.querySelectorAll(".unit-card")].map((card) => ({
       start: Number(card.querySelector('[name="start"]').value),
       end: Number(card.querySelector('[name="end"]').value),
@@ -289,9 +294,9 @@ function initReviewApp(app) {
       const units = ranges.filter((range) => range.start <= page && page <= range.end);
       button.classList.toggle("excluded", units.length > 0 && units.every((unit) => !unit.included));
     });
-  }
+  };
 
-  function updateInclusionSwitch() {
+  const updateInclusionSwitch = () => {
     updateThumbnailInclusion();
     const targets = inclusionTargets();
     document.querySelectorAll(".unit-card").forEach((card) => {
@@ -304,7 +309,7 @@ function initReviewApp(app) {
     control.indeterminate = included > 0 && included < targets.length;
     document.querySelector("#include-units-label").textContent = control.indeterminate
       ? messages.mixed : control.checked ? messages.included : messages.removed;
-  }
+  };
 
   document.querySelector("#unit-inclusion-scope").addEventListener("change", (event) => {
     if (event.currentTarget.value === "clear-selection") {
@@ -328,7 +333,7 @@ function initReviewApp(app) {
     updateInclusionSwitch();
   });
 
-  function renderUnits() {
+  const renderUnits = () => {
     const container = document.querySelector("#units");
     container.replaceChildren();
     state.units.forEach((unit, index) => {
@@ -405,9 +410,9 @@ function initReviewApp(app) {
     synchronizeUnit();
     validateUnitRanges();
     updateInclusionSwitch();
-  }
+  };
 
-  function validateUnitRanges() {
+  const validateUnitRanges = () => {
     updateThumbnailInclusion();
     const cards = [...document.querySelectorAll(".unit-card")];
     const ranges = cards.map((card) => ({
@@ -428,9 +433,9 @@ function initReviewApp(app) {
     });
     document.querySelector("#save-plan").disabled = state.saving || !valid;
     return valid;
-  }
+  };
 
-  function readUnitCards() {
+  const readUnitCards = () => {
     document.querySelectorAll(".unit-card").forEach((card) => {
       const unit = state.units[Number(card.dataset.index)];
       unit.title = card.querySelector('[name="title"]').value.trim();
@@ -438,9 +443,9 @@ function initReviewApp(app) {
       unit.input_pages.start = Number(card.querySelector('[name="start"]').value);
       unit.input_pages.end = Number(card.querySelector('[name="end"]').value);
     });
-  }
+  };
 
-  function newUnitId() {
+  const newUnitId = () => {
     let number = 1;
     let candidate;
     do {
@@ -448,9 +453,9 @@ function initReviewApp(app) {
       number += 1;
     } while (state.units.some((unit) => unit.id === candidate));
     return candidate;
-  }
+  };
 
-  function addUnit() {
+  const addUnit = () => {
     readUnitCards();
     const activeIndex = state.units.findIndex((unit) => unit.id === state.activeUnitId);
     const insertionIndex = activeIndex < 0 ? state.units.length : activeIndex + 1;
@@ -471,9 +476,9 @@ function initReviewApp(app) {
     renderUnits();
     synchronizeUnit(true);
     renderPreview().catch(() => showMessage(messages.loading_error));
-  }
+  };
 
-  function mergeUnits() {
+  const mergeUnits = () => {
     readUnitCards();
     const selected = [...document.querySelectorAll(".merge-unit:checked")]
       .map((control) => Number(control.closest(".unit-card").dataset.index))
@@ -511,14 +516,9 @@ function initReviewApp(app) {
     state.units.push(merged);
     state.units.sort((first, second) => first.input_pages.start - second.input_pages.start);
     renderUnits();
-  }
+  };
 
-  function compareUnitPages(first, second) {
-    return first.input_pages.start - second.input_pages.start
-      || first.input_pages.end - second.input_pages.end;
-  }
-
-  function buildPlan() {
+  const buildPlan = () => {
     readUnitCards();
     const units = state.units.map((unit) => ({
       id: unit.id,
@@ -547,9 +547,9 @@ function initReviewApp(app) {
       pages,
       units,
     };
-  }
+  };
 
-  async function savePlan() {
+  const savePlan = async () => {
     if (state.saving || !validateUnitRanges()) return;
     state.saving = true;
     const button = document.querySelector("#save-plan");
@@ -594,7 +594,7 @@ function initReviewApp(app) {
       validateUnitRanges();
       button.textContent = oldText;
     }
-  }
+  };
 
   document.querySelector("#delete-plan").addEventListener("htmx:afterRequest", (event) => {
     if (event.detail.successful) {
