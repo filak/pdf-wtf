@@ -227,6 +227,13 @@ least 90 percent of a page and is reused on another page is treated as an
 editorial background, not advertisement evidence. This excludes sparse title
 pages in a visually continuous article. Magazine cover classification takes
 precedence for the first page of a magazine issue.
+For `journal-issue`, a textless page is also proposed as
+`full-page-advertisement` when raster imagery covers at least 35 percent of
+the page and is not a repeated full-page background. A journal page is also
+proposed as an advertisement when it uses at least eight font families, ten
+font sizes, and four text colors. These journal-only rules detect mixed
+raster/vector and vector advertisements that the general raster rule misses.
+They do not apply to `magazine-issue`.
 Each detected full-page advertisement is proposed as a one-page unit. The page
 after it starts a new unit. Consecutive full-page advertisements are separate
 one-page units.
@@ -465,6 +472,17 @@ one nearest image and excludes page footers. Academic journal caption rules
 continue to require explicit caption prefixes.
 
 ## Academic journal opening detection
+
+Journal opening detection excludes text with at least 80 percent of its area
+inside a graphic region. Regions include raster images that occupy 3 to 85
+percent of the page and vector panels in that area range that contain at least
+four other drawing components. An aligned filled caption strip within 24 PDF
+points of a region, including an overlap of at most 24 points, is associated
+with that region when its height is at most
+60 points and its left and right edges differ by at most 12 points.
+Excluded text cannot provide title or nearby author evidence. Text extraction
+and HTML export retain the text. A single colored rectangle does not establish
+a vector graphic region. Graphic regions remain internal geometry.
 
 `journal-issue` and `proceedings` use local article-opening evidence. The
 magazine detection path is unchanged. Automatic classification uses these

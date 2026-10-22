@@ -11,7 +11,7 @@ from pathlib import Path
 import re
 import shutil
 from statistics import median
-from typing import Any
+from typing import Any, Callable
 
 import pymupdf as fitz
 
@@ -99,6 +99,8 @@ def extract_structure(pdf_path: Path) -> dict[str, Any]:
             )
             for page in document
         ]
+        for page, description in zip(document, pages):
+            description["graphic_regions"] = _graphic_regions(page)
         bookmarks = [
             {
                 "level": level,
@@ -139,6 +141,35 @@ def extract_structure(pdf_path: Path) -> dict[str, Any]:
     }
 
 
+def _title_line_cluster(
+    lines: list[dict[str, Any]],
+    index: int,
+    body_size: float,
+    *,
+    accept: Callable[[dict[str, Any]], bool] | None = None,
+) -> list[dict[str, Any]]:
+    """Return adjacent lines that use compatible title typography."""
+    line = lines[index]
+    size, bold = _line_style(line)
+    cluster = [line]
+    for following in lines[index + 1 : index + 4]:
+        next_size, next_bold = _line_style(following)
+        gap = following["bbox"][1] - cluster[-1]["bbox"][3]
+        if (
+            -size * 0.4 <= gap <= max(size, 6)
+            and abs(next_size - size) <= 0.5
+            and next_bold == bold
+            and (bold or size >= body_size * 1.15)
+            and abs(following["bbox"][0] - line["bbox"][0]) < 30
+            and len(" ".join(item["text"] for item in cluster + [following])) <= 220
+            and (accept is None or accept(following))
+        ):
+            cluster.append(following)
+        else:
+            break
+    return cluster
+
+
 def _page_signals(page: dict[str, Any]) -> dict[str, Any]:
     lines = [
         line
@@ -176,12 +207,23 @@ def _page_signals(page: dict[str, Any]) -> dict[str, Any]:
         ),
         default=None,
     )
-    title = title_line["text"] if title_line else f"Page {page['input_page']}"
+    if title_line:
+        cluster = _title_line_cluster(lines, lines.index(title_line), body_size)
+        title = " ".join(item["text"] for item in cluster)
+        title_bbox = [
+            min(item["bbox"][0] for item in cluster),
+            min(item["bbox"][1] for item in cluster),
+            max(item["bbox"][2] for item in cluster),
+            max(item["bbox"][3] for item in cluster),
+        ]
+    else:
+        title = f"Page {page['input_page']}"
+        title_bbox = None
     title_size = max(span["size"] for span in title_line["spans"]) if title_line else 0
     text = "\n".join(line["text"] for line in lines)
     return {
         "title": title,
-        "title_bbox": title_line["bbox"] if title_line else None,
+        "title_bbox": title_bbox,
         "title_y": title_line["bbox"][1] if title_line else 0,
         "prominent_title": bool(
             title_line
@@ -312,6 +354,41 @@ def _article_margin_dois(page: dict[str, Any]) -> set[str]:
     return values
 
 
+def _graphic_regions(page: fitz.Page) -> list[list[float]]:
+    """Find raster figures and vector panels with several drawing components."""
+    area = page.rect.get_area()
+    drawings = page.get_drawings()
+    rectangles = [fitz.Rect(item["rect"]) for item in drawings]
+    regions = [
+        fitz.Rect(item["bbox"])
+        for item in page.get_image_info()
+        if 0.03 * area <= fitz.Rect(item["bbox"]).get_area() <= 0.85 * area
+    ]
+    for rectangle in rectangles:
+        if not 0.03 * area <= rectangle.get_area() <= 0.85 * area:
+            continue
+        if (
+            sum(
+                other != rectangle and rectangle.contains(other) for other in rectangles
+            )
+            >= 4
+        ):
+            regions.append(rectangle)
+    # Associate an aligned caption strip with the nearby graphic panel.
+    for region in list(regions):
+        for drawing, rectangle in zip(drawings, rectangles):
+            gap = max(region.y0 - rectangle.y1, rectangle.y0 - region.y1)
+            if (
+                drawing.get("fill") is not None
+                and -24 <= gap <= 24
+                and 0 < rectangle.height <= 60
+                and abs(rectangle.x0 - region.x0) <= 12
+                and abs(rectangle.x1 - region.x1) <= 12
+            ):
+                regions.append(rectangle)
+    return [_rect(region) for region in regions]
+
+
 def _journal_signals(structure: dict[str, Any]) -> list[dict[str, Any]]:
     """Score local article openings, excluding recurring margin material."""
     margins: Counter[str] = Counter()
@@ -329,10 +406,29 @@ def _journal_signals(structure: dict[str, Any]) -> list[dict[str, Any]]:
     previous_text = ""
     previous_dois: set[str] = set()
     for page in structure["pages"]:
-        signal = _page_signals(page)
+        regions = [fitz.Rect(value) for value in page.get("graphic_regions", [])]
+        title_page = {
+            **page,
+            "text_blocks": [
+                {**block, "lines": eligible}
+                for block in page["text_blocks"]
+                if (
+                    eligible := [
+                        line
+                        for line in block["lines"]
+                        if not any(
+                            (fitz.Rect(line["bbox"]) & region).get_area()
+                            >= fitz.Rect(line["bbox"]).get_area() * 0.8
+                            for region in regions
+                        )
+                    ]
+                )
+            ],
+        }
+        signal = _page_signals(title_page)
         lines = []
         seen_lines = set()
-        for block in _ordered_blocks(page):
+        for block in _ordered_blocks(title_page):
             for line in block["lines"]:
                 key = (line["text"], tuple(round(value, 3) for value in line["bbox"]))
                 if key in seen_lines:
@@ -382,26 +478,15 @@ def _journal_signals(structure: dict[str, Any]) -> list[dict[str, Any]]:
             display_title = body_size > 0 and size >= body_size * 1.5
             if repeated and not (_CONTRIBUTION.match(text) or display_title):
                 continue
-            cluster = [line]
-            for following in lines[index + 1 : index + 4]:
-                next_size, next_bold = _line_style(following)
-                gap = following["bbox"][1] - cluster[-1]["bbox"][3]
-                if (
-                    -size * 0.4 <= gap <= max(size, 6)
-                    and abs(next_size - size) <= 0.5
-                    and next_bold == bold
-                    and (bold or size >= body_size * 1.15)
-                    and not _ABSTRACT_LABEL.match(following["text"])
-                    and not _journal_internal_section(following["text"])
-                    and not _DOI.search(following["text"])
-                    and not _AFFILIATION.search(following["text"])
-                    and abs(following["bbox"][0] - line["bbox"][0]) < 30
-                    and len(" ".join(item["text"] for item in cluster + [following]))
-                    <= 220
-                ):
-                    cluster.append(following)
-                else:
-                    break
+            cluster = _title_line_cluster(
+                lines,
+                index,
+                body_size,
+                accept=lambda following: not _ABSTRACT_LABEL.match(following["text"])
+                and not _journal_internal_section(following["text"])
+                and not _DOI.search(following["text"])
+                and not _AFFILIATION.search(following["text"]),
+            )
             title = " ".join(item["text"] for item in cluster)
             calendar_month = bool(_CALENDAR_MONTH.fullmatch(title)) and (
                 body_size > 0 and size >= body_size * 1.5
@@ -1246,6 +1331,12 @@ def _classify_page(
         image.get("xref") in (repeated_full_page_xrefs or set())
         for image in page["raster_images"]
     )
+    text_spans = [
+        span for line in lines for span in line["spans"] if span["text"].strip()
+    ]
+    font_families = {span["font"] for span in text_spans}
+    font_sizes = {round(span["size"], 1) for span in text_spans}
+    text_colors = {span["color"] for span in text_spans}
     if document_type == "magazine-issue" and page["input_page"] == 1:
         return "cover", ["The first page of the magazine issue is the cover."]
     if (
@@ -1259,6 +1350,16 @@ def _classify_page(
             "The sparse full page occurs between the magazine cover and contents."
         ]
     if (
+        document_type == "journal-issue"
+        and raster_coverage_fraction >= 0.35
+        and word_count == 0
+        and not uses_repeated_background
+    ):
+        return "full-page-advertisement", [
+            "Raster imagery covers a textless journal page, without a repeated "
+            "full-page editorial background."
+        ]
+    if (
         raster_coverage_fraction >= 0.45
         and word_count <= 150
         and not uses_repeated_background
@@ -1266,6 +1367,16 @@ def _classify_page(
         return "full-page-advertisement", [
             "Raster imagery dominates the page and the page has little text, without "
             "a repeated full-page editorial background."
+        ]
+    if (
+        document_type == "journal-issue"
+        and len(font_families) >= 8
+        and len(font_sizes) >= 10
+        and len(text_colors) >= 4
+    ):
+        return "full-page-advertisement", [
+            "The journal page uses unusually diverse fonts, font sizes, and text "
+            "colors."
         ]
     if len(lines) >= 3 or len(text) >= 80:
         return "normal", ["The page contains substantial extractable text."]

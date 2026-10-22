@@ -15,6 +15,7 @@ from pdfwtf.container_partition import (
     _valid_bbox,
     partition_container,
     export_units,
+    extract_structure,
     source_identity,
     validate_plan,
 )
@@ -93,6 +94,29 @@ def test_unit_partition_has_contract_and_structure(make_pdf):
         "chapter",
         "unknown",
     }
+
+
+def test_unit_partition_combines_multiline_main_title(tmp_path):
+    source = tmp_path / "multiline-title.pdf"
+    with fitz.open() as document:
+        page = document.new_page(width=500, height=700)
+        page.insert_text((40, 80), "Treatment and prevention of", fontsize=24)
+        page.insert_text((40, 108), "vitamin D deficiency in", fontsize=24)
+        page.insert_text((40, 136), "gynecology and obstetrics", fontsize=24)
+        page.insert_text((40, 190), "Alice Smith", fontsize=11, fontname="hebo")
+        page.insert_text((40, 225), "Abstract", fontsize=10)
+        page.insert_text((40, 250), "Article body text for the test.", fontsize=10)
+        document.save(source)
+
+    partition = partition_container(source, "unit")
+
+    expected = (
+        "Treatment and prevention of vitamin D deficiency in "
+        "gynecology and obstetrics"
+    )
+    assert partition["pages"][0]["main_title"]["text"] == expected
+    assert partition["units"][0]["title"] == expected
+    assert partition["pages"][0]["main_title"]["bbox"][3] > 130
 
 
 def test_extracted_text_normalization():
@@ -181,6 +205,65 @@ def test_partition_extracts_doi_candidates_for_each_unit(tmp_path):
     ]
 
 
+@pytest.mark.parametrize("raster", [False, True])
+def test_journal_graphic_text_and_caption_do_not_start_unit(tmp_path, raster):
+    source = tmp_path / "graphic-panel.pdf"
+    with fitz.open() as document:
+        page = document.new_page(width=400, height=500)
+        panel = fitz.Rect(30, 100, 370, 320)
+        if raster:
+            stream = io.BytesIO()
+            Image.new("RGB", (340, 220), "orange").save(stream, format="PNG")
+            page.insert_image(panel, stream=stream.getvalue())
+        else:
+            page.draw_rect(panel, fill=(1, 0.8, 0.6))
+            for index in range(4):
+                page.draw_rect(fitz.Rect(50 + index * 70, 150, 90 + index * 70, 180))
+        page.draw_rect(fitz.Rect(30, 60, 370, 110), fill=(1, 0.4, 0))
+        page.insert_text((40, 80), "Complex interactions", fontsize=16, fontname="hebo")
+        page.insert_text((40, 125), "John Smith", fontsize=12)
+        page.insert_text((40, 210), "Clinical outcomes", fontsize=16, fontname="hebo")
+        page.insert_text((40, 235), "Jane Brown", fontsize=12)
+        page.insert_text(
+            (30, 360), "Continued discussion of the study results.", fontsize=10
+        )
+        document.save(source)
+
+    partition = partition_container(source, "journal-issue")
+
+    assert partition["pages"][0]["main_title"] is None or partition["pages"][0][
+        "main_title"
+    ]["text"] not in {
+        "Complex interactions",
+        "Clinical outcomes",
+        "John Smith",
+        "Jane Brown",
+    }
+    assert "Complex interactions" in extract_structure(source)["pages"][0][
+        "text_blocks"
+    ][0]["lines"][0]["text"] or any(
+        "Complex interactions" in line["text"]
+        for block in extract_structure(source)["pages"][0]["text_blocks"]
+        for line in block["lines"]
+    )
+
+
+def test_journal_title_on_plain_colored_background_remains_eligible(tmp_path):
+    source = tmp_path / "colored-title.pdf"
+    with fitz.open() as document:
+        page = document.new_page(width=400, height=500)
+        page.draw_rect(fitz.Rect(20, 30, 380, 130), fill=(1, 0.8, 0.6))
+        page.insert_text((30, 60), "Clinical outcomes", fontsize=20, fontname="hebo")
+        page.insert_text((30, 90), "John Smith", fontsize=12)
+        page.insert_text((30, 160), "Abstract", fontsize=12)
+        page.insert_text(
+            (30, 190), "The study examines clinical outcomes.", fontsize=10
+        )
+        document.save(source)
+    partition = partition_container(source, "journal-issue")
+    assert partition["pages"][0]["main_title"]["text"] == "Clinical outcomes"
+
+
 def test_partition_detects_full_page_advertisement(tmp_path):
     source = tmp_path / "advertisement.pdf"
     image = Image.new("RGB", (400, 500), "navy")
@@ -251,6 +334,71 @@ def test_image_dominant_page_with_substantial_text_is_not_advertisement(tmp_path
         document.save(source)
 
     partition = partition_container(source, "unit")
+
+    assert partition["pages"][0]["page_type"] == "normal"
+
+
+def test_journal_detects_textless_mixed_raster_vector_advertisement(tmp_path):
+    source = tmp_path / "mixed-raster-vector-advertisement.pdf"
+    image = io.BytesIO()
+    Image.new("RGB", (400, 200), "navy").save(image, format="PNG")
+    with fitz.open() as document:
+        page = document.new_page(width=400, height=500)
+        page.insert_image(fitz.Rect(0, 0, 400, 200), stream=image.getvalue())
+        page.draw_rect(
+            fitz.Rect(0, 200, 400, 500), color=(0.8, 0.2, 0.2), fill=(0.8, 0.2, 0.2)
+        )
+        document.save(source)
+
+    partition = partition_container(source, "journal-issue")
+
+    assert partition["pages"][0]["page_type"] == "full-page-advertisement"
+    assert partition["pages"][0]["page_type_evidence"] == [
+        "Raster imagery covers a textless journal page, without a repeated "
+        "full-page editorial background."
+    ]
+
+
+def test_journal_detects_typographically_diverse_vector_advertisement(tmp_path):
+    source = tmp_path / "vector-advertisement.pdf"
+    fonts = ("helv", "hebo", "heit", "tiro", "tibo", "tiit", "cour", "cobo")
+    colors = ((0.8, 0, 0), (0, 0.5, 0), (0, 0, 0.8), (0.6, 0.3, 0))
+    with fitz.open() as document:
+        page = document.new_page(width=400, height=500)
+        for number in range(10):
+            page.insert_text(
+                (20, 35 + number * 35),
+                f"Product message {number} " + "offer " * 18,
+                fontname=fonts[number % len(fonts)],
+                fontsize=7 + number,
+                color=colors[number % len(colors)],
+            )
+        document.save(source)
+
+    partition = partition_container(source, "journal-issue")
+
+    assert partition["pages"][0]["page_type"] == "full-page-advertisement"
+    assert partition["pages"][0]["page_type_evidence"] == [
+        "The journal page uses unusually diverse fonts, font sizes, and text colors."
+    ]
+
+
+def test_journal_color_heavy_editorial_chart_is_not_advertisement(tmp_path):
+    source = tmp_path / "editorial-chart.pdf"
+    colors = ((0.8, 0, 0), (0, 0.5, 0), (0, 0, 0.8), (0.6, 0.3, 0))
+    with fitz.open() as document:
+        page = document.new_page(width=400, height=500)
+        for number in range(12):
+            page.insert_text(
+                (20, 35 + number * 25),
+                f"Study result {number}: editorial evidence and analysis",
+                fontname=("helv", "hebo", "heit")[number % 3],
+                fontsize=(8, 9, 10, 11)[number % 4],
+                color=colors[number % len(colors)],
+            )
+        document.save(source)
+
+    partition = partition_container(source, "journal-issue")
 
     assert partition["pages"][0]["page_type"] == "normal"
 
