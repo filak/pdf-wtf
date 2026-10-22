@@ -367,8 +367,14 @@ format ending in `Z`. Each export writes a new creation timestamp.
 
 `manifest.json` has `schema_version`, `kind`, `created`, `source`, `document_type`, and a
 `units` array. Each unit entry repeats its ID, title, type, input range, and
-selected input pages. It links the unit metadata filename and the optional HTML
-filename. Version `"1.3"` added optional LLM task fields to the manifest: a
+selected input pages. It links the unit metadata filename, the text filename
+under `text`, and the optional HTML filename.
+Each exported unit has a UTF-8 `<unit-id>.txt` file. It contains existing
+extractable text from selected source pages inside the unit range, in input
+order, with two newline characters between page texts. It has no added page
+headings. A unit with no extractable text still has a text file. Export does
+not run OCR. Overlapping units each include their selected shared pages.
+Version `"1.3"` added optional LLM task fields to the manifest: a
 top-level `llm` object and a per-unit `llm_tasks` object. These fields occur only when
 LLM tasks were selected. `specs/PROJECT.md` defines them.
 

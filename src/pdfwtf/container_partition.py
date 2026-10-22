@@ -2266,10 +2266,13 @@ def _write_unit(
 ) -> dict[str, Any]:
     """Write the files of one unit and return its manifest entry."""
     blocks, figures, warnings = reconstructed
+    text = "\n\n".join(
+        document[page - 1].get_text("text") for page in selected_input_pages
+    )
+    text_name = f"{unit['id']}.txt"
+    (destination / text_name).write_text(text, encoding="utf-8")
     if extract_doi:
-        doi = _extract_doi_candidates(
-            "\n\n".join(document[page - 1].get_text() for page in selected_input_pages)
-        )
+        doi = _extract_doi_candidates(text)
     else:
         doi = unit.get("doi", [])
     pdf_name = f"{unit['id']}.pdf" if include_pdf else None
@@ -2310,6 +2313,7 @@ def _write_unit(
         "doi": doi,
         "selected_input_pages": selected_input_pages,
         "html": html_name,
+        "text": text_name,
         "metadata": metadata_name,
         **({"pdf": pdf_name} if include_pdf else {}),
     }
