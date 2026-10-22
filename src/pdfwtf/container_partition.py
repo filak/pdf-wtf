@@ -40,7 +40,7 @@ DOCUMENT_TYPES = {
     "proceedings",
     "unknown",
 }
-PAGE_TYPES = {"normal", "full-page-advertisement", "unknown"}
+PAGE_TYPES = {"normal", "full-page-advertisement", "cover", "unknown"}
 UNIT_TYPES = {
     "preface",
     "editorial",
@@ -219,6 +219,9 @@ _AFFILIATION = re.compile(
     re.I,
 )
 _CONTENTS_LABEL = re.compile(r"\b(?:contents|obsah|sommaire)\b", re.I)
+_MAGAZINE_CONTENTS_LABEL = re.compile(
+    r"^(?:table of contents|contents|obsah|z obsahu|sommaire)$", re.I
+)
 _TABLE_OR_FIGURE_LABEL = re.compile(
     r"^(?:(?:tab(?:le)?|fig(?:ure)?)\.?\s*\d+[A-Za-z]?\b)", re.I
 )
@@ -916,8 +919,15 @@ def _magazine_signals(page: dict[str, Any]) -> dict[str, Any]:
     anchor = max(
         eligible, key=lambda line: (letter_size(line), -line["bbox"][1]), default=None
     )
+    contents_pattern = any(
+        _MAGAZINE_CONTENTS_LABEL.fullmatch(line["text"].strip()) for line in eligible
+    )
     if anchor is None:
-        signal.update(title_bbox=None, prominent_title=False)
+        signal.update(
+            title_bbox=None,
+            prominent_title=False,
+            contents_pattern=contents_pattern,
+        )
         return signal
     largest = letter_size(anchor)
     sizes = [
@@ -963,6 +973,7 @@ def _magazine_signals(page: dict[str, Any]) -> dict[str, Any]:
         title_bbox=bbox,
         title_y=bbox[1],
         prominent_title=largest >= 24 and largest >= body_size * 1.8,
+        contents_pattern=contents_pattern,
     )
     return signal
 
@@ -1152,21 +1163,93 @@ def _bibliographic_source(
     return source
 
 
-def _classify_page(page: dict[str, Any]) -> tuple[str, list[str]]:
+def _raster_coverage_fraction(page: dict[str, Any]) -> float:
+    page_rect = fitz.Rect(0, 0, page["width"], page["height"])
+    page_area = page_rect.get_area()
+    if page_area <= 0:
+        return 0
+
+    rectangles = []
+    for image in page["raster_images"]:
+        rectangle = fitz.Rect(image["bbox"]) & page_rect
+        if not rectangle.is_empty:
+            rectangles.append(rectangle)
+    if not rectangles:
+        return 0
+
+    x_coordinates = sorted(
+        {value for rect in rectangles for value in (rect.x0, rect.x1)}
+    )
+    covered_area = 0.0
+    for x0, x1 in zip(x_coordinates, x_coordinates[1:]):
+        intervals = sorted(
+            (rect.y0, rect.y1) for rect in rectangles if rect.x0 < x1 and rect.x1 > x0
+        )
+        covered_height = 0.0
+        if intervals:
+            start, end = intervals[0]
+            for next_start, next_end in intervals[1:]:
+                if next_start > end:
+                    covered_height += end - start
+                    start, end = next_start, next_end
+                else:
+                    end = max(end, next_end)
+            covered_height += end - start
+        covered_area += (x1 - x0) * covered_height
+    return covered_area / page_area
+
+
+def _repeated_full_page_image_xrefs(structure: dict[str, Any]) -> set[int]:
+    pages_by_xref: dict[int, set[int]] = {}
+    for page in structure["pages"]:
+        page_area = page["width"] * page["height"]
+        if page_area <= 0:
+            continue
+        page_rect = fitz.Rect(0, 0, page["width"], page["height"])
+        for image in page["raster_images"]:
+            xref = image.get("xref")
+            covered_fraction = (
+                fitz.Rect(image["bbox"]) & page_rect
+            ).get_area() / page_area
+            if isinstance(xref, int) and xref > 0 and covered_fraction >= 0.9:
+                pages_by_xref.setdefault(xref, set()).add(page["input_page"])
+    return {xref for xref, pages in pages_by_xref.items() if len(pages) > 1}
+
+
+def _classify_page(
+    page: dict[str, Any],
+    document_type: str = "unit",
+    magazine_contents_page: int | None = None,
+    repeated_full_page_xrefs: set[int] | None = None,
+) -> tuple[str, list[str]]:
     lines = [line for block in page["text_blocks"] for line in block["lines"]]
     text = " ".join(line["text"].strip() for line in lines).strip()
-    page_area = page["width"] * page["height"]
-    largest_image_fraction = max(
-        (
-            fitz.Rect(image["bbox"]).get_area() / page_area
-            for image in page["raster_images"]
-            if page_area > 0
-        ),
-        default=0,
+    raster_coverage_fraction = _raster_coverage_fraction(page)
+    word_count = sum(len(line["text"].split()) for line in lines)
+    uses_repeated_background = any(
+        image.get("xref") in (repeated_full_page_xrefs or set())
+        for image in page["raster_images"]
     )
-    if largest_image_fraction >= 0.72 and len(lines) <= 12 and len(text) <= 500:
+    if document_type == "magazine-issue" and page["input_page"] == 1:
+        return "cover", ["The first page of the magazine issue is the cover."]
+    if (
+        document_type == "magazine-issue"
+        and magazine_contents_page is not None
+        and 1 < page["input_page"] < magazine_contents_page
+        and len(lines) <= 12
+        and len(text) <= 500
+    ):
         return "full-page-advertisement", [
-            "A raster image covers most of the page and little text is present."
+            "The sparse full page occurs between the magazine cover and contents."
+        ]
+    if (
+        raster_coverage_fraction >= 0.45
+        and word_count <= 150
+        and not uses_repeated_background
+    ):
+        return "full-page-advertisement", [
+            "Raster imagery dominates the page and the page has little text, without "
+            "a repeated full-page editorial background."
         ]
     if len(lines) >= 3 or len(text) >= 80:
         return "normal", ["The page contains substantial extractable text."]
@@ -1318,6 +1401,7 @@ def _candidate_starts(
     document_type: str,
     structure: dict[str, Any],
     signals: list[dict[str, Any]],
+    repeated_full_page_xrefs: set[int] | None = None,
 ) -> list[dict[str, Any]]:
     candidates: dict[int, dict[str, Any]] = {}
     if document_type == "book":
@@ -1366,11 +1450,44 @@ def _candidate_starts(
                     )
     elif document_type == "magazine-issue":
         seen_titles = set()
+        contents_page = next(
+            (
+                page["input_page"]
+                for page, signal in zip(structure["pages"], signals)
+                if signal.get("contents_pattern")
+            ),
+            None,
+        )
         for page, signal in zip(structure["pages"], signals):
+            number = page["input_page"]
+            page_type, _ = _classify_page(
+                page,
+                document_type,
+                magazine_contents_page=contents_page,
+                repeated_full_page_xrefs=repeated_full_page_xrefs,
+            )
+            if page_type in {"cover", "full-page-advertisement"}:
+                candidates[number] = {
+                    "input_page": number,
+                    "title": signal["title"],
+                    "type": page_type,
+                    "evidence": [f"magazine {page_type} page"],
+                    "y": 0,
+                }
+                continue
+            if signal.get("contents_pattern"):
+                candidates[number] = {
+                    "input_page": number,
+                    "title": signal["title"],
+                    "type": "table-of-contents",
+                    "evidence": ["magazine contents heading"],
+                    "y": 0,
+                }
+                continue
             title_key = signal["title"].casefold()
             if signal["prominent_title"] and title_key not in seen_titles:
-                candidates[page["input_page"]] = {
-                    "input_page": page["input_page"],
+                candidates[number] = {
+                    "input_page": number,
                     "title": signal["title"],
                     "evidence": ["large magazine article title typography"],
                     "y": 0,
@@ -1424,6 +1541,66 @@ def _candidate_starts(
     return sorted(candidates.values(), key=lambda item: item["input_page"])
 
 
+def _add_advertisement_boundaries(
+    candidates: list[dict[str, Any]],
+    document_type: str,
+    structure: dict[str, Any],
+    signals: list[dict[str, Any]],
+    repeated_full_page_xrefs: set[int],
+) -> list[dict[str, Any]]:
+    by_page = {candidate["input_page"]: candidate for candidate in candidates}
+    contents_page = (
+        next(
+            (
+                page["input_page"]
+                for page, signal in zip(structure["pages"], signals)
+                if signal.get("contents_pattern")
+            ),
+            None,
+        )
+        if document_type == "magazine-issue"
+        else None
+    )
+    advertisement_pages = {
+        page["input_page"]
+        for page in structure["pages"]
+        if _classify_page(
+            page,
+            document_type,
+            contents_page,
+            repeated_full_page_xrefs,
+        )[0]
+        == "full-page-advertisement"
+    }
+    for number in advertisement_pages:
+        by_page[number] = {
+            "input_page": number,
+            "title": signals[number - 1]["title"],
+            "type": "full-page-advertisement",
+            "evidence": ["full-page advertisement"],
+            "y": 0,
+        }
+    for number in advertisement_pages:
+        following_page = number + 1
+        if (
+            following_page > len(structure["pages"])
+            or following_page in advertisement_pages
+        ):
+            continue
+        if following_page in by_page:
+            evidence = by_page[following_page]["evidence"]
+            if "page after full-page advertisement" not in evidence:
+                evidence.append("page after full-page advertisement")
+        else:
+            by_page[following_page] = {
+                "input_page": following_page,
+                "title": signals[following_page - 1]["title"],
+                "evidence": ["page after full-page advertisement"],
+                "y": 0,
+            }
+    return sorted(by_page.values(), key=lambda item: item["input_page"])
+
+
 def partition_container(pdf_path: Path, requested_type: str) -> dict[str, Any]:
     """Create conservative whole-page unit proposals with review evidence."""
     if requested_type not in {
@@ -1450,13 +1627,28 @@ def partition_container(pdf_path: Path, requested_type: str) -> dict[str, Any]:
         if document_type == "unknown":
             warnings.append("Document type is uncertain and requires review.")
 
+    repeated_full_page_xrefs = _repeated_full_page_image_xrefs(structure)
+
     if document_type in {"unit", "unknown"}:
-        candidates = _candidate_starts("unit", structure, signals)[:1]
+        candidates = _candidate_starts(
+            "unit", structure, signals, repeated_full_page_xrefs
+        )[:1]
     else:
-        candidates = _candidate_starts(document_type, structure, signals)
+        candidates = _candidate_starts(
+            document_type, structure, signals, repeated_full_page_xrefs
+        )
     if document_type == "magazine-issue":
         signals = [_magazine_signals(page) for page in structure["pages"]]
-        candidates = _candidate_starts(document_type, structure, signals)
+        candidates = _candidate_starts(
+            document_type, structure, signals, repeated_full_page_xrefs
+        )
+    candidates = _add_advertisement_boundaries(
+        candidates,
+        document_type,
+        structure,
+        signals,
+        repeated_full_page_xrefs,
+    )
     confirmed_starts = []
     suspected_shared = []
     for candidate in candidates:
@@ -1494,10 +1686,13 @@ def partition_container(pdf_path: Path, requested_type: str) -> dict[str, Any]:
             {
                 "id": f"unit-{offset + 1:03d}",
                 "title": candidate["title"],
-                "type": _unit_type(
-                    document_type,
-                    candidate,
-                    signals[candidate["input_page"] - 1],
+                "type": candidate.get(
+                    "type",
+                    _unit_type(
+                        document_type,
+                        candidate,
+                        signals[candidate["input_page"] - 1],
+                    ),
                 ),
                 "input_pages": {"start": start, "end": end},
                 "doi": _unit_doi_candidates(structure, start, end),
@@ -1506,8 +1701,21 @@ def partition_container(pdf_path: Path, requested_type: str) -> dict[str, Any]:
             }
         )
     pages = []
+    magazine_contents_page = next(
+        (
+            page["input_page"]
+            for page, signal in zip(structure["pages"], signals)
+            if signal.get("contents_pattern")
+        ),
+        None,
+    )
     for page, signal in zip(structure["pages"], signals):
-        page_type, page_type_evidence = _classify_page(page)
+        page_type, page_type_evidence = _classify_page(
+            page,
+            document_type,
+            magazine_contents_page=magazine_contents_page,
+            repeated_full_page_xrefs=repeated_full_page_xrefs,
+        )
         input_page = page["input_page"]
         page_unit_ids = [
             unit["id"]

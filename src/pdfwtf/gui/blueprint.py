@@ -671,6 +671,7 @@ def create_gui_blueprint() -> Blueprint:
         source = _input_dir() / job_id / "source.pdf"
         options = {
             "pdf_type": pdf_type,
+            "ocrlib": "ocrmypdf",
             "languages": languages,
             "remove_background_flag": (
                 pdf_type != "born-digital"

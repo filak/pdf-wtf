@@ -196,6 +196,173 @@ def test_partition_detects_full_page_advertisement(tmp_path):
     assert partition["pages"][0]["figures"][0]["bbox"] == [0.0, 0.0, 400.0, 500.0]
 
 
+def test_partition_detects_advertisement_from_combined_raster_coverage(tmp_path):
+    source = tmp_path / "tiled-advertisement.pdf"
+    left_image = io.BytesIO()
+    right_image = io.BytesIO()
+    Image.new("RGB", (200, 500), "navy").save(left_image, format="PNG")
+    Image.new("RGB", (200, 500), "gold").save(right_image, format="PNG")
+    with fitz.open() as document:
+        page = document.new_page(width=400, height=500)
+        page.insert_image(fitz.Rect(0, 0, 200, 500), stream=left_image.getvalue())
+        page.insert_image(fitz.Rect(200, 0, 400, 500), stream=right_image.getvalue())
+        for number in range(20):
+            page.insert_text((20, 20 + number * 20), f"Offer number {number}")
+        document.save(source)
+
+    partition = partition_container(source, "book")
+
+    assert partition["pages"][0]["page_type"] == "full-page-advertisement"
+    assert partition["pages"][0]["page_type_evidence"] == [
+        "Raster imagery dominates the page and the page has little text, without "
+        "a repeated full-page editorial background."
+    ]
+
+
+def test_top_image_with_title_and_bullets_is_advertisement(tmp_path):
+    source = tmp_path / "top-image-advertisement.pdf"
+    image = io.BytesIO()
+    Image.new("RGB", (400, 300), "navy").save(image, format="PNG")
+    with fitz.open() as document:
+        page = document.new_page(width=400, height=500)
+        page.insert_image(fitz.Rect(0, 0, 400, 300), stream=image.getvalue())
+        page.insert_text((30, 350), "SPECIAL OFFER", fontsize=24)
+        page.insert_text((30, 390), "- First benefit", fontsize=12)
+        page.insert_text((30, 415), "- Second benefit", fontsize=12)
+        document.save(source)
+
+    partition = partition_container(source, "unit")
+
+    assert partition["pages"][0]["page_type"] == "full-page-advertisement"
+
+
+def test_image_dominant_page_with_substantial_text_is_not_advertisement(tmp_path):
+    source = tmp_path / "top-image-article.pdf"
+    image = io.BytesIO()
+    Image.new("RGB", (400, 300), "navy").save(image, format="PNG")
+    with fitz.open() as document:
+        page = document.new_page(width=400, height=500)
+        page.insert_image(fitz.Rect(0, 0, 400, 300), stream=image.getvalue())
+        page.insert_textbox(
+            fitz.Rect(20, 305, 380, 495),
+            " ".join(f"editorial{number}" for number in range(160)),
+            fontsize=7,
+        )
+        document.save(source)
+
+    partition = partition_container(source, "unit")
+
+    assert partition["pages"][0]["page_type"] == "normal"
+
+
+def test_repeated_full_page_background_is_not_advertisement(tmp_path):
+    source = tmp_path / "editorial-background.pdf"
+    image = io.BytesIO()
+    Image.new("RGB", (400, 500), "navy").save(image, format="PNG")
+    with fitz.open() as document:
+        for title in ("Photo essay", "Continuation"):
+            page = document.new_page(width=400, height=500)
+            page.insert_image(page.rect, stream=image.getvalue())
+            page.insert_text((30, 50), title, fontsize=24, color=(1, 1, 1))
+        document.save(source)
+
+    partition = partition_container(source, "unit")
+
+    assert [page["page_type"] for page in partition["pages"]] == [
+        "unknown",
+        "unknown",
+    ]
+
+
+def test_overlapping_raster_areas_count_once_for_advertisement(tmp_path):
+    source = tmp_path / "overlapping-images.pdf"
+    image = io.BytesIO()
+    Image.new("RGB", (300, 300), "navy").save(image, format="PNG")
+    with fitz.open() as document:
+        page = document.new_page(width=400, height=500)
+        rectangle = fitz.Rect(60, 100, 340, 400)
+        page.insert_image(rectangle, stream=image.getvalue())
+        page.insert_image(rectangle, stream=image.getvalue())
+        document.save(source)
+
+    partition = partition_container(source, "proceedings")
+
+    assert partition["pages"][0]["page_type"] == "unknown"
+
+
+@pytest.mark.parametrize(
+    "document_type", ["unit", "book", "journal-issue", "proceedings", "auto"]
+)
+def test_full_page_advertisement_is_a_single_page_unit(tmp_path, document_type):
+    source = tmp_path / f"advertisement-boundary-{document_type}.pdf"
+    image = io.BytesIO()
+    Image.new("RGB", (400, 500), "navy").save(image, format="PNG")
+    with fitz.open() as document:
+        first = document.new_page(width=400, height=500)
+        first.insert_text((30, 50), "Text before advertisement", fontsize=18)
+        advertisement = document.new_page(width=400, height=500)
+        advertisement.insert_image(advertisement.rect, stream=image.getvalue())
+        following = document.new_page(width=400, height=500)
+        following.insert_text((30, 50), "Text after advertisement", fontsize=18)
+        document.save(source)
+
+    partition = partition_container(source, document_type)
+
+    assert [unit["input_pages"] for unit in partition["units"]] == [
+        {"start": 1, "end": 1},
+        {"start": 2, "end": 2},
+        {"start": 3, "end": 3},
+    ]
+    assert partition["units"][1]["type"] == "full-page-advertisement"
+    assert (
+        "page after full-page advertisement"
+        in partition["units"][2]["boundary_evidence"]
+    )
+
+
+def test_magazine_front_matter_detects_cover_advertisement_and_contents(tmp_path):
+    source = tmp_path / "magazine-front-matter.pdf"
+    with fitz.open() as document:
+        cover = document.new_page(width=400, height=500)
+        cover.insert_text((30, 80), "MAGAZINE", fontsize=42)
+        cover.insert_text((30, 140), "Stories and photographs", fontsize=18)
+        advertisement = document.new_page(width=400, height=500)
+        advertisement.insert_text((30, 100), "CYCLING EXPO", fontsize=36)
+        advertisement.insert_text((30, 160), "www.example.test", fontsize=16)
+        contents = document.new_page(width=400, height=500)
+        contents.insert_text((30, 50), "Z OBSAHU", fontsize=24)
+        contents.insert_text((30, 100), "First story ........ 4", fontsize=12)
+        contents.insert_text((30, 125), "Second story ........ 8", fontsize=12)
+        article = document.new_page(width=400, height=500)
+        article.insert_text((30, 50), "First story", fontsize=30)
+        for number in range(12):
+            article.insert_text(
+                (30, 100 + number * 20),
+                "Magazine article body text for the reader.",
+                fontsize=10,
+            )
+        document.save(source)
+
+    partition = partition_container(source, "magazine-issue")
+
+    assert [page["page_type"] for page in partition["pages"][:3]] == [
+        "cover",
+        "full-page-advertisement",
+        "normal",
+    ]
+    assert [unit["input_pages"]["start"] for unit in partition["units"]] == [
+        1,
+        2,
+        3,
+        4,
+    ]
+    assert [unit["type"] for unit in partition["units"][:3]] == [
+        "cover",
+        "full-page-advertisement",
+        "table-of-contents",
+    ]
+
+
 def test_plan_allows_gaps_and_exports_only_selected_ranges(tmp_path):
     source = make_structured_pdf(tmp_path / "source.pdf", 4)
     plan = reviewed_plan(

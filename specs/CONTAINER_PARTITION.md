@@ -219,6 +219,17 @@ produce `unknown`. An uncertain result requires review.
 the absolute 1-based input index. `printed_page_number` is a string or `null`.
 `page_type` is `normal`, `full-page-advertisement`, `cover`, or `unknown`.
 `page_type_evidence` explains the machine proposal.
+A page is proposed as `full-page-advertisement` for every `document_type` when
+raster imagery covers at least 45 percent of the page and the page contains no
+more than 150 extracted words. Combined raster coverage uses the clipped union
+of the images, so overlapping areas count once. A raster image that covers at
+least 90 percent of a page and is reused on another page is treated as an
+editorial background, not advertisement evidence. This excludes sparse title
+pages in a visually continuous article. Magazine cover classification takes
+precedence for the first page of a magazine issue.
+Each detected full-page advertisement is proposed as a one-page unit. The page
+after it starts a new unit. Consecutive full-page advertisements are separate
+one-page units.
 
 `main_title`, section titles, figures, and captions use `coordinate_system`.
 Rectangles contain finite coordinates in the order `[x0, y0, x1, y1]`.

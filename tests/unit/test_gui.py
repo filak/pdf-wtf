@@ -1610,6 +1610,7 @@ def test_preparation_changes_active_pdf_and_invalidates_plan(
         status = client.get(f"/jobs/{job_id}/prepare/status")
         assert status.status_code == 200
         assert status.headers["HX-Refresh"] == "true"
+        assert scan_tools_mocked[0]["ocrlib"] == "ocrmypdf"
         assert scan_tools_mocked[0]["lang"] == "eng+ces"
         prepared = source.parent / "prepared.pdf"
         assert prepared.is_file()
