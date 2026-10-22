@@ -320,6 +320,8 @@ uv run --locked pdfwtf export /data/out/issue.prepared.pdf --plan issue.plan.jso
 ```
 
 Repeat `--unit_type` to select several types.
+Each exported unit also has a UTF-8 `<unit-id>.txt` file with existing PDF text
+from its selected pages. Unit text files are included in the GUI ZIP.
 For schemas, output filenames, and partitioning limits, see the
 [container partitioning specification](specs/CONTAINER_PARTITION.md).
 

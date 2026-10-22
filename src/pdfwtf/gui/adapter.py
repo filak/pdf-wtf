@@ -641,7 +641,7 @@ class DemoPartitionAdapter:
                         )
                     for file in debug_files:
                         bundle.write(file, file.name)
-                archive.replace(destination / "export.zip")
+                replace_file(archive, destination / "export.zip")
         except Exception:
             logging.getLogger(__name__).exception(
                 "GUI export failed", extra={"job_id": job_id}

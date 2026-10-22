@@ -582,6 +582,46 @@ def test_plan_allows_gaps_and_exports_only_selected_ranges(tmp_path):
     assert not (destination / "not-selected.metadata.json").exists()
 
 
+@pytest.mark.parametrize("include_pdf", [False, True])
+def test_unit_text_uses_selected_pages_and_is_linked_in_manifest(tmp_path, include_pdf):
+    source = make_structured_pdf(tmp_path / "source.pdf", 4)
+    plan = reviewed_plan(
+        source,
+        [unit("one", 1, 3), unit("two", 3, 3), unit("removed", 4, 4, selected=False)],
+    )
+    plan["pages"][1]["selected"] = False
+    selected = validate_plan(plan, source)
+    destination = tmp_path / "units"
+    export_units(
+        source, plan, selected, destination, include_html=False, include_pdf=include_pdf
+    )
+    manifest = json.loads((destination / "manifest.json").read_text("utf-8"))
+    with fitz.open(source) as document:
+        for entry, pages in zip(manifest["units"], [[1, 3], [3]], strict=True):
+            assert entry["text"] == f"{entry['id']}.txt"
+            assert (destination / entry["text"]).read_text("utf-8") == "\n\n".join(
+                document[page - 1].get_text("text") for page in pages
+            )
+    assert not (destination / "removed.txt").exists()
+
+
+def test_unit_text_preserves_unicode_and_writes_empty_text_file(tmp_path):
+    source = tmp_path / "source.pdf"
+    with fitz.open() as document:
+        document.new_page().insert_text((72, 72), "Caf\u00e9 r\u00e9sum\u00e9")
+        document.new_page()
+        document.save(source)
+    plan = reviewed_plan(source, [unit("unicode", 1, 1), unit("empty", 2, 2)])
+    destination = tmp_path / "units"
+    export_units(
+        source, plan, validate_plan(plan, source), destination, include_html=False
+    )
+    assert (destination / "unicode.txt").read_text(
+        "utf-8"
+    ) == "Caf\u00e9 r\u00e9sum\u00e9\n"
+    assert (destination / "empty.txt").read_bytes() == b""
+
+
 def test_export_writes_unit_doi_to_manifest_and_metadata(tmp_path):
     source = make_structured_pdf(tmp_path / "source.pdf", 2)
     first = {**unit("first", 1, 1), "doi": ["10.1234/first"]}
@@ -1738,7 +1778,7 @@ def test_html_export_normalizes_rendered_fragment_when_requested(tmp_path, monke
     destination = tmp_path / "units"
     monkeypatch.setattr(
         "pdfwtf.container_partition.normalize_extracted_html",
-        lambda _html: NormalizationResult("<p>Normalized HTML.</p>"),
+        lambda _html, **_options: NormalizationResult("<p>Normalized HTML.</p>"),
     )
 
     export_units(
@@ -1771,3 +1811,49 @@ def test_html_export_does_not_normalize_by_default(tmp_path, monkeypatch):
         tmp_path / "units",
         include_html=True,
     )
+
+
+@pytest.mark.parametrize("normalize_html", [False, True])
+@pytest.mark.parametrize("source_title", [False, True])
+def test_saved_plan_renders_sections_as_h2_and_preserves_main_titles(
+    tmp_path, normalize_html, source_title
+):
+    source = tmp_path / "issue.pdf"
+    with fitz.open() as document:
+        for _ in range(2):
+            page = document.new_page(width=400, height=500)
+            if source_title:
+                page.insert_text((30, 35), "Original title line one", fontsize=10)
+                page.insert_text((30, 60), "Original title line two", fontsize=10)
+            page.insert_text((30, 110), "Original section title", fontsize=14)
+            page.insert_text((30, 150), "Body prose must remain in the export.")
+        document.save(source)
+    plan = reviewed_plan(source, [unit("article", 1, 2)], "journal-issue")
+    for number, page in enumerate(plan["pages"], start=1):
+        page["main_title"] = {
+            "text": f"Saved title {number} <&>",
+            "bbox": [30, 20, 350, 70],
+        }
+        page["sections"] = [
+            {
+                "title": "Saved section title",
+                "level": number,
+                "bbox": [30, 90, 350, 120],
+            }
+        ]
+    destination = tmp_path / "units"
+    export_units(
+        source,
+        plan,
+        validate_plan(plan, source),
+        destination,
+        include_html=True,
+        normalize_html=normalize_html,
+    )
+    html = (destination / "article.html").read_text(encoding="utf-8")
+    for number in (1, 2):
+        assert html.count(f"<h1>Saved title {number} &lt;&amp;&gt;</h1>") == 1
+    assert "Original title" not in html
+    assert "Original section title" not in html
+    assert html.count("<h2>Saved section title</h2>") == 2
+    assert html.count("Body prose must remain in the export.") == 2

@@ -122,7 +122,7 @@ def normalize_extracted_html(
 
     Add ``data-no-merge`` to a paragraph or ancestor to preserve its contents
     and paragraph boundary. ``protected_selector`` extends those protections.
-    Does not infer headings, remove headers/footers, or reorder text.
+    Does not infer or change heading levels, remove headers/footers, or reorder text.
     """
     if short_paragraph_chars < 1 or max_paragraph_chars < 1:
         raise ValueError("Paragraph length limits must be positive")
@@ -160,14 +160,6 @@ def normalize_extracted_html(
             return left[:-1], right, ""
         uncertain.append(f"Kept uncertain hyphen: {a.group(1)}- + {b.group(1)}")
         return left, right, ""
-
-    # Heading levels are document-wide, excluding explicitly protected subtrees.
-    first_heading = True
-    for heading in soup.find_all(re.compile(r"^h[1-6]$")):
-        if heading.name == "h1" and not first_heading and not blocked(heading):
-            heading.name = "h2"
-            changes.append("Converted a later h1 to h2")
-        first_heading = False
 
     # Resolve line-end hyphens before collapsing source newlines.
     for node in list(soup.find_all(string=True)):
