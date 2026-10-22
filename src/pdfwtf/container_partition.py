@@ -968,11 +968,27 @@ def _magazine_signals(page: dict[str, Any]) -> dict[str, Any]:
         max(line["bbox"][2] for line in cluster),
         max(line["bbox"][3] for line in cluster),
     ]
+    following_column_lines = [
+        line
+        for block in page["text_blocks"]
+        if block["bbox"][2] - block["bbox"][0] <= page["width"] * 0.4
+        and block["bbox"][0] < bbox[2]
+        and bbox[0] < block["bbox"][2]
+        and block["bbox"][1] <= bbox[3] + largest * 2
+        and block["bbox"][3] >= bbox[1]
+        for line in block["lines"]
+        if line not in cluster and line["bbox"][1] >= bbox[1] and line["text"].strip()
+    ]
+    embedded_column_heading = (
+        bbox[2] - bbox[0] <= page["width"] * 0.35 and len(following_column_lines) >= 2
+    )
     signal.update(
         title=" ".join(line["text"] for line in cluster),
         title_bbox=bbox,
         title_y=bbox[1],
-        prominent_title=largest >= 24 and largest >= body_size * 1.8,
+        prominent_title=(
+            largest >= 24 and largest >= body_size * 1.8 and not embedded_column_heading
+        ),
         contents_pattern=contents_pattern,
     )
     return signal
@@ -1484,8 +1500,33 @@ def _candidate_starts(
                     "y": 0,
                 }
                 continue
+            word_count = sum(
+                len(line["text"].split())
+                for block in page["text_blocks"]
+                for line in block["lines"]
+            )
+            uses_repeated_background = any(
+                image.get("xref") in (repeated_full_page_xrefs or set())
+                for image in page["raster_images"]
+            )
+            if (
+                uses_repeated_background
+                and word_count <= 20
+                and signal["title_y"] <= page["height"] * 0.15
+            ):
+                candidates[number] = {
+                    "input_page": number,
+                    "title": signal["title"],
+                    "evidence": ["sparse editorial title page"],
+                    "y": signal["title_y"],
+                }
+                continue
             title_key = signal["title"].casefold()
-            if signal["prominent_title"] and title_key not in seen_titles:
+            if (
+                signal["prominent_title"]
+                and signal["title_y"] <= page["height"] * 0.65
+                and title_key not in seen_titles
+            ):
                 candidates[number] = {
                     "input_page": number,
                     "title": signal["title"],

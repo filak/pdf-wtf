@@ -230,6 +230,14 @@ precedence for the first page of a magazine issue.
 Each detected full-page advertisement is proposed as a one-page unit. The page
 after it starts a new unit. Consecutive full-page advertisements are separate
 one-page units.
+For magazine issues, a prominent title in the bottom 35 percent of a page does
+not start a unit. A sparse title page with a repeated full-page editorial
+background can start a unit when its title occurs within the top 15 percent of
+the page.
+A large line does not start a magazine unit when it occupies at most 35 percent
+of the page width and continues into at least two smaller lines in the same
+narrow text block. This pattern is an embedded column heading, such as a person
+profile, rather than a standalone title.
 
 `main_title`, section titles, figures, and captions use `coordinate_system`.
 Rectangles contain finite coordinates in the order `[x0, y0, x1, y1]`.

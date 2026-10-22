@@ -363,6 +363,54 @@ def test_magazine_front_matter_detects_cover_advertisement_and_contents(tmp_path
     ]
 
 
+def test_magazine_bottom_title_does_not_absorb_next_page(tmp_path):
+    source = tmp_path / "magazine-bottom-title.pdf"
+    with fitz.open() as document:
+        first = document.new_page(width=400, height=500)
+        first.insert_text((30, 50), "Current article", fontsize=28)
+        first.insert_text((30, 100), "Body text for the current article.", fontsize=12)
+        bottom = document.new_page(width=400, height=500)
+        bottom.insert_text((30, 440), "Small section", fontsize=28)
+        following = document.new_page(width=400, height=500)
+        following.insert_text((30, 50), "Next article", fontsize=28)
+        following.insert_text((30, 100), "Body text for the next article.", fontsize=12)
+        document.save(source)
+
+    partition = partition_container(source, "magazine-issue")
+
+    assert [unit["input_pages"] for unit in partition["units"]] == [
+        {"start": 1, "end": 2},
+        {"start": 3, "end": 3},
+    ]
+    assert partition["suspected_shared_page_boundaries"] == []
+
+
+def test_magazine_profile_heading_in_column_does_not_start_unit(tmp_path):
+    source = tmp_path / "magazine-column-profile.pdf"
+    with fitz.open() as document:
+        first = document.new_page(width=600, height=800)
+        first.insert_text((30, 60), "Main article", fontsize=36)
+        first.insert_text((30, 110), "Article body text continues.", fontsize=12)
+        profile = document.new_page(width=600, height=800)
+        profile.insert_htmlbox(
+            fitz.Rect(390, 50, 560, 180),
+            "<div><span style='font-size:27pt'>Marek Svoboda</span><br>"
+            "born: 1998<br>education: logistics<br>location: Prague</div>",
+        )
+        profile.insert_text((30, 100), "The interview continues here.", fontsize=12)
+        following = document.new_page(width=600, height=800)
+        following.insert_text((30, 60), "Following article", fontsize=36)
+        following.insert_text((30, 110), "New article body text.", fontsize=12)
+        document.save(source)
+
+    partition = partition_container(source, "magazine-issue")
+
+    assert [unit["input_pages"] for unit in partition["units"]] == [
+        {"start": 1, "end": 2},
+        {"start": 3, "end": 3},
+    ]
+
+
 def test_plan_allows_gaps_and_exports_only_selected_ranges(tmp_path):
     source = make_structured_pdf(tmp_path / "source.pdf", 4)
     plan = reviewed_plan(
