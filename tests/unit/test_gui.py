@@ -960,10 +960,10 @@ def test_export_button_works_without_plan_and_modal_defaults_off(gui_app, make_p
     client, job_id, _plan = _saved_export_job(gui_app, make_pdf)
     listing = client.get("/").get_data(as_text=True)
     assert f'data-export-url="/jobs/{job_id}/export"' in listing
-    assert 'id="export-no-pdf-out"' in listing
+    assert 'id="export-no-pdf-out"' not in listing
     assert 'id="export-get-html"' in listing
     for control in (
-        "export-no-pdf-out",
+        "export-get-img",
         "export-get-html",
         "export-get-meta",
         "export-include-source",
@@ -980,13 +980,13 @@ def test_export_button_works_without_plan_and_modal_defaults_off(gui_app, make_p
     assert "Export the whole PDF as one unit." in listing
 
 
-@pytest.mark.parametrize("no_pdf_out", [False, True])
+@pytest.mark.parametrize("get_img", [False, True])
 @pytest.mark.parametrize("get_html", [False, True])
 @pytest.mark.parametrize("include_source", [False, True])
 @pytest.mark.parametrize("debug", [False, True])
 @pytest.mark.parametrize("get_meta", [False, True])
 def test_saved_plan_export_downloads_selected_results(
-    gui_app, make_pdf, no_pdf_out, get_html, include_source, debug, get_meta
+    gui_app, make_pdf, get_img, get_html, include_source, debug, get_meta
 ):
     from zipfile import ZipFile
     import pymupdf
@@ -1003,7 +1003,7 @@ def test_saved_plan_export_downloads_selected_results(
         response = client.post(
             f"/jobs/{job_id}/export",
             json={
-                "no_pdf_out": no_pdf_out,
+                "get_img": get_img,
                 "get_html": get_html,
                 "get_meta": get_meta,
                 "include_source": include_source,
@@ -1031,7 +1031,13 @@ def test_saved_plan_export_downloads_selected_results(
                 assert bundle.read("source.pdf") == original_path.read_bytes()
             assert all(not name.startswith("_units_source/") for name in names)
             assert "reviewed.pdf" not in names
-            assert ("_units/reviewed.pdf" in names) is not no_pdf_out
+            assert "_units/reviewed.pdf" in names
+            assert all(not name.startswith("_images_source/") for name in names)
+            images = [name for name in names if name.startswith("_images/")]
+            if get_img:
+                assert images == ["_images/page_001.png", "_images/page_002.png"]
+            else:
+                assert images == []
             manifest = json.loads(bundle.read("_units/manifest.json"))
             upload_path = home / "instance/_data/in" / job_id / "upload.json"
             assert manifest["upload"] == json.loads(
@@ -1041,19 +1047,15 @@ def test_saved_plan_export_downloads_selected_results(
             assert keys[keys.index("kind") + 1] == "upload"
             assert manifest["created"].endswith("Z")
             assert datetime.fromisoformat(manifest["created"]).tzinfo == UTC
-            if no_pdf_out:
-                assert "pdf" not in manifest["units"][0]
-            else:
-                assert manifest["units"][0]["pdf"] == "reviewed.pdf"
-            if not no_pdf_out:
-                with pymupdf.open(
-                    stream=bundle.read("_units/reviewed.pdf"), filetype="pdf"
-                ) as pdf:
-                    assert pdf.page_count == 1
-                    source = home / "instance/_data/in" / job_id / "source.pdf"
-                    with pymupdf.open(source) as original:
-                        assert original.page_count == 2
-                        assert pdf[0].get_text() == original[0].get_text()
+            assert manifest["units"][0]["pdf"] == "reviewed.pdf"
+            with pymupdf.open(
+                stream=bundle.read("_units/reviewed.pdf"), filetype="pdf"
+            ) as pdf:
+                assert pdf.page_count == 1
+                source = home / "instance/_data/in" / job_id / "source.pdf"
+                with pymupdf.open(source) as original:
+                    assert original.page_count == 2
+                    assert pdf[0].get_text() == original[0].get_text()
             assert ("_units/reviewed.html" in names) is get_html
             metadata_files = [name for name in names if name.endswith(".metadata.json")]
             assert bool(metadata_files) is get_meta

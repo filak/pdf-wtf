@@ -75,9 +75,9 @@ class ExportAdapter(Protocol):
         source: Path,
         plan: dict[str, Any] | None,
         *,
-        no_pdf_out: bool = False,
         get_html: bool = False,
         get_meta: bool = False,
+        get_img: bool = False,
         include_source: bool = False,
         debug: bool = False,
         llm_tasks: tuple[str, ...] = (),
@@ -343,9 +343,9 @@ class DemoPartitionAdapter:
         source: Path,
         plan: dict[str, Any] | None,
         *,
-        no_pdf_out: bool = False,
         get_html: bool = False,
         get_meta: bool = False,
+        get_img: bool = False,
         include_source: bool = False,
         debug: bool = False,
         llm_tasks: tuple[str, ...] = (),
@@ -369,7 +369,7 @@ class DemoPartitionAdapter:
                 job_id,
                 source,
                 snapshot,
-                no_pdf_out,
+                get_img,
                 get_html,
                 include_source,
                 debug,
@@ -550,7 +550,7 @@ class DemoPartitionAdapter:
         job_id: str,
         source: Path,
         plan: dict[str, Any] | None,
-        no_pdf_out: bool,
+        get_img: bool,
         get_html: bool,
         include_source: bool,
         debug: bool,
@@ -600,7 +600,8 @@ class DemoPartitionAdapter:
                     source,
                     results,
                     plan_path=plan_path,
-                    export_unit_pdfs_flag=not no_pdf_out,
+                    export_unit_pdfs_flag=True,
+                    export_images_flag=get_img,
                     export_html_normalized_flag=get_html,
                     unit_doi_flag=True,
                     config=self._config,
@@ -619,6 +620,8 @@ class DemoPartitionAdapter:
                         enriched_manifest["upload"] = upload
                 write_json_document(enriched_manifest, manifest_path)
                 units.rename(results / "_units")
+                if get_img:
+                    (results / f"_images_{source.stem}").rename(results / "_images")
                 archive = workspace / "export.zip"
                 with ZipFile(archive, "w", compression=ZIP_DEFLATED) as bundle:
                     for file in sorted(results.rglob("*")):

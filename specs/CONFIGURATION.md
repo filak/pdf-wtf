@@ -280,15 +280,15 @@ The demo adapter runs the shared export operation on the active PDF. It
 does not run cleanup or OCR.
 Each export uses an isolated results directory. It publishes
 `<output_dir>/<job-id>/export.zip` after processing and ZIP creation succeed.
-The archive contains unit results. With `no-pdf-out` off, it also contains
+The archive contains unit results. It also contains
 one `<unit-id>.pdf` for each included unit, using its selected source pages.
+With `get-img` on, it contains one PNG image for each page in `_images`.
 Unit results use the `_units` directory inside the GUI ZIP. The manifest
 links each unit PDF with a `pdf` field. It always includes the complete
 `upload.json` object under `upload`, immediately after `kind`. Missing or
 invalid upload metadata causes export to fail. The archive excludes a
 combined document PDF. The GUI-only `include-source` switch adds the active
-PDF at the ZIP root, as `source.pdf` or `prepared.pdf`. It defaults to off and is independent
-of `no-pdf-out`. The export adapter accepts `include_source=False` as an
+PDF at the ZIP root, as `source.pdf` or `prepared.pdf`. It defaults to off. The export adapter accepts `include_source=False` as an
 optional keyword argument.
 A successful rerun replaces this archive. Temporary export files are removed
 after success or failure. Export status is held in memory and is not restored

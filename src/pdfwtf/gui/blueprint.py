@@ -431,9 +431,9 @@ def create_gui_blueprint() -> Blueprint:
             return jsonify(error=_("Select valid export options.")), 400
         llm_tasks = options.pop("llm_tasks", [])
         if set(options) - {
-            "no_pdf_out",
             "get_html",
             "get_meta",
+            "get_img",
             "include_source",
             "debug",
         } or any(not isinstance(value, bool) for value in options.values()):

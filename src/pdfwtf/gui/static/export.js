@@ -111,9 +111,9 @@ exportForm.addEventListener("submit", async (event) => {
   if (!exportUrl) return;
   const generation = exportGeneration;
   const options = {
-    no_pdf_out: exportForm.elements.no_pdf_out.checked,
     get_html: exportForm.elements.get_html.checked,
     get_meta: exportForm.elements.get_meta.checked,
+    get_img: exportForm.elements.get_img.checked,
     include_source: exportForm.elements.include_source.checked,
     debug: exportForm.elements.debug.checked,
   };

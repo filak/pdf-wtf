@@ -346,11 +346,10 @@ filename. Version `"1.3"` added optional LLM task fields to the manifest: a
 top-level `llm` object and a per-unit `llm_tasks` object. These fields occur only when
 LLM tasks were selected. `specs/PROJECT.md` defines them.
 
-GUI plan export can also write `<unit-id>.pdf` for each selected unit.
+GUI plan export also writes `<unit-id>.pdf` for each selected unit.
 The PDF contains only selected source pages inside that unit's reviewed range,
 in input order. Overlapping units each include their selected shared pages.
-Removed units produce no results. With `no-pdf-out` on, GUI export omits all
-unit PDFs. When a unit PDF is written, its manifest entry includes a `pdf`
+Removed units produce no results. Each unit manifest entry includes a `pdf`
 field with the filename. GUI export does not write a combined document PDF.
 Inside the GUI ZIP, unit results use `_units`. Its manifest always includes
 the complete upload metadata under `upload`, immediately after `kind`.

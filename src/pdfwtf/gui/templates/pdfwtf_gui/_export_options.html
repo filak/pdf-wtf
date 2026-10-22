@@ -40,6 +40,17 @@
                          class="form-text">{{ _("Include unit metadata JSON files in the ZIP.") }}</div>
                 </div>
                 <div class="form-check form-switch mt-2">
+                    <input id="export-get-img"
+                           name="get_img"
+                           class="form-check-input"
+                           type="checkbox"
+                           role="switch"
+                           aria-describedby="export-img-help">
+                    <label class="form-check-label" for="export-get-img">get-img</label>
+                    <div id="export-img-help"
+                         class="form-text">{{ _("Include a PNG image of each page in the ZIP.") }}</div>
+                </div>
+                <div class="form-check form-switch mt-2">
                     <input id="export-include-source"
                            name="include_source"
                            class="form-check-input"
@@ -48,16 +59,6 @@
                            aria-describedby="export-source-help">
                     <label class="form-check-label" for="export-include-source">include-source</label>
                     <div id="export-source-help" class="form-text">{{ _("Include the active PDF in the ZIP.") }}</div>
-                </div>
-                <div class="form-check form-switch mt-2">
-                    <input id="export-no-pdf-out"
-                           name="no_pdf_out"
-                           class="form-check-input"
-                           type="checkbox"
-                           role="switch"
-                           aria-describedby="export-no-pdf-help">
-                    <label class="form-check-label" for="export-no-pdf-out">no-pdf-out</label>
-                    <div id="export-no-pdf-help" class="form-text">{{ _("Do not write PDF for units.") }}</div>
                 </div>
                 <div class="form-check form-switch mt-2">
                     <input id="export-debug"

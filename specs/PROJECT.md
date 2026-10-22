@@ -318,23 +318,23 @@ with action `delete`.
 
 Export appears in each file row of the Process files list. Partitioning is
 optional. Without a saved plan, export uses the whole active PDF as one unit.
-With a saved plan for the active PDF, export uses that plan. Export opens a modal with five switches: `no-pdf-out`, `get-html`,
-`get-meta`, `include-source`, and `debug`. All switches start off each time the modal opens. With all
+With a saved plan for the active PDF, export uses that plan. Export opens a modal with five switches: `get-html`, `get-meta`, `get-img`,
+`include-source`, and `debug`. All switches start off each time the modal opens. With all
 switches off,
-export writes one PDF for each included unit and the manifest. `no-pdf-out`
-suppresses unit PDFs. `get-html` adds editorially normalized HTML for included
-units.
+export writes one PDF for each included unit and the manifest. Export always
+writes unit PDFs. `get-html` adds editorially normalized HTML for included
+units. `get-img` adds one PNG image for each page of the active PDF in
+`_images`, as `page_<NNN>.png`.
 `get-meta` adds unit `*.metadata.json` files. With `get-meta` off, the ZIP
 contains no unit metadata files and manifest `metadata` fields are `null`. Export uses existing PDF text
 and does not run OCR. The saved plan controls page and unit selection.
 The demo adapter runs export in the background. Download export downloads
-the results as `export.zip`. With `no-pdf-out` off, each included unit has
+the results as `export.zip`. Each included unit has
 a `<unit-id>.pdf` in `_units`. Each PDF uses that unit's reviewed range
 and selected source pages in input order. Shared pages appear in each included
 unit that contains them. The ZIP does not contain a combined document PDF.
 The GUI-only `include-source` switch adds the active PDF at the ZIP root,
-as `source.pdf` for the original PDF or `prepared.pdf` for the prepared PDF. This switch is independent of `no-pdf-out`.
-The `_units/manifest.json` file always includes the complete `upload.json`
+as `source.pdf` for the original PDF or `prepared.pdf` for the prepared PDF.The `_units/manifest.json` file always includes the complete `upload.json`
 object under `upload`, immediately after `kind`.
 When LLM tasks are available, the modal also shows one switch for each task.
 The switch label uses the task description in the current language, or
@@ -438,7 +438,7 @@ Compose file supports Docker Engine on Docker-capable hosts. Keep each
 development computer's Docker data independent.
 
 Use direct `uv run --locked <tool> ...` commands. Run verification commands
-separately. Use Black, Flake8, pytest, and pip-audit as specified in `AGENTS.md`.
+separately. Use Black, Flake8, pytest as specified in `AGENTS.md`.
 Place tests without external services in `tests/unit`. Put shared fixtures in
 `tests/conftest.py`. Existing scripts in `tests/misc` do not change this policy.
 

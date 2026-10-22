@@ -135,7 +135,6 @@ correlation identifier fields when available.
 - Check Python with Flake8.
 - After you change a Jinja template, run `uv run --locked djlint <template_path> --reformat`.
 - Use `pytest` for automated testing.
-- Use `pip-audit` for dependency vulnerability checks.
 - Add type annotations to new public functions.
 - Prefer `pathlib.Path` to `os.path`.
 - Use application factories where practical.
