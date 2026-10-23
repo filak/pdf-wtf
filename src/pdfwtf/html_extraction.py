@@ -172,7 +172,11 @@ def _export_heading_evidence(
 
 
 def _resolve_unit_headings(
-    blocks: list[dict[str, Any]], unit_title: str, body_size: float
+    blocks: list[dict[str, Any]],
+    unit_title: str,
+    body_size: float,
+    *,
+    reviewed_unit_title: bool = False,
 ) -> tuple[list[dict[str, Any]], list[str]]:
     """Merge wrapped automatic headings and assign hierarchy across pages."""
     merged: list[dict[str, Any]] = []
@@ -202,8 +206,44 @@ def _resolve_unit_headings(
     headings = [b for b in merged if b["kind"] == "heading"]
     automatic = [b for b in headings if not b.get("_reviewed")]
     title = None
-    if not any(b.get("_reviewed") and b["level"] == 1 for b in headings):
-        normalized_title = " ".join(unit_title.casefold().split())
+    normalized_title = " ".join(unit_title.casefold().split())
+    approved_title = next(
+        (
+            block
+            for block in headings
+            if " ".join(block["text"].casefold().split()) == normalized_title
+            and (reviewed_unit_title or _can_be_unit_title(block["text"]))
+        ),
+        None,
+    )
+    if reviewed_unit_title and approved_title is not None:
+        if not approved_title.get("_reviewed"):
+            approved_title["level"] = 1
+        title = approved_title
+    elif reviewed_unit_title and normalized_title:
+        first_page = next(b["input_page"] for b in merged if "input_page" in b)
+        insert_at = next(
+            (
+                index
+                for index, block in enumerate(merged)
+                if block["kind"] != "page_marker"
+            ),
+            len(merged),
+        )
+        merged.insert(
+            insert_at,
+            {
+                "kind": "heading",
+                "level": 1,
+                "text": unit_title,
+                "input_page": first_page,
+                "bbox": [0.0, 0.0, 0.0, 0.0],
+                "heading_evidence": ["approved plan unit title"],
+                "_style": (float("inf"), True),
+                "_reviewed": True,
+            },
+        )
+    elif not any(b.get("_reviewed") and b["level"] == 1 for b in headings):
         title = next(
             (
                 b
@@ -336,7 +376,7 @@ def _page_blocks_for_export(
         reviewed_headings.extend(
             {
                 "text": section["title"],
-                "level": section["level"],
+                "level": max(2, section["level"]),
                 "bbox": section["bbox"],
             }
             for section in reviewed_page.get("sections", [])
@@ -352,21 +392,50 @@ def _page_blocks_for_export(
                 page["input_page"]
             )
         )
+    heading_by_block: dict[int, dict[str, Any]] = {}
+    suppressed_heading_blocks: set[int] = set()
+    unmatched_reviewed_headings = []
+    for heading in reviewed_headings:
+        matching_indices = [
+            index
+            for index, block in enumerate(blocks)
+            if _bbox_matches(block["bbox"], heading["bbox"])
+            or _overlap_fraction(block["bbox"], heading["bbox"]) >= 0.8
+        ]
+        if matching_indices:
+            heading_by_block[matching_indices[0]] = heading
+            suppressed_heading_blocks.update(matching_indices[1:])
+        else:
+            unmatched_reviewed_headings.append(heading)
+    unmatched_reviewed_headings.sort(key=lambda heading: heading["bbox"][1])
+
+    def append_reviewed_heading(heading: dict[str, Any]) -> None:
+        semantic.append(
+            {
+                "kind": "heading",
+                "level": heading["level"],
+                "text": heading["text"],
+                "input_page": page["input_page"],
+                "bbox": heading["bbox"],
+                "heading_evidence": ["reviewed plan heading"],
+                "_style": (float("inf"), True),
+                "_reviewed": True,
+            }
+        )
+
     for item in _ordered_items(items, page):
+        while (
+            unmatched_reviewed_headings
+            and unmatched_reviewed_headings[0]["bbox"][1] <= item["bbox"][1]
+        ):
+            append_reviewed_heading(unmatched_reviewed_headings.pop(0))
         if item.get("kind") == "figure":
             semantic.append(item)
             continue
         index = blocks.index(item)
-        if index in caption_indices:
+        if index in caption_indices or index in suppressed_heading_blocks:
             continue
-        reviewed_heading = next(
-            (
-                heading
-                for heading in reviewed_headings
-                if _bbox_matches(item["bbox"], heading["bbox"])
-            ),
-            None,
-        )
+        reviewed_heading = heading_by_block.get(index)
         text = reviewed_heading["text"] if reviewed_heading else _block_text(item)
         if not text:
             continue
@@ -394,6 +463,8 @@ def _page_blocks_for_export(
                 "_reviewed": reviewed_heading is not None,
             }
         )
+    for heading in unmatched_reviewed_headings:
+        append_reviewed_heading(heading)
     return semantic, figures, warnings
 
 
@@ -445,13 +516,20 @@ def reconstruct_pages(
             warnings.append(
                 f"Input page {page['input_page']} contains vector graphics or table rules; review is required."
             )
-    semantic, heading_warnings = _resolve_unit_headings(semantic, title, body_size)
+    semantic, heading_warnings = _resolve_unit_headings(
+        semantic,
+        title,
+        body_size,
+        reviewed_unit_title=reviewed_pages is not None and use_reviewed_headings,
+    )
     warnings.extend(heading_warnings)
     return semantic, figures, warnings
 
 
-def render_html(blocks: list[dict[str, Any]], page_marker=False) -> str:
-    """Render a safe UTF-8 HTML fragment with a linked figure list."""
+def render_html(
+    blocks: list[dict[str, Any]], page_marker: bool = False, figure_list: bool = False
+) -> str:
+    """Render a safe UTF-8 HTML fragment, optionally with a linked figure list."""
     output = []
     figures = []
     for block in blocks:
@@ -476,15 +554,16 @@ def render_html(blocks: list[dict[str, Any]], page_marker=False) -> str:
             figures.append((anchor, block["id"], block.get("caption") or ""))
             output.append(f'<figure data-figure-id="{escape(block["id"])}">')
             output.append(
-                f'<div id="{anchor}" class="figure-placeholder">Figure {escape(block["id"])}</div>'
+                f'<div class="figure-placeholder" id="{anchor}">Figure {escape(block["id"])}</div>'
             )
             if block.get("caption"):
                 output.append(f"<figcaption>{escape(block['caption'])}</figcaption>")
             output.append("</figure>")
-    output.extend(['<section class="figures">', "<h2>Figures</h2>", "<ul>"])
-    for anchor, identifier, caption in figures:
-        output.append(
-            f'<li><a href="#{anchor}">{escape(identifier)}</a> -- {escape(caption)}</li>'
-        )
-    output.extend(["</ul>", "</section>"])
+    if figure_list:
+        output.extend(['<section class="figures">', "<h2>Figures</h2>", "<ul>"])
+        for anchor, identifier, caption in figures:
+            output.append(
+                f'<li><a href="#{anchor}">{escape(identifier)}</a> -- {escape(caption)}</li>'
+            )
+        output.extend(["</ul>", "</section>"])
     return "\n".join(output) + "\n"

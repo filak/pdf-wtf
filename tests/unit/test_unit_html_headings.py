@@ -169,6 +169,24 @@ def test_reviewed_headings_are_neither_merged_nor_releveled():
     assert [b["level"] for b in blocks] == [1, 3]
 
 
+def test_matching_reviewed_heading_keeps_its_level():
+    blocks, _ = _resolve_unit_headings(
+        [heading("Subtitle", reviewed=True, level=3)],
+        "Subtitle",
+        10,
+        reviewed_unit_title=True,
+    )
+    assert [b["level"] for b in blocks] == [3]
+
+
+@pytest.mark.parametrize("label", ["Abstract", "1 Methods"])
+def test_reviewed_unit_title_can_be_a_section_label(label):
+    blocks, _ = _resolve_unit_headings(
+        [heading(label)], label, 10, reviewed_unit_title=True
+    )
+    assert [b["level"] for b in blocks] == [1]
+
+
 def test_direct_export_reconsiders_automatic_page_titles(tmp_path):
     source = tmp_path / "article.pdf"
     with fitz.open() as document:

@@ -699,6 +699,7 @@ def export_pdf(
             export_document_html(
                 input_pdf,
                 staged_units,
+                include_html=export_html_flag,
                 normalize_html=export_html_normalized_flag,
             )
         if unit_plan is not None and selected_units is not None:
@@ -712,7 +713,7 @@ def export_pdf(
                 unit_plan,
                 selected_units,
                 staged_units,
-                include_html=include_html,
+                include_html=export_html_flag,
                 normalize_html=export_html_normalized_flag,
                 use_reviewed_headings=plan_path is not None,
                 include_pdf=export_unit_pdfs_flag,

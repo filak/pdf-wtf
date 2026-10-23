@@ -7,17 +7,16 @@ msgid ""
 msgstr ""
 "Project-Id-Version: pdfwtf 0.1.6\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-22 16:10+0200\n"
+"POT-Creation-Date: 2026-10-23 10:49+0200\n"
 "PO-Revision-Date: 2026-10-22 16:19+0200\n"
 "Last-Translator: PDF-WTF contributors\n"
-"Language-Team: cs <LL@li.org>\n"
 "Language: cs\n"
+"Language-Team: cs <LL@li.org>\n"
+"Plural-Forms: nplurals=3; plural=((n==1) ? 0 : (n>=2 && n<=4) ? 1 : 2);\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Plural-Forms: nplurals=3; plural=((n==1) ? 0 : (n>=2 && n<=4) ? 1 : 2);\n"
 "Generated-By: Babel 2.18.0\n"
-"X-Generator: Poedit 3.10\n"
 
 #: src/pdfwtf/gui/blueprint.py:113
 msgid "Select a valid PDF type."
@@ -32,11 +31,11 @@ msgid "Upload could not be saved. Try again."
 msgstr "Soubor se nepodařilo uložit. Zkuste to znovu."
 
 #: src/pdfwtf/gui/blueprint.py:180 src/pdfwtf/gui/blueprint.py:240
-#: src/pdfwtf/gui/blueprint.py:428 src/pdfwtf/gui/blueprint.py:477
-#: src/pdfwtf/gui/blueprint.py:481 src/pdfwtf/gui/blueprint.py:556
-#: src/pdfwtf/gui/blueprint.py:601 src/pdfwtf/gui/blueprint.py:667
-#: src/pdfwtf/gui/blueprint.py:689 src/pdfwtf/gui/blueprint.py:742
-#: src/pdfwtf/gui/blueprint.py:753
+#: src/pdfwtf/gui/blueprint.py:428 src/pdfwtf/gui/blueprint.py:478
+#: src/pdfwtf/gui/blueprint.py:482 src/pdfwtf/gui/blueprint.py:557
+#: src/pdfwtf/gui/blueprint.py:602 src/pdfwtf/gui/blueprint.py:668
+#: src/pdfwtf/gui/blueprint.py:691 src/pdfwtf/gui/blueprint.py:744
+#: src/pdfwtf/gui/blueprint.py:755
 msgid "Wait for the active operation to finish."
 msgstr "Počkejte na dokončení probíhající operace."
 
@@ -109,80 +108,82 @@ msgstr "Obálka"
 msgid "Unknown"
 msgstr "Neznámý typ"
 
-#: src/pdfwtf/gui/blueprint.py:431 src/pdfwtf/gui/blueprint.py:440
+#: src/pdfwtf/gui/blueprint.py:431 src/pdfwtf/gui/blueprint.py:441
 msgid "Select valid export options."
 msgstr "Vyberte platné možnosti exportu."
 
-#: src/pdfwtf/gui/blueprint.py:444 src/pdfwtf/gui/blueprint.py:484
+#: src/pdfwtf/gui/blueprint.py:445 src/pdfwtf/gui/blueprint.py:485
 msgid "Select valid LLM tasks."
 msgstr "Vyberte platné úlohy LLM."
 
-#: src/pdfwtf/gui/blueprint.py:455
+#: src/pdfwtf/gui/blueprint.py:456
 msgid "The saved plan could not be read."
 msgstr "Uložený plán nelze načíst."
 
-#: src/pdfwtf/gui/blueprint.py:462
-msgid "The saved plan does not match the active PDF. Partition the document again."
+#: src/pdfwtf/gui/blueprint.py:463
+msgid ""
+"The saved plan does not match the active PDF. Partition the document "
+"again."
 msgstr "Uložený plán neodpovídá aktivnímu PDF. Rozdělte dokument znovu."
 
-#: src/pdfwtf/gui/blueprint.py:487
+#: src/pdfwtf/gui/blueprint.py:488
 msgid "Export could not start. Try again."
 msgstr "Export se nepodařilo spustit. Zkuste to znovu."
 
-#: src/pdfwtf/gui/blueprint.py:511
+#: src/pdfwtf/gui/blueprint.py:512
 msgid "Export finished, but LLM processing is incomplete. See manifest.json."
 msgstr "Export je dokončen, ale zpracování LLM není úplné. Viz manifest.json."
 
-#: src/pdfwtf/gui/blueprint.py:518
+#: src/pdfwtf/gui/blueprint.py:519
 #, python-format
 msgid "%(count)s more errors. See manifest.json."
 msgstr "Další chyby: %(count)s. Viz manifest.json."
 
-#: src/pdfwtf/gui/blueprint.py:522
+#: src/pdfwtf/gui/blueprint.py:523
 msgid "Export failed. Check the host logs."
 msgstr "Export selhal. Zkontrolujte protokoly hostitele."
 
-#: src/pdfwtf/gui/blueprint.py:559
+#: src/pdfwtf/gui/blueprint.py:560
 msgid "The plan must be a JSON object."
 msgstr "Plán musí být objekt JSON."
 
-#: src/pdfwtf/gui/blueprint.py:566
+#: src/pdfwtf/gui/blueprint.py:567
 msgid "The plan is not valid."
 msgstr "Plán není platný."
 
-#: src/pdfwtf/gui/blueprint.py:592
+#: src/pdfwtf/gui/blueprint.py:593
 msgid "The approved plan was saved."
 msgstr "Schválený plán byl uložen."
 
-#: src/pdfwtf/gui/blueprint.py:610
+#: src/pdfwtf/gui/blueprint.py:611
 msgid "The plan was deleted."
 msgstr "Plán byl smazán."
 
-#: src/pdfwtf/gui/blueprint.py:648
+#: src/pdfwtf/gui/blueprint.py:649
 msgid "Select valid preparation options."
 msgstr "Vyberte platné možnosti přípravy."
 
-#: src/pdfwtf/gui/blueprint.py:698
+#: src/pdfwtf/gui/blueprint.py:700
 msgid "Preparation could not start. Try again."
 msgstr "Přípravu se nepodařilo spustit. Zkuste to znovu."
 
-#: src/pdfwtf/gui/blueprint.py:718
+#: src/pdfwtf/gui/blueprint.py:720
 msgid "Preparation failed. Check the host logs."
 msgstr "Příprava selhala. Zkontrolujte protokoly hostitele."
 
-#: src/pdfwtf/gui/blueprint.py:762
+#: src/pdfwtf/gui/blueprint.py:764
 msgid "Analysis could not start. Try again."
 msgstr "Analýzu se nepodařilo spustit. Zkuste to znovu."
 
-#: src/pdfwtf/gui/blueprint.py:782
+#: src/pdfwtf/gui/blueprint.py:784
 msgid "Analysis failed. Check the host logs."
 msgstr "Analýza selhala. Zkontrolujte protokoly hostitele."
 
-#: src/pdfwtf/gui/blueprint.py:845
+#: src/pdfwtf/gui/blueprint.py:847
 msgid "The PDF is larger than the configured upload limit."
 msgstr "Soubor PDF je větší než nastavený limit pro nahrávání."
 
-#: src/pdfwtf/gui/blueprint.py:942
+#: src/pdfwtf/gui/blueprint.py:944
 #: src/pdfwtf/gui/templates/pdfwtf_gui/_uploads.html:20
 #: src/pdfwtf/gui/templates/pdfwtf_gui/_uploads.html:76
 #: src/pdfwtf/gui/templates/pdfwtf_gui/input.html:41
@@ -190,7 +191,7 @@ msgstr "Soubor PDF je větší než nastavený limit pro nahrávání."
 msgid "Born-digital"
 msgstr "Digitálně vytvořené"
 
-#: src/pdfwtf/gui/blueprint.py:943
+#: src/pdfwtf/gui/blueprint.py:945
 #: src/pdfwtf/gui/templates/pdfwtf_gui/_uploads.html:16
 #: src/pdfwtf/gui/templates/pdfwtf_gui/_uploads.html:75
 #: src/pdfwtf/gui/templates/pdfwtf_gui/input.html:42
@@ -198,55 +199,55 @@ msgstr "Digitálně vytvořené"
 msgid "Scanned"
 msgstr "Naskenované"
 
-#: src/pdfwtf/gui/blueprint.py:944
+#: src/pdfwtf/gui/blueprint.py:946
 msgid "Mixed content"
 msgstr "Smíšený obsah"
 
-#: src/pdfwtf/gui/blueprint.py:945
+#: src/pdfwtf/gui/blueprint.py:947
 msgid "Blank"
 msgstr "Prázdná"
 
-#: src/pdfwtf/gui/blueprint.py:946
+#: src/pdfwtf/gui/blueprint.py:948
 msgid "Uncertain"
 msgstr "Nejisté"
 
-#: src/pdfwtf/gui/blueprint.py:947
+#: src/pdfwtf/gui/blueprint.py:949
 msgid "Different page types"
 msgstr "Různé typy stránek"
 
-#: src/pdfwtf/gui/blueprint.py:950
+#: src/pdfwtf/gui/blueprint.py:952
 msgid "OCR likely needed"
 msgstr "OCR pravděpodobně potřeba"
 
-#: src/pdfwtf/gui/blueprint.py:951
+#: src/pdfwtf/gui/blueprint.py:953
 msgid "OCR unlikely needed"
 msgstr "OCR pravděpodobně není potřeba"
 
-#: src/pdfwtf/gui/blueprint.py:952
+#: src/pdfwtf/gui/blueprint.py:954
 msgid "OCR need uncertain"
 msgstr "Potřeba OCR nejistá"
 
-#: src/pdfwtf/gui/blueprint.py:955
+#: src/pdfwtf/gui/blueprint.py:957
 msgid "Run OCR"
 msgstr "Spustit OCR"
 
-#: src/pdfwtf/gui/blueprint.py:956
+#: src/pdfwtf/gui/blueprint.py:958
 msgid "Review text quality"
 msgstr "Zkontrolovat kvalitu textu"
 
-#: src/pdfwtf/gui/blueprint.py:957
+#: src/pdfwtf/gui/blueprint.py:959
 msgid "Check page content"
 msgstr "Zkontrolovat obsah stránek"
 
-#: src/pdfwtf/gui/blueprint.py:958
+#: src/pdfwtf/gui/blueprint.py:960
 msgid "Review blank pages"
 msgstr "Zkontrolovat prázdné stránky"
 
-#: src/pdfwtf/gui/blueprint.py:1163
+#: src/pdfwtf/gui/blueprint.py:1165
 msgid "Select a PDF document."
 msgstr "Vyberte dokument PDF."
 
-#: src/pdfwtf/gui/blueprint.py:1165
+#: src/pdfwtf/gui/blueprint.py:1167
 msgid "The selected file must have a .pdf extension."
 msgstr "Vybraný soubor musí mít příponu .pdf."
 
@@ -274,7 +275,7 @@ msgstr "Analýza PDF"
 #: src/pdfwtf/gui/templates/pdfwtf_gui/_analysis_summary.html:66
 #: src/pdfwtf/gui/templates/pdfwtf_gui/_close_alert.html:4
 #: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:17
-#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:95
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:105
 msgid "Close"
 msgstr "Zavřít"
 
@@ -415,34 +416,38 @@ msgid "Export options"
 msgstr "Možnosti exportu"
 
 #: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:29
-msgid "Write HTML for included units."
-msgstr "Vytvořit HTML pro zahrnuté jednotky."
+msgid "Write normalized HTML files for included units."
+msgstr "Vytvořit normalizované soubory HTML pro zahrnuté jednotky."
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:40
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:39
+msgid "Write HTML files in the ZIP."
+msgstr "Vytvořit soubory HTML v archivu ZIP."
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:50
 msgid "Include unit metadata JSON files in the ZIP."
 msgstr "Přidat soubory metadat jednotek ve formátu JSON do ZIPu."
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:51
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:61
 msgid "Include a PNG image of each page in the ZIP."
 msgstr "Do souboru ZIP zahrnout obrázek každé stránky ve formátu PNG."
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:61
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:71
 msgid "Include the active PDF in the ZIP."
 msgstr "Přidat aktivní PDF do ZIPu."
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:72
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:82
 msgid "Include the saved plan and partition JSON in the ZIP."
 msgstr "Přidat uložený plán a rozdělení ve formátu JSON do ZIPu."
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:76
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:86
 msgid "LLM tasks"
 msgstr "Úlohy LLM"
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:77
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:87
 msgid "Select a LLM task"
 msgstr "Vyberte úlohu LLM"
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:96
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:106
 #: src/pdfwtf/gui/templates/pdfwtf_gui/_partition_actions.html:15
 #: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:75
 msgid "Export"

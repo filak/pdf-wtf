@@ -471,20 +471,53 @@ def test_export_alone_writes_normalized_direct_unit_html(
         document_type="unit",
     )
 
-    assert (output / "_units_input/unit-001.html").read_text("utf-8") == (
-        "<p>Normalized HTML.</p>"
+    manifest = json.loads((output / "_units_input/manifest.json").read_text())
+    assert [item["html"] for item in manifest["units"]] == ["unit-001.normalized.html"]
+    assert (output / "_units_input/unit-001.normalized.html").read_text("utf-8") == (
+        "<p>Normalized HTML.</p>\n"
     )
+    assert not (output / "_units_input/unit-001.html").exists()
+
+
+def test_export_alone_writes_raw_and_normalized_direct_unit_html(
+    make_pdf, tmp_path, no_enhancement, monkeypatch
+):
+    from pdfwtf.html_normalize import NormalizationResult
+
+    monkeypatch.setattr(
+        container_partition,
+        "normalize_extracted_html",
+        lambda _html: NormalizationResult("<p>Normalized HTML.</p>"),
+    )
+    source = make_pdf(["digital"])
+    output = tmp_path / "out"
+
+    pipeline.export_pdf(
+        source,
+        output,
+        export_html_flag=True,
+        export_html_normalized_flag=True,
+        document_type="unit",
+    )
+
+    units = output / "_units_input"
+    assert (units / "unit-001.html").is_file()
+    assert (units / "unit-001.normalized.html").read_text("utf-8") == (
+        "<p>Normalized HTML.</p>\n"
+    )
+    manifest = json.loads((units / "manifest.json").read_text())
+    assert [item["html"] for item in manifest["units"]] == ["unit-001.normalized.html"]
 
 
 def test_direct_html_does_not_use_partition_heuristics(
-    make_pdf, tmp_path, no_enhancement, monkeypatch
+    tmp_path, no_enhancement, monkeypatch
 ):
     def fail(*args, **kwargs):
         raise AssertionError("Direct HTML must not partition the PDF.")
 
     monkeypatch.setattr(pipeline, "partition_container", fail)
     monkeypatch.setattr(container_partition, "partition_container", fail)
-    source = make_pdf(["digital", "digital"])
+    source = make_structured_pdf(tmp_path / "input.pdf", 2)
     output = tmp_path / "out"
     pipeline.export_pdf(source, output, export_html_flag=True)
     units = output / "_units_input"
@@ -494,7 +527,9 @@ def test_direct_html_does_not_use_partition_heuristics(
     assert entry["type"] == "unknown"
     assert entry["input_pages"] == {"start": 1, "end": 2}
     assert entry["selected_input_pages"] == [1, 2]
-    assert (units / "unit-001.html").read_text("utf-8")
+    html = (units / "unit-001.html").read_text("utf-8")
+    assert "Body text for absolute input page 1 with enough words." in html
+    assert "Body text for absolute input page 2 with enough words." in html
 
 
 def test_export_writes_unit_pdfs_from_plan(tmp_path, no_enhancement):

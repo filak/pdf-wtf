@@ -23,3 +23,14 @@ def test_normalize_extracted_html_preserves_all_heading_levels():
 
     assert result.html == html
     assert result.changes == []
+
+
+def test_normalize_extracted_html_keeps_generated_figure_attribute_order():
+    html = (
+        '<div class="figure-placeholder" id="figure-001-001">'
+        "Figure figure-001-001</div>"
+    )
+
+    result = normalize_extracted_html(html)
+
+    assert result.html == html

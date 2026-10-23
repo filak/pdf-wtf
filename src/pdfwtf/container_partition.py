@@ -16,6 +16,7 @@ from typing import Any, Callable
 import pymupdf as fitz
 
 from .html_extraction import reconstruct_pages, render_html
+from .html_format import indent_html_fragment
 from .html_normalize import normalize_extracted_html
 from .page_layout import (
     _CAPTION,
@@ -88,7 +89,9 @@ def source_identity(pdf_path: Path) -> dict[str, Any]:
     return {"sha256": digest.hexdigest(), "page_count": page_count}
 
 
-def extract_structure(pdf_path: Path) -> dict[str, Any]:
+def extract_structure(
+    pdf_path: Path, *, include_graphic_regions: bool = True
+) -> dict[str, Any]:
     """Extract reusable geometry and navigation without exporting image bytes."""
     page_metadata = build_page_metadata(pdf_path, [], [])
     with fitz.open(pdf_path) as document:
@@ -99,8 +102,11 @@ def extract_structure(pdf_path: Path) -> dict[str, Any]:
             )
             for page in document
         ]
-        for page, description in zip(document, pages):
-            description["graphic_regions"] = _graphic_regions(page)
+        if include_graphic_regions:
+            for page, description in zip(document, pages):
+                description["graphic_regions"] = _graphic_regions(
+                    page, description["raster_images"]
+                )
         bookmarks = [
             {
                 "level": level,
@@ -354,26 +360,28 @@ def _article_margin_dois(page: dict[str, Any]) -> set[str]:
     return values
 
 
-def _graphic_regions(page: fitz.Page) -> list[list[float]]:
+def _graphic_regions(
+    page: fitz.Page, raster_images: list[dict[str, Any]]
+) -> list[list[float]]:
     """Find raster figures and vector panels with several drawing components."""
     area = page.rect.get_area()
     drawings = page.get_drawings()
     rectangles = [fitz.Rect(item["rect"]) for item in drawings]
     regions = [
         fitz.Rect(item["bbox"])
-        for item in page.get_image_info()
+        for item in raster_images
         if 0.03 * area <= fitz.Rect(item["bbox"]).get_area() <= 0.85 * area
     ]
     for rectangle in rectangles:
         if not 0.03 * area <= rectangle.get_area() <= 0.85 * area:
             continue
-        if (
-            sum(
-                other != rectangle and rectangle.contains(other) for other in rectangles
-            )
-            >= 4
-        ):
-            regions.append(rectangle)
+        contained = 0
+        for other in rectangles:
+            if other != rectangle and rectangle.contains(other):
+                contained += 1
+                if contained >= 4:
+                    regions.append(rectangle)
+                    break
     # Associate an aligned caption strip with the nearby graphic panel.
     for region in list(regions):
         for drawing, rectangle in zip(drawings, rectangles):
@@ -1765,7 +1773,11 @@ def partition_container(pdf_path: Path, requested_type: str) -> dict[str, Any]:
     }:
         raise ValueError("Unsupported document type.")
     identity = source_identity(pdf_path)
-    structure = extract_structure(pdf_path)
+    structure = extract_structure(
+        pdf_path,
+        include_graphic_regions=requested_type
+        in {"journal-issue", "proceedings", "auto"},
+    )
     signals = (
         _journal_signals(structure)
         if requested_type in {"journal-issue", "proceedings", "auto"}
@@ -2212,19 +2224,35 @@ def validate_plan(
 
 
 def direct_unit_plan(pdf_path: Path) -> dict[str, Any]:
-    """Build confirmed instructions for direct single-unit processing."""
-    partition = partition_container(pdf_path, "unit")
-    identity = partition["source"]
-    unit = partition["units"][0]
+    """Select all pages as one unit without extracting partition evidence."""
+    identity = source_identity(pdf_path)
+    identity["bibliographic"] = {"kind": "book", "book_title": pdf_path.stem}
     return {
         "schema_version": SCHEMA_VERSION,
         "kind": "plan",
         "source": identity,
         "document_type": "unit",
-        "pages": [{**page, "selected": True} for page in partition["pages"]],
+        "pages": [
+            {
+                "input_page": number,
+                "selected": True,
+                "printed_page_number": None,
+                "page_type": "unknown",
+                "page_type_evidence": [],
+                "main_title": None,
+                "sections": [],
+                "figures": [],
+                "unit_ids": ["unit-001"],
+                "warnings": [],
+            }
+            for number in range(1, identity["page_count"] + 1)
+        ],
         "units": [
             {
-                **unit,
+                "id": "unit-001",
+                "title": pdf_path.stem,
+                "type": "unknown",
+                "input_pages": {"start": 1, "end": identity["page_count"]},
                 "selected": True,
                 "boundary_status": "confirmed",
             }
@@ -2281,7 +2309,9 @@ def _write_unit(
             for page in selected_input_pages:
                 unit_pdf.insert_pdf(document, from_page=page - 1, to_page=page - 1)
             unit_pdf.save(destination / pdf_name)
-    html_name = f"{unit['id']}.html" if include_html else None
+    raw_html_name = f"{unit['id']}.html" if include_html else None
+    normalized_html_name = f"{unit['id']}.normalized.html" if normalize_html else None
+    html_name = normalized_html_name or raw_html_name
     metadata_name = f"{unit['id']}.metadata.json"
     metadata = {
         "schema_version": SCHEMA_VERSION,
@@ -2300,11 +2330,18 @@ def _write_unit(
         "semantic_blocks": blocks,
     }
     write_json_document(metadata, destination / metadata_name)
-    if include_html:
-        rendered_html = render_html(blocks, page_marker=False)
+    if include_html or normalize_html:
+        if raw_html_name:
+            rendered_html = render_html(blocks, page_marker=False)
+            formatted_html = indent_html_fragment(rendered_html)
+            (destination / raw_html_name).write_text(formatted_html, encoding="utf-8")
         if normalize_html:
-            rendered_html = normalize_extracted_html(rendered_html).html
-        (destination / html_name).write_text(rendered_html, encoding="utf-8")
+            rendered_html = render_html(blocks, page_marker=False, figure_list=True)
+            normalized_html = normalize_extracted_html(rendered_html).html
+            normalized_html = indent_html_fragment(normalized_html)
+            (destination / normalized_html_name).write_text(
+                normalized_html, encoding="utf-8"
+            )
     return {
         "id": unit["id"],
         "title": unit["title"],
@@ -2390,7 +2427,11 @@ def export_units(
 
 
 def export_document_html(
-    pdf_path: Path, destination: Path, *, normalize_html: bool = False
+    pdf_path: Path,
+    destination: Path,
+    *,
+    include_html: bool = True,
+    normalize_html: bool = False,
 ) -> None:
     """Write all pages of any PDF as one unit, without partition heuristics.
 
@@ -2425,7 +2466,7 @@ def export_document_html(
             page_numbers,
             reconstructed,
             destination,
-            include_html=True,
+            include_html=include_html,
             normalize_html=normalize_html,
             include_pdf=False,
             extract_doi=True,

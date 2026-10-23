@@ -112,6 +112,7 @@ exportForm.addEventListener("submit", async (event) => {
   const generation = exportGeneration;
   const options = {
     get_html: exportForm.elements.get_html.checked,
+    get_html_normalized: exportForm.elements.get_html_normalized.checked,
     get_meta: exportForm.elements.get_meta.checked,
     get_img: exportForm.elements.get_img.checked,
     include_source: exportForm.elements.include_source.checked,

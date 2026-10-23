@@ -273,12 +273,15 @@ To export text from a scan, enhance it first, then export the prepared PDF.
 | `--get-doi` | DOI candidates and JSON metadata |
 | `--get-format` | Page image format. The only supported format is PNG. |
 | `--get-html` | Extracted UTF-8 HTML fragments for selected units |
-| `--get-html-normalized` | Editorially normalized UTF-8 HTML fragments for selected units |
+| `--get-html-normalized` | Editorially normalized UTF-8 HTML fragments named `<unit-id>.normalized.html`, including a final linked Figures section. Use with `--get-html` to write both forms. |
 | `--get-img` | PNG page images |
 | `--get-meta` | JSON metadata |
 | `--get-text` | Per-page text and combined text |
 | `--get-thumb` | Page images and JPEG thumbnails |
 | `--get-unit-pdf` | One PDF for each selected unit. Requires `--plan`. |
+
+HTML exports use consistent two-space indentation. Formatting does not repair
+markup or add missing tags.
 
 DOI candidates are not externally verified.
 If you also need text files, use `--get-text`.

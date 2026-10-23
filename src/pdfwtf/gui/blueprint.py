@@ -432,6 +432,7 @@ def create_gui_blueprint() -> Blueprint:
         llm_tasks = options.pop("llm_tasks", [])
         if set(options) - {
             "get_html",
+            "get_html_normalized",
             "get_meta",
             "get_img",
             "include_source",

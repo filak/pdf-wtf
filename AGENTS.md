@@ -196,10 +196,9 @@ After an implementation change:
 
 1. Format Python with Black.
 2. Run Flake8.
-3. If a Jinja template changed, run `uv run --locked djlint <template_path> --reformat`.
-4. Run the relevant automated tests when they exist.
-5. Report checks that could not run.
-6. Summarize changed files and important decisions.
+3. Run the relevant automated tests when they exist.
+4. Report checks that could not run.
+5. Summarize changed files and important decisions.
 
 ## Change control
 

@@ -96,6 +96,34 @@ def test_unit_partition_has_contract_and_structure(make_pdf):
     }
 
 
+@pytest.mark.parametrize(
+    ("document_type", "expected_calls"),
+    (
+        ("unit", 0),
+        ("book", 0),
+        ("magazine-issue", 0),
+        ("journal-issue", 2),
+        ("proceedings", 2),
+        ("auto", 2),
+    ),
+)
+def test_partition_extracts_graphic_regions_only_for_academic_detection(
+    make_pdf, monkeypatch, document_type, expected_calls
+):
+    source = make_pdf(["digital", "digital"])
+    calls = []
+
+    def graphic_regions(_page, raster_images):
+        calls.append(raster_images)
+        return []
+
+    monkeypatch.setattr("pdfwtf.container_partition._graphic_regions", graphic_regions)
+
+    partition_container(source, document_type)
+
+    assert len(calls) == expected_calls
+
+
 def test_unit_partition_combines_multiline_main_title(tmp_path):
     source = tmp_path / "multiline-title.pdf"
     with fitz.open() as document:
@@ -718,19 +746,30 @@ def test_raster_figure_has_stable_placeholder_and_caption(tmp_path):
         validate_plan(plan, source),
         destination,
         include_html=True,
+        normalize_html=True,
     )
     html = (destination / "article.html").read_text("utf-8")
+    normalized_html = (destination / "article.normalized.html").read_text("utf-8")
     metadata = json.loads((destination / "article.metadata.json").read_text("utf-8"))
     assert "Figure figure-001-001" in html
     assert "<figcaption>Figure 1. Reviewed caption.</figcaption>" in html
-    assert 'id="figure-001-001"' in html
-    assert 'class="figure-placeholder"' in html
+    assert (
+        '<div class="figure-placeholder" id="figure-001-001">'
+        "Figure figure-001-001</div>"
+    ) in html
+    assert "<h2>Figures</h2>" not in html
     assert (
         '<li><a href="#figure-001-001">figure-001-001</a> -- Figure 1. Reviewed caption.</li>'
-        in html
+        in normalized_html
     )
-    assert html.index("<h2>Figures</h2>") > html.index("</figure>")
-    assert html.rstrip().endswith("</section>")
+    assert normalized_html.index("<h2>Figures</h2>") > normalized_html.index(
+        "</figure>"
+    )
+    assert (
+        '\n  <h2>Figures</h2>\n  <ul>\n    <li><a href="#figure-001-001">'
+        in normalized_html
+    )
+    assert normalized_html.rstrip().endswith("</section>")
     assert "A navy rectangle" not in html
     assert "Printed page iv" not in html
     assert "Reviewed figure title" in html
@@ -1303,12 +1342,21 @@ def test_captionless_reviewed_figure_exports_html(tmp_path):
     ]
     destination = tmp_path / "units"
     export_units(
-        source, plan, validate_plan(plan, source), destination, include_html=True
+        source,
+        plan,
+        validate_plan(plan, source),
+        destination,
+        include_html=True,
+        normalize_html=True,
     )
     html = (destination / "article.html").read_text(encoding="utf-8")
+    normalized_html = (destination / "article.normalized.html").read_text(
+        encoding="utf-8"
+    )
     assert "Figure figure-1" in html
     assert "<figcaption>" not in html
-    assert '<li><a href="#figure-1">figure-1</a> -- </li>' in html
+    assert '<li><a href="#figure-1">figure-1</a> -- </li>' not in html
+    assert '<li><a href="#figure-1">figure-1</a> -- </li>' in normalized_html
 
 
 def test_overlapping_figure_preserves_text_and_warns(tmp_path):
@@ -1683,6 +1731,7 @@ def test_html_figure_links_use_figure_ids_and_untrusted_text_is_escaped():
             {"kind": "paragraph", "text": "Last content paragraph."},
             {"kind": "figure", "id": 'other"<&', "caption": None},
         ],
+        figure_list=True,
     )
     parsed = Elements()
     parsed.feed(html)
@@ -1705,7 +1754,9 @@ def test_html_figure_links_use_figure_ids_and_untrusted_text_is_escaped():
 def test_html_without_figures_has_final_empty_figure_list():
     from pdfwtf.html_extraction import render_html
 
-    html = render_html([{"kind": "paragraph", "text": "Article content."}])
+    html = render_html(
+        [{"kind": "paragraph", "text": "Article content."}], figure_list=True
+    )
     assert html.startswith("<p>Article content.</p>")
     assert "<body" not in html
     assert "</body>" not in html
@@ -1790,9 +1841,11 @@ def test_html_export_normalizes_rendered_fragment_when_requested(tmp_path, monke
         normalize_html=True,
     )
 
-    assert (destination / "article.html").read_text(encoding="utf-8") == (
-        "<p>Normalized HTML.</p>"
+    assert (destination / "article.normalized.html").read_text(encoding="utf-8") == (
+        "<p>Normalized HTML.</p>\n"
     )
+    manifest = json.loads((destination / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["units"][0]["html"] == "article.normalized.html"
 
 
 def test_html_export_does_not_normalize_by_default(tmp_path, monkeypatch):
@@ -1850,10 +1903,37 @@ def test_saved_plan_renders_sections_as_h2_and_preserves_main_titles(
         include_html=True,
         normalize_html=normalize_html,
     )
-    html = (destination / "article.html").read_text(encoding="utf-8")
+    html_suffix = ".normalized.html" if normalize_html else ".html"
+    html = (destination / f"article{html_suffix}").read_text(encoding="utf-8")
     for number in (1, 2):
         assert html.count(f"<h1>Saved title {number} &lt;&amp;&gt;</h1>") == 1
     assert "Original title" not in html
     assert "Original section title" not in html
     assert html.count("<h2>Saved section title</h2>") == 2
     assert html.count("Body prose must remain in the export.") == 2
+
+
+@pytest.mark.parametrize("normalize_html", [False, True])
+def test_saved_plan_renders_approved_unit_title_as_first_heading(
+    tmp_path, normalize_html
+):
+    source = make_structured_pdf(tmp_path / "issue.pdf", page_count=1)
+    plan = reviewed_plan(source, [unit("article", 1, 1)], "journal-issue")
+    plan["units"][0]["title"] = "Reviewer corrected title"
+    destination = tmp_path / "units"
+
+    export_units(
+        source,
+        plan,
+        validate_plan(plan, source),
+        destination,
+        include_html=True,
+        normalize_html=normalize_html,
+    )
+
+    html_suffix = ".normalized.html" if normalize_html else ".html"
+    html = (destination / f"article{html_suffix}").read_text(encoding="utf-8")
+    assert html.count("<h1>Reviewer corrected title</h1>") == 1
+    assert html.index("<h1>Reviewer corrected title</h1>") < html.index(
+        "<h1>Unit 1 title</h1>"
+    )

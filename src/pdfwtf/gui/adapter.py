@@ -76,6 +76,7 @@ class ExportAdapter(Protocol):
         plan: dict[str, Any] | None,
         *,
         get_html: bool = False,
+        get_html_normalized: bool = False,
         get_meta: bool = False,
         get_img: bool = False,
         include_source: bool = False,
@@ -344,6 +345,7 @@ class DemoPartitionAdapter:
         plan: dict[str, Any] | None,
         *,
         get_html: bool = False,
+        get_html_normalized: bool = False,
         get_meta: bool = False,
         get_img: bool = False,
         include_source: bool = False,
@@ -356,7 +358,11 @@ class DemoPartitionAdapter:
         """
         if self._output_dir is None:
             raise RuntimeError("Export output directory is not configured.")
-        llm_tasks = self._validate_tasks(llm_tasks, COMMAND_EXPORT, get_html=get_html)
+        llm_tasks = self._validate_tasks(
+            llm_tasks,
+            COMMAND_EXPORT,
+            get_html=get_html or get_html_normalized,
+        )
         snapshot = deepcopy(plan) if plan is not None else None
         with self._lock:
             active = self._active_operation(job_id)
@@ -371,6 +377,7 @@ class DemoPartitionAdapter:
                 snapshot,
                 get_img,
                 get_html,
+                get_html_normalized,
                 include_source,
                 debug,
                 get_meta,
@@ -552,6 +559,7 @@ class DemoPartitionAdapter:
         plan: dict[str, Any] | None,
         get_img: bool,
         get_html: bool,
+        get_html_normalized: bool,
         include_source: bool,
         debug: bool,
         get_meta: bool,
@@ -602,7 +610,8 @@ class DemoPartitionAdapter:
                     plan_path=plan_path,
                     export_unit_pdfs_flag=True,
                     export_images_flag=get_img,
-                    export_html_normalized_flag=get_html,
+                    export_html_flag=get_html,
+                    export_html_normalized_flag=get_html_normalized,
                     unit_doi_flag=True,
                     config=self._config,
                     llm_tasks=llm_tasks,

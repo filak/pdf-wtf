@@ -978,15 +978,28 @@ def test_export_button_works_without_plan_and_modal_defaults_off(gui_app, make_p
     listing = client.get("/").get_data(as_text=True)
     assert f'data-export-url="/jobs/{job_id}/export"' in listing
     assert "Export the whole PDF as one unit." in listing
+    assert 'name="get_html_normalized"' in listing
+    assert listing.index("get-html-normalized") < listing.index("get-html</label>")
+    assert listing.index("get-img</label>") < listing.index("get-meta</label>")
 
 
 @pytest.mark.parametrize("get_img", [False, True])
-@pytest.mark.parametrize("get_html", [False, True])
+@pytest.mark.parametrize(
+    ("get_html", "get_html_normalized"),
+    [(False, False), (True, False), (False, True), (True, True)],
+)
 @pytest.mark.parametrize("include_source", [False, True])
 @pytest.mark.parametrize("debug", [False, True])
 @pytest.mark.parametrize("get_meta", [False, True])
 def test_saved_plan_export_downloads_selected_results(
-    gui_app, make_pdf, get_img, get_html, include_source, debug, get_meta
+    gui_app,
+    make_pdf,
+    get_img,
+    get_html,
+    get_html_normalized,
+    include_source,
+    debug,
+    get_meta,
 ):
     from zipfile import ZipFile
     import pymupdf
@@ -1005,6 +1018,7 @@ def test_saved_plan_export_downloads_selected_results(
             json={
                 "get_img": get_img,
                 "get_html": get_html,
+                "get_html_normalized": get_html_normalized,
                 "get_meta": get_meta,
                 "include_source": include_source,
                 "debug": debug,
@@ -1057,6 +1071,7 @@ def test_saved_plan_export_downloads_selected_results(
                     assert original.page_count == 2
                     assert pdf[0].get_text() == original[0].get_text()
             assert ("_units/reviewed.html" in names) is get_html
+            assert ("_units/reviewed.normalized.html" in names) is get_html_normalized
             metadata_files = [name for name in names if name.endswith(".metadata.json")]
             assert bool(metadata_files) is get_meta
             if get_meta:
@@ -1072,7 +1087,15 @@ def test_saved_plan_export_downloads_selected_results(
 
 
 @pytest.mark.parametrize(
-    "options", [None, [], {"get_html": "true"}, {"include_source": 1}, {"other": True}]
+    "options",
+    [
+        None,
+        [],
+        {"get_html": "true"},
+        {"get_html_normalized": "true"},
+        {"include_source": 1},
+        {"other": True},
+    ],
 )
 def test_export_rejects_invalid_options(gui_app, make_pdf, options):
     client, job_id, _plan = _saved_export_job(gui_app, make_pdf)
@@ -1477,7 +1500,7 @@ def test_cli_and_gui_llm_results_match(llm_home, gui_app, make_pdf, fake_gemini)
             str(output),
             "--plan",
             str(plan),
-            "--get-html-normalized",
+            "--get-html",
             "--llm-task",
             "clean_html",
         ],

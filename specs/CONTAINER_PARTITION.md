@@ -400,6 +400,9 @@ ID, input page, bounding box, image xref, and optional caption.
 use detected printed numbers. If detection is uncertain, the marker explicitly
 uses the input page index. Extracted text is HTML-escaped. The fragment has no
 script, positioning CSS, or image URL.
+The reviewed `units[].title` value is the first `h1`. If no extracted or
+reviewed page heading has the same text, export adds the value before the page
+content. Reviewed page headings remain in the fragment.
 A Figures section appears at the end of the HTML fragment.
 The fragment has no `html`, `head`, or `body` wrapper tags.
 It uses a standard `ul`/`li` list in figure occurrence order. Each item has

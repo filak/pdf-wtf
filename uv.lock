@@ -937,10 +937,11 @@ wheels = [
 
 [[package]]
 name = "llm-call"
-version = "0.6.0"
-source = { git = "https://github.com/filak/llm-call.git#11f407bd7c6538877bde1004fccf2621845f6ede" }
+version = "0.7.0"
+source = { git = "https://github.com/filak/llm-call.git#edc9e1b5e2735c6b5fdb54461163038b683757e0" }
 dependencies = [
     { name = "google-genai" },
+    { name = "httpx" },
 ]
 
 [[package]]

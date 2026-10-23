@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-10-22 16:10+0200\n"
+"POT-Creation-Date: 2026-10-23 10:49+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -30,11 +30,11 @@ msgid "Upload could not be saved. Try again."
 msgstr ""
 
 #: src/pdfwtf/gui/blueprint.py:180 src/pdfwtf/gui/blueprint.py:240
-#: src/pdfwtf/gui/blueprint.py:428 src/pdfwtf/gui/blueprint.py:477
-#: src/pdfwtf/gui/blueprint.py:481 src/pdfwtf/gui/blueprint.py:556
-#: src/pdfwtf/gui/blueprint.py:601 src/pdfwtf/gui/blueprint.py:667
-#: src/pdfwtf/gui/blueprint.py:689 src/pdfwtf/gui/blueprint.py:742
-#: src/pdfwtf/gui/blueprint.py:753
+#: src/pdfwtf/gui/blueprint.py:428 src/pdfwtf/gui/blueprint.py:478
+#: src/pdfwtf/gui/blueprint.py:482 src/pdfwtf/gui/blueprint.py:557
+#: src/pdfwtf/gui/blueprint.py:602 src/pdfwtf/gui/blueprint.py:668
+#: src/pdfwtf/gui/blueprint.py:691 src/pdfwtf/gui/blueprint.py:744
+#: src/pdfwtf/gui/blueprint.py:755
 msgid "Wait for the active operation to finish."
 msgstr ""
 
@@ -107,82 +107,82 @@ msgstr ""
 msgid "Unknown"
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:431 src/pdfwtf/gui/blueprint.py:440
+#: src/pdfwtf/gui/blueprint.py:431 src/pdfwtf/gui/blueprint.py:441
 msgid "Select valid export options."
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:444 src/pdfwtf/gui/blueprint.py:484
+#: src/pdfwtf/gui/blueprint.py:445 src/pdfwtf/gui/blueprint.py:485
 msgid "Select valid LLM tasks."
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:455
+#: src/pdfwtf/gui/blueprint.py:456
 msgid "The saved plan could not be read."
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:462
+#: src/pdfwtf/gui/blueprint.py:463
 msgid ""
 "The saved plan does not match the active PDF. Partition the document "
 "again."
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:487
+#: src/pdfwtf/gui/blueprint.py:488
 msgid "Export could not start. Try again."
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:511
+#: src/pdfwtf/gui/blueprint.py:512
 msgid "Export finished, but LLM processing is incomplete. See manifest.json."
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:518
+#: src/pdfwtf/gui/blueprint.py:519
 #, python-format
 msgid "%(count)s more errors. See manifest.json."
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:522
+#: src/pdfwtf/gui/blueprint.py:523
 msgid "Export failed. Check the host logs."
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:559
+#: src/pdfwtf/gui/blueprint.py:560
 msgid "The plan must be a JSON object."
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:566
+#: src/pdfwtf/gui/blueprint.py:567
 msgid "The plan is not valid."
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:592
+#: src/pdfwtf/gui/blueprint.py:593
 msgid "The approved plan was saved."
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:610
+#: src/pdfwtf/gui/blueprint.py:611
 msgid "The plan was deleted."
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:648
+#: src/pdfwtf/gui/blueprint.py:649
 msgid "Select valid preparation options."
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:698
+#: src/pdfwtf/gui/blueprint.py:700
 msgid "Preparation could not start. Try again."
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:718
+#: src/pdfwtf/gui/blueprint.py:720
 msgid "Preparation failed. Check the host logs."
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:762
+#: src/pdfwtf/gui/blueprint.py:764
 msgid "Analysis could not start. Try again."
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:782
+#: src/pdfwtf/gui/blueprint.py:784
 msgid "Analysis failed. Check the host logs."
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:845
+#: src/pdfwtf/gui/blueprint.py:847
 msgid "The PDF is larger than the configured upload limit."
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:942
+#: src/pdfwtf/gui/blueprint.py:944
 #: src/pdfwtf/gui/templates/pdfwtf_gui/_uploads.html:20
 #: src/pdfwtf/gui/templates/pdfwtf_gui/_uploads.html:76
 #: src/pdfwtf/gui/templates/pdfwtf_gui/input.html:41
@@ -190,7 +190,7 @@ msgstr ""
 msgid "Born-digital"
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:943
+#: src/pdfwtf/gui/blueprint.py:945
 #: src/pdfwtf/gui/templates/pdfwtf_gui/_uploads.html:16
 #: src/pdfwtf/gui/templates/pdfwtf_gui/_uploads.html:75
 #: src/pdfwtf/gui/templates/pdfwtf_gui/input.html:42
@@ -198,55 +198,55 @@ msgstr ""
 msgid "Scanned"
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:944
+#: src/pdfwtf/gui/blueprint.py:946
 msgid "Mixed content"
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:945
+#: src/pdfwtf/gui/blueprint.py:947
 msgid "Blank"
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:946
+#: src/pdfwtf/gui/blueprint.py:948
 msgid "Uncertain"
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:947
+#: src/pdfwtf/gui/blueprint.py:949
 msgid "Different page types"
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:950
+#: src/pdfwtf/gui/blueprint.py:952
 msgid "OCR likely needed"
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:951
+#: src/pdfwtf/gui/blueprint.py:953
 msgid "OCR unlikely needed"
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:952
+#: src/pdfwtf/gui/blueprint.py:954
 msgid "OCR need uncertain"
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:955
+#: src/pdfwtf/gui/blueprint.py:957
 msgid "Run OCR"
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:956
+#: src/pdfwtf/gui/blueprint.py:958
 msgid "Review text quality"
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:957
+#: src/pdfwtf/gui/blueprint.py:959
 msgid "Check page content"
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:958
+#: src/pdfwtf/gui/blueprint.py:960
 msgid "Review blank pages"
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:1163
+#: src/pdfwtf/gui/blueprint.py:1165
 msgid "Select a PDF document."
 msgstr ""
 
-#: src/pdfwtf/gui/blueprint.py:1165
+#: src/pdfwtf/gui/blueprint.py:1167
 msgid "The selected file must have a .pdf extension."
 msgstr ""
 
@@ -274,7 +274,7 @@ msgstr ""
 #: src/pdfwtf/gui/templates/pdfwtf_gui/_analysis_summary.html:66
 #: src/pdfwtf/gui/templates/pdfwtf_gui/_close_alert.html:4
 #: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:17
-#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:95
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:105
 msgid "Close"
 msgstr ""
 
@@ -415,34 +415,38 @@ msgid "Export options"
 msgstr ""
 
 #: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:29
-msgid "Write HTML for included units."
+msgid "Write normalized HTML files for included units."
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:40
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:39
+msgid "Write HTML files in the ZIP."
+msgstr ""
+
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:50
 msgid "Include unit metadata JSON files in the ZIP."
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:51
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:61
 msgid "Include a PNG image of each page in the ZIP."
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:61
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:71
 msgid "Include the active PDF in the ZIP."
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:72
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:82
 msgid "Include the saved plan and partition JSON in the ZIP."
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:76
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:86
 msgid "LLM tasks"
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:77
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:87
 msgid "Select a LLM task"
 msgstr ""
 
-#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:96
+#: src/pdfwtf/gui/templates/pdfwtf_gui/_export_options.html:106
 #: src/pdfwtf/gui/templates/pdfwtf_gui/_partition_actions.html:15
 #: src/pdfwtf/gui/templates/pdfwtf_gui/review.html:75
 msgid "Export"

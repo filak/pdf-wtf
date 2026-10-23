@@ -163,7 +163,12 @@ removes all of its prepared PDF pages.
 Optional exports include PNG page images, JPEG thumbnails, per-page text,
 and combined text. `--get-thumb` also writes page images.
 `--get-html` writes extracted HTML without editorial paragraph merging.
-`--get-html-normalized` explicitly requests editorial HTML normalization.
+`--get-html-normalized` explicitly requests editorial HTML normalization and
+writes each fragment as `<unit-id>.normalized.html`. If both options are used,
+export writes both HTML forms. Both forms use consistent indentation. The
+indentation step does not repair markup or add missing tags. Both forms contain
+inline figure elements. Only normalized HTML contains the final linked Figures
+section.
 
 Born-digital container partitioning describes each input page and proposes
 whole-page unit partitions from text structure, bookmarks, links, and raster
@@ -318,12 +323,12 @@ with action `delete`.
 
 Export appears in each file row of the Process files list. Partitioning is
 optional. Without a saved plan, export uses the whole active PDF as one unit.
-With a saved plan for the active PDF, export uses that plan. Export opens a modal with five switches: `get-html`, `get-meta`, `get-img`,
+With a saved plan for the active PDF, export uses that plan. Export opens a modal with six switches: `get-html-normalized`, `get-html`, `get-meta`, `get-img`,
 `include-source`, and `debug`. All switches start off each time the modal opens. With all
 switches off,
 export writes one PDF for each included unit and the manifest. Export always
-writes unit PDFs. `get-html` adds editorially normalized HTML for included
-units. `get-img` adds one PNG image for each page of the active PDF in
+writes unit PDFs. `get-html-normalized` adds editorially normalized HTML for included
+units as `<unit-id>.normalized.html`. `get-html` adds raw extracted HTML for included units. `get-img` adds one PNG image for each page of the active PDF in
 `_images`, as `page_<NNN>.png`.
 `get-meta` adds unit `*.metadata.json` files. With `get-meta` off, the ZIP
 contains no unit metadata files and manifest `metadata` fields are `null`. Export uses existing PDF text
