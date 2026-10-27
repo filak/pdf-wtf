@@ -33,7 +33,7 @@ LLM_STAGES: Dict[str, frozenset[str]] = {
 }
 # Output suffixes that each stage requires.
 LLM_STAGE_SUFFIXES: Dict[str, str] = {"after_unit_html": ".html"}
-# Seconds for one LLM request. The google-genai client has no default timeout.
+# Seconds for one LLM request.
 DEFAULT_LLM_TIMEOUT = 180
 LLM_TASK_KEYS = frozenset(
     {"description", "commands", "stage", "provider", "template", "output"}
