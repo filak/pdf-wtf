@@ -120,6 +120,7 @@ docker compose -f compose-pdf-wtf-gui.yaml up -d --build
 ## Development
 
 Run the following commands from the repository root.
+
 Install the locked Python dependencies:
 
 ```bash
